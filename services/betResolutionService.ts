@@ -121,11 +121,13 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
   }
 }
 
-// Resolve all pending bets for the current match
+// Resolve all pending bets for a specific match
 export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Promise<BetResolutionResult[]> {
   const store = useStore.getState();
   const creditsStore = useCreditsStore.getState();
   const results: BetResolutionResult[] = [];
+
+  const matchId = matchData.metadata.matchId;
 
   // Get Johnny's stats from the match
   const johnnyStats = matchData.info.participants.find(p => p.puuid === johnnyPuuid);
@@ -134,15 +136,18 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
     return results;
   }
 
-  // Get all pending bets
-  const pendingBets = store.bets.filter(b => b.status === BetStatus.PENDING);
+  // Get all pending bets for this match (or all pending bets if matchId not specified on bet)
+  const pendingBets = store.bets.filter(b =>
+    b.status === BetStatus.PENDING &&
+    (b.matchId === matchId || !b.matchId || b.matchId.startsWith('m_')) // Support legacy bets without proper matchId
+  );
 
   if (pendingBets.length === 0) {
-    console.log('No pending bets to resolve');
+    console.log('No pending bets to resolve for match:', matchId);
     return results;
   }
 
-  console.log(`Resolving ${pendingBets.length} pending bets...`);
+  console.log(`Resolving ${pendingBets.length} pending bets for match ${matchId}...`);
 
   // Evaluate each bet
   const updatedBets = [...store.bets];

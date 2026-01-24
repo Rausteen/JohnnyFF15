@@ -18,6 +18,7 @@ export interface GameState {
   // Current game status
   isInGame: boolean;
   currentGame: CurrentGameInfo | null;
+  currentGameId: string | null; // Riot game ID for bet tracking
   gameStartTime: number | null;
 
   // Last match data
@@ -60,6 +61,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   isInGame: false,
   currentGame: null,
+  currentGameId: null,
   gameStartTime: null,
   lastMatch: null,
   lastMatchStats: null,
@@ -161,7 +163,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   checkGameStatus: async () => {
-    const { johnny } = get();
+    const { johnny, testMode } = get();
+
+    // Don't check if in test mode
+    if (testMode) {
+      console.log('Test mode active, skipping game status check');
+      return;
+    }
 
     if (!johnny.puuid) {
       console.warn('checkGameStatus: Johnny PUUID not configured');
@@ -174,10 +182,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       if (currentGame) {
         // Johnny is in game!
-        console.log('Johnny is IN GAME!', currentGame.gameId);
+        // Create match ID format: PLATFORM_GAMEID (e.g., EUW1_1234567890)
+        const gameId = `${currentGame.platformId}_${currentGame.gameId}`;
+        console.log('Johnny is IN GAME!', gameId);
+
         set({
           isInGame: true,
           currentGame,
+          currentGameId: gameId,
           gameStartTime: currentGame.gameStartTime,
           error: null
         });
@@ -185,20 +197,23 @@ export const useGameStore = create<GameState>((set, get) => ({
         console.log('Johnny is not in game');
         // Not in game
         const wasInGame = get().isInGame;
+        const previousGameId = get().currentGameId;
 
         set({
           isInGame: false,
           currentGame: null,
           gameStartTime: null
+          // Keep currentGameId until bets are resolved
         });
 
         // If was in game and now isn't, fetch the last match, resolve bets and save it
-        if (wasInGame) {
-          console.log('Game ended, waiting for Riot API to process...');
+        if (wasInGame && previousGameId) {
+          console.log('Game ended! Previous game ID:', previousGameId);
+          console.log('Waiting for Riot API to process match data...');
 
           // Wait for Riot API to have the match data (usually takes 30-60 seconds)
           setTimeout(async () => {
-            const { johnny } = get();
+            const { johnny, currentGameId } = get();
             if (!johnny.puuid) return;
 
             console.log('Fetching last match for bet resolution...');
@@ -209,17 +224,23 @@ export const useGameStore = create<GameState>((set, get) => ({
               const stats = riotApi.getPlayerStatsFromMatch(lastMatch, johnny.puuid);
               set({ lastMatch, lastMatchStats: stats });
 
+              console.log('Match found:', lastMatch.metadata.matchId);
+
               // Resolve bets based on actual match data
-              console.log('Resolving bets...');
+              console.log('Resolving bets for game:', currentGameId);
               const results = await resolveBets(lastMatch, johnny.puuid);
-              console.log('Bet resolution complete:', results);
+              console.log('Bet resolution complete:', results.length, 'bets resolved');
+
+              // Now clear the game ID
+              set({ currentGameId: null });
             }
 
-            // Also save to match history
+            // Save to match history (auto-sync)
+            console.log('Auto-syncing match to museum...');
             const matchHistoryStore = useMatchHistoryStore.getState();
             const newMatch = await matchHistoryStore.checkForNewMatch();
             if (newMatch) {
-              console.log('New match saved:', newMatch.id);
+              console.log('New match saved to museum:', newMatch.id);
             }
           }, 45000); // Wait 45 seconds for Riot API to process the match
         }

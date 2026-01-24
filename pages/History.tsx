@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Calendar, Skull, RefreshCw, Loader2, Eye, Swords, Target, Clock } from 'lucide-react';
+import { useEffect } from 'react';
+import { Calendar, Skull, Loader2, Eye, Swords, Target, Clock, Sparkles } from 'lucide-react';
 import { useMatchHistoryStore, formatDuration, formatDate, generateFunFact, JohnnyMatch } from '../services/matchHistoryStore';
+import { useGameStore } from '../services/gameStore';
 import { getQueueName } from '../services/riotApi';
 
 const History = () => {
-  const { matches, loading, syncing, error, loadMatches, syncMatches, loadConfig } = useMatchHistoryStore();
-  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const { matches, loading, error, loadMatches, loadConfig } = useMatchHistoryStore();
+  const { isPolling, isInGame } = useGameStore();
 
   // Load matches on mount
   useEffect(() => {
@@ -15,18 +16,6 @@ const History = () => {
     };
     init();
   }, [loadConfig, loadMatches]);
-
-  // Handle manual sync
-  const handleSync = async () => {
-    setSyncResult(null);
-    const result = await syncMatches();
-    if (result.newMatches > 0) {
-      setSyncResult(`${result.newMatches} nouvelle(s) game(s) ajoutée(s) !`);
-    } else {
-      setSyncResult('Aucune nouvelle game trouvée.');
-    }
-    setTimeout(() => setSyncResult(null), 5000);
-  };
 
   if (loading && matches.length === 0) {
     return (
@@ -43,31 +32,25 @@ const History = () => {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-12 text-center">
         <h1 className="text-3xl font-bold text-white mb-2">Musée du Throw</h1>
-        <p className="text-zinc-400 mb-6">Les grandes dates de l'histoire (tragique) de Johnny.</p>
+        <p className="text-zinc-400 mb-4">Les grandes dates de l'histoire (tragique) de Johnny.</p>
 
-        {/* Sync button */}
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-primary/10 border border-primary/30 rounded-xl text-primary hover:bg-primary/20 transition disabled:opacity-50"
-        >
-          {syncing ? (
+        {/* Auto-sync status */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900 border border-zinc-800 text-sm">
+          {isPolling ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Synchronisation...
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-green-400">Synchronisation automatique active</span>
             </>
           ) : (
             <>
-              <RefreshCw className="w-5 h-5" />
-              Synchroniser les games
+              <div className="w-2 h-2 bg-zinc-500 rounded-full"></div>
+              <span className="text-zinc-500">Synchronisation inactive</span>
             </>
           )}
-        </button>
-
-        {/* Sync result message */}
-        {syncResult && (
-          <div className="mt-4 p-3 rounded-lg bg-green-500/20 border border-green-500/30 text-green-400 text-sm inline-block">
-            {syncResult}
+        </div>
+        {isInGame && (
+          <div className="mt-2 text-xs text-amber-400">
+            Les nouvelles games seront ajoutées automatiquement à la fin de chaque partie.
           </div>
         )}
 
@@ -83,8 +66,11 @@ const History = () => {
         <div className="text-center py-16 bg-zinc-900/50 rounded-2xl border border-zinc-800">
           <Skull className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
           <h3 className="text-xl font-bold text-white mb-2">Aucune game enregistrée</h3>
-          <p className="text-zinc-400 mb-6">
-            Clique sur "Synchroniser les games" pour récupérer l'historique de Johnny.
+          <p className="text-zinc-400 mb-4">
+            Les games s'ajoutent automatiquement quand Johnny finit une partie.
+          </p>
+          <p className="text-zinc-500 text-sm">
+            Tu peux aussi synchroniser manuellement dans Admin si besoin.
           </p>
         </div>
       ) : (

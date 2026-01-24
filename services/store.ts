@@ -8,12 +8,12 @@ interface StoreState {
   gameState: GameState;
   bets: Bet[];
   history: MatchHistoryItem[];
-  
+
   // Actions
   addFunds: (amount: number) => void;
-  placeBet: (propId: string, propTitle: string, odds: number, amount: number) => void;
+  placeBet: (propId: string, propTitle: string, odds: number, amount: number, matchId?: string) => void;
   cancelBet: (betId: string) => void;
-  
+
   // Admin Actions
   toggleMatchStatus: (status: MatchStatus) => void;
   simulateGameEnd: () => void;
@@ -34,7 +34,7 @@ export const useStore = create<StoreState>()(
 
       addFunds: (amount) => set((state) => ({ balance: state.balance + amount })),
 
-      placeBet: (propId, propTitle, odds, amount) => {
+      placeBet: (propId, propTitle, odds, amount, matchId) => {
         const { balance, gameState } = get();
         if (balance < amount) return;
         // Note: Game status check is now done in PropCard using gameStore.isInGame
@@ -47,7 +47,7 @@ export const useStore = create<StoreState>()(
           odds,
           potentialPayout: Math.floor(amount * odds),
           status: BetStatus.PENDING,
-          matchId: gameState.matchId,
+          matchId: matchId || gameState.matchId, // Use provided matchId or fallback
           timestamp: Date.now(),
         };
 

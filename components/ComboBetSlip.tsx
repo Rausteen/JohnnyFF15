@@ -11,7 +11,10 @@ const ComboBetSlip: React.FC = () => {
   const { placeBet } = useStore();
   const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
-  const { isInGame } = useGameStore();
+  const { isInGame, currentGameId, testMode, testMatchId } = useGameStore();
+
+  // Get the match ID for the current bet
+  const betMatchId = testMode ? testMatchId : currentGameId;
 
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +85,8 @@ const ComboBetSlip: React.FC = () => {
           sel.prop.id,
           `[COMBO ${index + 1}/${selections.length}] ${sel.prop.title}`,
           combinedOdds, // Use combined odds for display
-          index === 0 ? val : 0 // Only first bet shows the amount
+          index === 0 ? val : 0, // Only first bet shows the amount
+          betMatchId || undefined
         );
       });
 

@@ -15,10 +15,13 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
   const { placeBet } = useStore();
   const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
-  const { isInGame, currentGame } = useGameStore();
+  const { isInGame, currentGame, currentGameId, testMode, testMatchId } = useGameStore();
   const { addToCombo, removeFromCombo, isInCombo, selections } = useComboStore();
 
   const inCombo = isInCombo(prop.id);
+
+  // Get the match ID for the current bet (live game ID or test mode ID)
+  const betMatchId = testMode ? testMatchId : currentGameId;
 
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -95,8 +98,8 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
         return;
       }
 
-      // Place bet in local store
-      placeBet(prop.id, prop.title, prop.odds, val);
+      // Place bet in local store with match ID
+      placeBet(prop.id, prop.title, prop.odds, val, betMatchId || undefined);
 
       // Record bet for stats
       await recordBetPlaced(val);
