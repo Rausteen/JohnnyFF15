@@ -75,7 +75,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
     }
 
     if (val < 10) {
-      setError("Mise minimum: 10 crédits");
+      setError("Mise minimum: 10 JC");
       return;
     }
 
@@ -83,10 +83,10 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
 
     try {
       // Subtract credits from Supabase
-      const success = await subtractCredits(val);
+      const result = await subtractCredits(val);
 
-      if (!success) {
-        setError("Erreur lors du paiement");
+      if (!result) {
+        setError("Pas assez de Johnny Coins !");
         setLoading(false);
         return;
       }
@@ -97,8 +97,9 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
       setAmount('');
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err) {
-      setError("Erreur lors du pari");
+    } catch (err: any) {
+      console.error('Bet error:', err);
+      setError(err?.message || "Erreur lors du pari");
     } finally {
       setLoading(false);
     }
@@ -178,7 +179,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
             disabled={!canBetOnProp()}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
           />
-          <span className="absolute right-4 top-3.5 text-xs text-zinc-500 font-mono">CRD</span>
+          <span className="absolute right-4 top-3.5 text-xs text-zinc-500 font-mono">JC</span>
         </div>
 
         {/* Potential gain display */}
@@ -186,7 +187,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
           <div className="flex justify-between text-sm px-1">
             <span className="text-zinc-500">Gain potentiel:</span>
             <span className="text-gold font-bold font-mono">
-              {Math.floor(parseInt(amount) * prop.odds)} CRD
+              {Math.floor(parseInt(amount) * prop.odds)} JC
             </span>
           </div>
         )}

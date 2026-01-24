@@ -69,7 +69,7 @@ const TopBar = () => {
                 <Sparkles className="w-3.5 h-3.5 text-gold" />
               </div>
               <span className="text-sm font-mono font-bold text-gold">
-                {profile.credits.toLocaleString('fr-FR')}
+                {profile.credits.toLocaleString('fr-FR')} JC
               </span>
             </div>
           )}
@@ -134,7 +134,7 @@ const TopBar = () => {
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-gold" />
                 <span className="font-mono font-bold text-gold">
-                  {profile.credits.toLocaleString('fr-FR')}
+                  {profile.credits.toLocaleString('fr-FR')} JC
                 </span>
               </div>
             </div>

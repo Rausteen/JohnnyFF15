@@ -35,7 +35,7 @@ export const useStore = create<StoreState>()(
       addFunds: (amount) => set((state) => ({ balance: state.balance + amount })),
 
       placeBet: (propId, propTitle, odds, amount) => {
-        const { balance } = get();
+        const { balance, gameState } = get();
         if (balance < amount) return;
         // Note: Game status check is now done in PropCard using gameStore.isInGame
 
@@ -52,7 +52,6 @@ export const useStore = create<StoreState>()(
         };
 
         set((state) => ({
-          balance: state.balance - amount,
           bets: [newBet, ...state.bets],
         }));
       },

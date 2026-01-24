@@ -271,7 +271,7 @@ const Login = () => {
 
             {/* Info bonus */}
             <p className="text-center text-zinc-500 text-xs mt-4">
-              10 000 credits offerts + 1 000 credits/jour
+              10 000 JC offerts + 1 000 JC/jour
             </p>
           </form>
         )}

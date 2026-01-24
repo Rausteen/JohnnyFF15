@@ -32,7 +32,7 @@ const Profile = () => {
     setBonusMessage(null);
     const result = await claimDailyBonus();
     if (result.success) {
-      setBonusMessage({ type: 'success', text: '+1 000 crédits ajoutés !' });
+      setBonusMessage({ type: 'success', text: '+1 000 JC ajoutés !' });
       setTimeout(() => setBonusMessage(null), 5000);
     } else {
       setBonusMessage({ type: 'error', text: result.error || 'Erreur lors de la réclamation' });
@@ -91,11 +91,14 @@ const Profile = () => {
             <div className="p-3 bg-gold/20 rounded-xl">
               <Sparkles className="w-6 h-6 text-gold" />
             </div>
-            <h2 className="text-xl font-bold text-white">Mes Crédits</h2>
+            <h2 className="text-xl font-bold text-white">Johnny Coins</h2>
           </div>
 
-          <div className="text-5xl font-black text-gold mb-6 font-mono">
-            {profile?.credits.toLocaleString('fr-FR') || '---'}
+          <div className="flex items-baseline gap-2 mb-6">
+            <span className="text-5xl font-black text-gold font-mono">
+              {profile?.credits.toLocaleString('fr-FR') || '---'}
+            </span>
+            <span className="text-xl font-bold text-gold/60">JC</span>
           </div>
 
           {/* Daily Bonus */}
@@ -105,7 +108,7 @@ const Profile = () => {
                 <Gift className="w-4 h-4" />
                 <span>Bonus Quotidien</span>
               </div>
-              <span className="text-sm font-bold text-gold">+1 000</span>
+              <span className="text-sm font-bold text-gold">+1 000 JC</span>
             </div>
 
             {bonusMessage && (
@@ -197,11 +200,11 @@ const Profile = () => {
             </div>
             <div className="text-center p-4 bg-black/20 rounded-xl">
               <div className="text-3xl font-bold text-gold">0</div>
-              <div className="text-xs text-zinc-500 uppercase mt-1">Crédits gagnés</div>
+              <div className="text-xs text-zinc-500 uppercase mt-1">JC gagnés</div>
             </div>
             <div className="text-center p-4 bg-black/20 rounded-xl">
               <div className="text-3xl font-bold text-red-400">0</div>
-              <div className="text-xs text-zinc-500 uppercase mt-1">Crédits perdus</div>
+              <div className="text-xs text-zinc-500 uppercase mt-1">JC perdus</div>
             </div>
           </div>
         </div>
