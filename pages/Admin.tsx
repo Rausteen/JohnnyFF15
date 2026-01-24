@@ -5,7 +5,9 @@ import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useMatchHistoryStore } from '../services/matchHistoryStore';
 import { Region, riotApi } from '../services/riotApi';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History } from 'lucide-react';
+import { resolveBets } from '../services/betResolutionService';
+import { useStore } from '../services/store';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel } from 'lucide-react';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -47,6 +49,11 @@ const Admin = () => {
   const [apiTestLoading, setApiTestLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetResult, setResetResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [resolveLoading, setResolveLoading] = useState(false);
+  const [resolveResult, setResolveResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const { bets } = useStore();
+  const pendingBets = bets.filter(b => b.status === 'PENDING');
 
   // Check if user is admin
   const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
@@ -123,6 +130,49 @@ const Admin = () => {
 
     setResetLoading(false);
     setTimeout(() => setResetResult(null), 5000);
+  };
+
+  const handleResolveBets = async () => {
+    if (!johnny.puuid) {
+      setResolveResult({ success: false, message: 'PUUID non configuré' });
+      return;
+    }
+
+    if (pendingBets.length === 0) {
+      setResolveResult({ success: false, message: 'Aucun pari en attente' });
+      return;
+    }
+
+    setResolveLoading(true);
+    setResolveResult(null);
+
+    try {
+      // Get the last match
+      const lastMatch = await riotApi.getLastMatch(johnny.puuid);
+
+      if (!lastMatch) {
+        setResolveResult({ success: false, message: 'Impossible de récupérer la dernière game' });
+        setResolveLoading(false);
+        return;
+      }
+
+      console.log('Resolving bets with match:', lastMatch.metadata.matchId);
+      const results = await resolveBets(lastMatch, johnny.puuid);
+
+      const won = results.filter(r => r.won).length;
+      const lost = results.filter(r => !r.won).length;
+
+      setResolveResult({
+        success: true,
+        message: `${results.length} paris résolus: ${won} gagnés, ${lost} perdus`
+      });
+    } catch (err: any) {
+      console.error('Resolve bets error:', err);
+      setResolveResult({ success: false, message: `Erreur: ${err.message}` });
+    } finally {
+      setResolveLoading(false);
+      setTimeout(() => setResolveResult(null), 5000);
+    }
   };
 
   const handleTestApi = async () => {
@@ -431,6 +481,56 @@ const Admin = () => {
                     <AlertCircle className="w-4 h-4" />
                   )}
                   <span>{resetResult.message}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bet Resolution */}
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Gavel className="w-5 h-5 text-blue-500" />
+                <h3 className="font-bold text-white">Résolution des Paris</h3>
+              </div>
+              <span className="text-xs text-zinc-500">{pendingBets.length} paris en attente</span>
+            </div>
+
+            <p className="text-xs text-zinc-500 mb-4">
+              Résout tous les paris en attente basé sur la dernière game terminée.
+            </p>
+
+            <button
+              onClick={handleResolveBets}
+              disabled={resolveLoading || pendingBets.length === 0 || !johnny.puuid}
+              className="w-full py-3 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+            >
+              {resolveLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Résolution...
+                </>
+              ) : (
+                <>
+                  <Gavel className="w-4 h-4" />
+                  Résoudre les paris maintenant
+                </>
+              )}
+            </button>
+
+            {resolveResult && (
+              <div className={`mt-3 p-3 rounded-xl text-sm ${
+                resolveResult.success
+                  ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                  : 'bg-red-500/10 border border-red-500/30 text-red-400'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {resolveResult.success ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4" />
+                  )}
+                  <span>{resolveResult.message}</span>
                 </div>
               </div>
             )}

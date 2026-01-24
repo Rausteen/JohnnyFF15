@@ -1,13 +1,67 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Flame, Skull, Trophy, Zap, AlertTriangle, History, Sparkles, Users } from 'lucide-react';
+import { ArrowRight, Flame, Skull, Trophy, Zap, AlertTriangle, History, Sparkles, Users, Gamepad2, Wifi } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
+import { useGameStore } from '../services/gameStore';
+import { getChampionName, getQueueName } from '../services/riotApi';
 
 const Landing = () => {
   const { user } = useAuthStore();
+  const { johnny, isInGame, currentGame, isPolling, loadJohnnyConfig, startPolling } = useGameStore();
+
+  // Load config and start polling on mount
+  useEffect(() => {
+    const init = async () => {
+      await loadJohnnyConfig();
+    };
+    init();
+  }, []);
+
+  useEffect(() => {
+    if (johnny.puuid && !isPolling) {
+      startPolling(30000);
+    }
+  }, [johnny.puuid, isPolling]);
+
+  // Find Johnny in the current game
+  const johnnyInGame = currentGame?.participants.find(p => p.puuid === johnny.puuid);
+  const gameTimeMinutes = currentGame ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60) : 0;
 
   return (
     <div className="flex flex-col">
+      {/* LIVE GAME BANNER */}
+      {isInGame && currentGame && (
+        <div className="bg-gradient-to-r from-green-900/50 via-green-800/30 to-green-900/50 border-b border-green-500/30 py-4 relative z-30">
+          <div className="container mx-auto px-4">
+            <div className="flex items-center justify-center gap-6 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Gamepad2 className="w-8 h-8 text-green-400" />
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-ping"></span>
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full"></span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-400 font-black text-lg">JOHNNY EST EN GAME !</span>
+                    <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full animate-pulse">LIVE</span>
+                  </div>
+                  <div className="text-green-300/70 text-sm">
+                    {johnnyInGame && getChampionName(johnnyInGame.championId)} • {getQueueName(currentGame.gameQueueConfigId)} • {gameTimeMinutes} min
+                  </div>
+                </div>
+              </div>
+              <Link
+                to={user ? "/dashboard" : "/login"}
+                className="px-6 py-2 bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg transition-all flex items-center gap-2"
+              >
+                <Zap className="w-4 h-4" />
+                {user ? "PARIER MAINTENANT" : "CONNEXION POUR PARIER"}
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Marquee Ticker */}
       <div className="bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10 border-y border-primary/20 backdrop-blur-sm overflow-hidden py-2.5 relative z-20">
         <div className="animate-marquee whitespace-nowrap flex items-center gap-8 text-sm font-mono">
@@ -73,12 +127,12 @@ const Landing = () => {
 
           <div className="flex items-center justify-center lg:justify-start gap-6 text-sm text-zinc-500 font-mono pt-4">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              Server Online
+              <div className={`w-2 h-2 rounded-full animate-pulse ${isPolling ? 'bg-green-500' : 'bg-zinc-500'}`}></div>
+              {isPolling ? 'Surveillance Active' : 'Surveillance Off'}
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-              Johnny Tilted
+              <div className={`w-2 h-2 rounded-full animate-pulse ${isInGame ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              {isInGame ? 'Johnny EN GAME' : 'Johnny AFK'}
             </div>
           </div>
         </div>

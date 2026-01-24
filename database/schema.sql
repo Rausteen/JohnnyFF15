@@ -131,14 +131,24 @@ alter table public.johnny_matches enable row level security;
 -- Drop existing policies if they exist
 drop policy if exists "Anyone can view matches" on public.johnny_matches;
 drop policy if exists "Authenticated users can insert matches" on public.johnny_matches;
+drop policy if exists "Authenticated users can update matches" on public.johnny_matches;
+drop policy if exists "Authenticated users can delete matches" on public.johnny_matches;
 
 -- Everyone can read matches (it's public data)
 create policy "Anyone can view matches" on public.johnny_matches
   for select using (true);
 
--- Only authenticated users can insert (will be done via service role in production)
+-- Only authenticated users can insert
 create policy "Authenticated users can insert matches" on public.johnny_matches
   for insert with check (auth.role() = 'authenticated');
+
+-- Only authenticated users can update (for upsert operations)
+create policy "Authenticated users can update matches" on public.johnny_matches
+  for update using (auth.role() = 'authenticated');
+
+-- Only authenticated users can delete (for museum reset)
+create policy "Authenticated users can delete matches" on public.johnny_matches
+  for delete using (auth.role() = 'authenticated');
 
 -- =====================================================
 -- JOHNNY CONFIG TABLE
