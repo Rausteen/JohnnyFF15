@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { useCreditsStore } from './creditsStore';
 
 interface AuthState {
   user: User | null;
@@ -28,9 +29,21 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { data: { session } } = await supabase.auth.getSession();
       set({ session, user: session?.user ?? null, loading: false });
 
+      // Load profile if user is logged in
+      if (session?.user) {
+        useCreditsStore.getState().loadProfile(session.user.id);
+      }
+
       // Listen for auth changes
       supabase.auth.onAuthStateChange((_event, session) => {
         set({ session, user: session?.user ?? null });
+
+        // Load or clear profile based on auth state
+        if (session?.user) {
+          useCreditsStore.getState().loadProfile(session.user.id);
+        } else {
+          useCreditsStore.getState().clearProfile();
+        }
       });
     } catch (error) {
       console.error('Auth initialization error:', error);
@@ -57,6 +70,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       set({ user: data.user, session: data.session, loading: false });
+
+      // Load profile for new user
+      if (data.user) {
+        // Small delay to allow trigger to create profile
+        setTimeout(() => {
+          useCreditsStore.getState().loadProfile(data.user!.id);
+        }, 1000);
+      }
+
       return { success: true };
     } catch (error: any) {
       const errorMessage = error.message || 'Erreur lors de l\'inscription';
@@ -79,6 +101,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       set({ user: data.user, session: data.session, loading: false });
+
+      // Load profile
+      if (data.user) {
+        useCreditsStore.getState().loadProfile(data.user.id);
+      }
+
       return { success: true };
     } catch (error: any) {
       const errorMessage = error.message || 'Erreur lors de la connexion';
@@ -91,6 +119,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ loading: true });
     try {
       await supabase.auth.signOut();
+      useCreditsStore.getState().clearProfile();
       set({ user: null, session: null, loading: false });
     } catch (error) {
       console.error('Sign out error:', error);

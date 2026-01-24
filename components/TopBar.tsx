@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut } from 'lucide-react';
-import { useStore } from '../services/store';
+import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
+import { useCreditsStore } from '../services/creditsStore';
 
 const TopBar = () => {
-  const { balance } = useStore();
-  const { user, signOut, loading } = useAuthStore();
+  const { user, signOut, loading: authLoading } = useAuthStore();
+  const { profile } = useCreditsStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
@@ -25,11 +25,11 @@ const TopBar = () => {
     navigate('/');
   };
 
-  // Get user display name (pseudo from metadata or email)
-  const displayName = user?.user_metadata?.pseudo || user?.email?.split('@')[0] || 'Utilisateur';
+  // Get user display name
+  const displayName = profile?.pseudo || user?.user_metadata?.pseudo || user?.email?.split('@')[0] || 'Utilisateur';
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/50 backdrop-blur-xl">
+    <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/80 backdrop-blur-xl">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group">
@@ -62,15 +62,17 @@ const TopBar = () => {
 
         {/* Balance + User Info & Mobile Menu */}
         <div className="flex items-center gap-3">
-          {/* Solde */}
-          <div className="hidden sm:flex items-center gap-3 px-4 py-1.5 rounded-full bg-black/40 border border-gold/30 shadow-[0_0_10px_rgba(245,158,11,0.1)]">
-            <div className="bg-gold/20 p-1 rounded-full">
-              <Sparkles className="w-3 h-3 text-gold" />
+          {/* Solde - Only show when logged in */}
+          {user && profile && (
+            <div className="hidden sm:flex items-center gap-3 px-4 py-1.5 rounded-full bg-gradient-to-r from-gold/10 to-amber-900/20 border border-gold/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+              <div className="bg-gold/20 p-1.5 rounded-full">
+                <Sparkles className="w-3.5 h-3.5 text-gold" />
+              </div>
+              <span className="text-sm font-mono font-bold text-gold">
+                {profile.credits.toLocaleString('fr-FR')}
+              </span>
             </div>
-            <span className="text-sm font-mono font-bold text-gold">
-              {balance.toLocaleString('fr-FR')}
-            </span>
-          </div>
+          )}
 
           {user ? (
             <>
@@ -79,7 +81,9 @@ const TopBar = () => {
                 to="/profile"
                 className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition cursor-pointer"
               >
-                <User className="w-4 h-4 text-white" />
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                  <span className="text-xs font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
+                </div>
                 <span className="text-sm font-bold text-white truncate max-w-[100px]">
                   {displayName}
                 </span>
@@ -87,7 +91,7 @@ const TopBar = () => {
               {/* Sign Out */}
               <button
                 onClick={handleSignOut}
-                disabled={loading}
+                disabled={authLoading}
                 className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full border border-white/20 bg-white/5 hover:bg-red-500/20 hover:border-red-500/50 transition cursor-pointer"
                 title="Se déconnecter"
               >
@@ -99,16 +103,9 @@ const TopBar = () => {
               {/* Se connecter */}
               <Link
                 to="/login"
-                className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition cursor-pointer font-bold text-sm"
+                className="hidden sm:flex items-center gap-2 px-5 py-2 rounded-full bg-gradient-to-r from-primary to-primary-glow hover:from-primary-glow hover:to-primary transition-all cursor-pointer font-bold text-sm text-white shadow-lg shadow-primary/25"
               >
                 Se connecter
-              </Link>
-              {/* Profil */}
-              <Link
-                to="/profile"
-                className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition cursor-pointer"
-              >
-                <User className="w-5 h-5 text-white" />
               </Link>
             </>
           )}
@@ -124,31 +121,22 @@ const TopBar = () => {
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden border-t border-white/10 bg-black p-4 space-y-4">
-          <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-zinc-900 to-black border border-zinc-800 mb-4">
-            <span className="text-zinc-400 text-sm">Solde actuel</span>
-            <div className="flex items-center gap-2">
-              <Coins className="w-4 h-4 text-gold" />
-              <span className="font-mono font-bold text-gold">
-                {balance.toLocaleString('fr-FR')}
-              </span>
-            </div>
-          </div>
-
-          {/* User info for mobile */}
-          {user && (
-            <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-zinc-900 to-black border border-zinc-800 mb-4">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-white" />
-                <span className="text-white text-sm font-bold">{displayName}</span>
+        <div className="md:hidden border-t border-white/10 bg-black/95 backdrop-blur-xl p-4 space-y-4">
+          {/* User info and balance for mobile */}
+          {user && profile && (
+            <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-zinc-900 to-black border border-gold/20 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                  <span className="text-sm font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
+                </div>
+                <span className="text-white font-bold">{displayName}</span>
               </div>
-              <button
-                onClick={handleSignOut}
-                className="flex items-center gap-2 text-red-400 hover:text-red-300"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="text-sm">Déconnexion</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-gold" />
+                <span className="font-mono font-bold text-gold">
+                  {profile.credits.toLocaleString('fr-FR')}
+                </span>
+              </div>
             </div>
           )}
 
@@ -170,26 +158,34 @@ const TopBar = () => {
             ))}
           </div>
 
-          {/* Login/Profile buttons for mobile */}
-          {!user && (
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              <Link
-                to="/login"
-                onClick={() => setIsOpen(false)}
-                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-primary/50 bg-primary/10 text-primary"
-              >
-                <User className="w-6 h-6" />
-                <span className="text-sm font-bold">Se connecter</span>
-              </Link>
+          {/* Login/Logout buttons for mobile */}
+          {user ? (
+            <div className="grid grid-cols-2 gap-2 mt-4">
               <Link
                 to="/profile"
                 onClick={() => setIsOpen(false)}
-                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-white/5 bg-zinc-900/50 text-zinc-400"
+                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-accent/30 bg-accent/10 text-accent"
               >
-                <User className="w-6 h-6" />
+                <Gift className="w-6 h-6" />
                 <span className="text-sm font-bold">Profil</span>
               </Link>
+              <button
+                onClick={() => { handleSignOut(); setIsOpen(false); }}
+                className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400"
+              >
+                <LogOut className="w-6 h-6" />
+                <span className="text-sm font-bold">Déconnexion</span>
+              </button>
             </div>
+          ) : (
+            <Link
+              to="/login"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center justify-center gap-2 p-4 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-bold mt-4"
+            >
+              <User className="w-5 h-5" />
+              Se connecter
+            </Link>
           )}
         </div>
       )}
