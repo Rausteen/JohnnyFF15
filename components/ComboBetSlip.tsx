@@ -11,7 +11,7 @@ const ComboBetSlip: React.FC = () => {
   const { placeBet } = useStore();
   const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
-  const { isInGame, currentGameId, testMode, testMatchId } = useGameStore();
+  const { isInGame, currentGameId, testMode, testMatchId, testMatchData, currentGame, johnny } = useGameStore();
 
   // Get the match ID for the current bet
   const betMatchId = testMode ? testMatchId : currentGameId;
@@ -78,6 +78,19 @@ const ComboBetSlip: React.FC = () => {
         return;
       }
 
+      // Get champion name from current game or test match
+      let championName = 'Inconnu';
+      if (testMode && testMatchData) {
+        const johnnyStats = testMatchData.info.participants.find(p => p.puuid === johnny.puuid);
+        championName = johnnyStats?.championName || 'Inconnu';
+      } else if (currentGame) {
+        const johnnyInGame = currentGame.participants.find(p => p.puuid === johnny.puuid);
+        if (johnnyInGame) {
+          const { getChampionName } = await import('../services/riotApi');
+          championName = getChampionName(johnnyInGame.championId);
+        }
+      }
+
       // Place each bet in the combo as a linked bet
       const comboId = `combo_${Date.now()}`;
       const comboTotal = selections.length;
@@ -88,7 +101,9 @@ const ComboBetSlip: React.FC = () => {
           combinedOdds, // Use combined odds for display
           index === 0 ? val : 0, // Only first bet shows the amount
           betMatchId || undefined,
-          { comboId, comboIndex: index + 1, comboTotal }
+          { comboId, comboIndex: index + 1, comboTotal },
+          user.id,
+          championName
         );
       });
 

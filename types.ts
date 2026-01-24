@@ -33,6 +33,8 @@ export interface Bet {
   comboId?: string; // If part of a combo, all bets share this ID
   comboIndex?: number; // Position in combo (1/3, 2/3, etc.)
   comboTotal?: number; // Total bets in combo
+  userId?: string; // Owner of this bet
+  championName?: string; // Champion for this game
 }
 
 export interface MatchStats {

@@ -15,7 +15,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
   const { placeBet } = useStore();
   const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
-  const { isInGame, currentGame, currentGameId, testMode, testMatchId } = useGameStore();
+  const { isInGame, currentGame, currentGameId, testMode, testMatchId, testMatchData, johnny } = useGameStore();
   const { addToCombo, removeFromCombo, isInCombo, selections } = useComboStore();
 
   const inCombo = isInCombo(prop.id);
@@ -98,8 +98,22 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
         return;
       }
 
-      // Place bet in local store with match ID
-      placeBet(prop.id, prop.title, prop.odds, val, betMatchId || undefined);
+      // Get champion name from current game or test match
+      let championName = 'Inconnu';
+      if (testMode && testMatchData) {
+        const johnnyStats = testMatchData.info.participants.find(p => p.puuid === johnny.puuid);
+        championName = johnnyStats?.championName || 'Inconnu';
+      } else if (currentGame) {
+        const johnnyInGame = currentGame.participants.find(p => p.puuid === johnny.puuid);
+        if (johnnyInGame) {
+          // Get champion name from ID
+          const { getChampionName } = await import('../services/riotApi');
+          championName = getChampionName(johnnyInGame.championId);
+        }
+      }
+
+      // Place bet in local store with match ID, user ID and champion
+      placeBet(prop.id, prop.title, prop.odds, val, betMatchId || undefined, undefined, user.id, championName);
 
       // Record bet for stats
       await recordBetPlaced(val);
