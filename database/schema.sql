@@ -94,6 +94,7 @@ create trigger update_profiles_updated_at
 
 create table if not exists public.johnny_matches (
   id text primary key, -- Riot match ID (e.g., EUW1_1234567890)
+  puuid text, -- Johnny's PUUID (to filter matches when config changes)
   game_creation bigint not null, -- Timestamp when game was created
   game_duration integer not null, -- Game duration in seconds
   game_mode text not null, -- Game mode (e.g., CLASSIC)
@@ -122,8 +123,12 @@ create table if not exists public.johnny_matches (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Add puuid column if it doesn't exist (for existing tables)
+alter table public.johnny_matches add column if not exists puuid text;
+
 -- Index for faster queries
 create index if not exists idx_johnny_matches_game_creation on public.johnny_matches(game_creation desc);
+create index if not exists idx_johnny_matches_puuid on public.johnny_matches(puuid);
 
 -- Enable RLS (public read, no write from client - only server/admin)
 alter table public.johnny_matches enable row level security;

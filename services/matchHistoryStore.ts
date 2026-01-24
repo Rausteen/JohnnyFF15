@@ -5,6 +5,7 @@ import { riotApi, MatchDto, getChampionName, getQueueName } from './riotApi';
 // Type for a saved match in Supabase
 export interface JohnnyMatch {
   id: string; // Riot match ID
+  puuid: string; // Johnny's PUUID for this match
   game_creation: number;
   game_duration: number;
   game_mode: string;
@@ -96,15 +97,23 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     }
   },
 
-  // Load matches from Supabase
+  // Load matches from Supabase (filtered by Johnny's PUUID)
   loadMatches: async () => {
+    const { config } = get();
     set({ loading: true, error: null });
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('johnny_matches')
         .select('*')
         .order('game_creation', { ascending: false })
         .limit(50);
+
+      // Filter by PUUID if configured (to avoid showing other players' games)
+      if (config?.puuid) {
+        query = query.eq('puuid', config.puuid);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       set({ matches: data as JohnnyMatch[], loading: false });
@@ -267,7 +276,10 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
 // Helper: Convert Riot API match to our format
 function convertMatchToJohnnyMatch(match: MatchDto, puuid: string): JohnnyMatch | null {
   const johnnyStats = match.info.participants.find(p => p.puuid === puuid);
-  if (!johnnyStats) return null;
+  if (!johnnyStats) {
+    console.warn(`Johnny (PUUID: ${puuid}) not found in match ${match.metadata.matchId}`);
+    return null;
+  }
 
   // Get team kills
   const team = match.info.participants.filter(p => p.teamId === johnnyStats.teamId);
@@ -275,6 +287,7 @@ function convertMatchToJohnnyMatch(match: MatchDto, puuid: string): JohnnyMatch 
 
   return {
     id: match.metadata.matchId,
+    puuid: puuid, // Store Johnny's PUUID to filter later
     game_creation: match.info.gameCreation,
     game_duration: match.info.gameDuration,
     game_mode: match.info.gameMode,

@@ -56,7 +56,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       // Normalize pseudo for email generation (lowercase, no special chars)
       const normalizedPseudo = pseudo.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const fakeEmail = `${normalizedPseudo}@johnnyff15.local`;
+      const fakeEmail = `${normalizedPseudo}@jff15.bet`;
 
       // Check if pseudo is already taken
       const { data: existingUser } = await supabase
@@ -115,7 +115,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       // Generate email from pseudo
       const normalizedPseudo = pseudo.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const fakeEmail = `${normalizedPseudo}@johnnyff15.local`;
+      const fakeEmail = `${normalizedPseudo}@jff15.bet`;
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email: fakeEmail,

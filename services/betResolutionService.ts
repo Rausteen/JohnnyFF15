@@ -83,8 +83,8 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
       return killParticipation < 15;
 
     // ========== RÉSULTAT ==========
-    case 'out1': // FF avant 20 min (early surrender = before 15 actually)
-      return (stats.gameEndedInEarlySurrender || stats.teamEarlySurrendered) && match.info.gameDuration < 1200;
+    case 'out1': // FF avant 20 min (any surrender before 20 min)
+      return stats.gameEndedInSurrender && match.info.gameDuration < 1200;
 
     case 'out2': // Défaite
       return !stats.win;
