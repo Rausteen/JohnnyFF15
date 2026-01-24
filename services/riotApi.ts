@@ -233,18 +233,32 @@ class RiotApiService {
 
   private async fetch<T>(url: string): Promise<T | null> {
     if (!RIOT_API_KEY) {
-      console.error('RIOT_API_KEY not configured');
+      console.error('RIOT_API_KEY not configured in .env');
       return null;
     }
 
     try {
+      console.log('Riot API Request:', url);
       const response = await fetch(url, {
         headers: {
           'X-Riot-Token': RIOT_API_KEY
         }
       });
 
+      console.log('Riot API Response:', response.status, response.statusText);
+
       if (response.status === 404) {
+        // Player not in game or not found - this is expected
+        return null;
+      }
+
+      if (response.status === 403) {
+        console.error('Riot API: Access Forbidden - Check your API key');
+        return null;
+      }
+
+      if (response.status === 429) {
+        console.error('Riot API: Rate limited - Too many requests');
         return null;
       }
 

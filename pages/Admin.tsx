@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useGameStore, JohnnyConfig } from '../services/gameStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
-import { Region } from '../services/riotApi';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX } from 'lucide-react';
+import { Region, riotApi } from '../services/riotApi';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap } from 'lucide-react';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -41,6 +41,8 @@ const Admin = () => {
   const [tagLine, setTagLine] = useState('');
   const [region, setRegion] = useState<Region>('EUW');
   const [configSuccess, setConfigSuccess] = useState(false);
+  const [apiTestResult, setApiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [apiTestLoading, setApiTestLoading] = useState(false);
 
   // Check if user is admin
   const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
@@ -96,6 +98,51 @@ const Admin = () => {
 
   const handleAddCredits = async () => {
     await addCredits(1000);
+  };
+
+  const handleTestApi = async () => {
+    setApiTestLoading(true);
+    setApiTestResult(null);
+
+    try {
+      if (!johnny.puuid) {
+        setApiTestResult({ success: false, message: 'PUUID non configuré. Sauvegarde Johnny d\'abord.' });
+        return;
+      }
+
+      // Test 1: Check if we can access spectator API
+      console.log('Testing Riot API with PUUID:', johnny.puuid);
+      const currentGame = await riotApi.getCurrentGame(johnny.puuid);
+
+      if (currentGame) {
+        setApiTestResult({
+          success: true,
+          message: `API OK! Johnny est EN GAME (Game ID: ${currentGame.gameId})`
+        });
+      } else {
+        // Try to get match history to verify API is working
+        const matchHistory = await riotApi.getMatchHistory(johnny.puuid, 1);
+        if (matchHistory && matchHistory.length > 0) {
+          setApiTestResult({
+            success: true,
+            message: `API OK! Johnny n'est pas en game actuellement. Dernière game: ${matchHistory[0]}`
+          });
+        } else {
+          setApiTestResult({
+            success: false,
+            message: 'API peut fonctionner mais aucune game trouvée. Vérifie la clé API ou la région.'
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error('API Test error:', err);
+      setApiTestResult({
+        success: false,
+        message: `Erreur: ${err.message || 'Vérifie la console pour plus de détails'}`
+      });
+    } finally {
+      setApiTestLoading(false);
+    }
   };
 
   const gameTimeMinutes = currentGame
@@ -278,6 +325,44 @@ const Admin = () => {
                 Vérification toutes les 30 secondes...
               </div>
             )}
+
+            {/* API Test Section */}
+            <div className="mt-4 pt-4 border-t border-zinc-800">
+              <button
+                onClick={handleTestApi}
+                disabled={apiTestLoading || !johnny.puuid}
+                className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                {apiTestLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Test en cours...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4" />
+                    Tester la connexion API Riot
+                  </>
+                )}
+              </button>
+
+              {apiTestResult && (
+                <div className={`mt-3 p-3 rounded-xl text-sm ${
+                  apiTestResult.success
+                    ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                    : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {apiTestResult.success ? (
+                      <CheckCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    )}
+                    <span>{apiTestResult.message}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Simulation / Cheats */}
