@@ -24,19 +24,21 @@ const Dashboard = () => {
     stopPolling
   } = useGameStore();
 
+  // Load config and start polling
   useEffect(() => {
-    loadJohnnyConfig();
-  }, []);
+    const init = async () => {
+      await loadJohnnyConfig();
+    };
+    init();
+  }, [loadJohnnyConfig]);
 
   // Auto-start polling if johnny is configured
   useEffect(() => {
     if (johnny.puuid && !isPolling) {
+      console.log('Starting surveillance for', johnny.gameName);
       startPolling(30000);
     }
-    return () => {
-      // Don't stop on unmount, let it run in background
-    };
-  }, [johnny.puuid]);
+  }, [johnny.puuid, isPolling, startPolling]);
 
   const activeBets = bets.filter(b => b.status === BetStatus.PENDING);
   const gameTimeMinutes = currentGame

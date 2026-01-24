@@ -183,6 +183,7 @@ export interface MatchParticipant {
   wardsKilled: number;
   firstBloodKill: boolean;
   firstBloodAssist: boolean;
+  firstBloodVictim: boolean;
   firstTowerKill: boolean;
   firstTowerAssist: boolean;
   doubleKills: number;

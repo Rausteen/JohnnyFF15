@@ -258,8 +258,7 @@ function convertMatchToJohnnyMatch(match: MatchDto, puuid: string): JohnnyMatch 
     gold_earned: johnnyStats.goldEarned,
     damage_dealt: johnnyStats.totalDamageDealtToChampions,
     win: johnnyStats.win,
-    first_blood_victim: johnnyStats.firstBloodKill === false && johnnyStats.deaths > 0 &&
-      match.info.participants.some(p => p.firstBloodKill && p.teamId !== johnnyStats.teamId),
+    first_blood_victim: johnnyStats.firstBloodVictim === true,
     game_ended_surrender: johnnyStats.gameEndedInSurrender || johnnyStats.teamEarlySurrendered,
     team_kills: teamKills,
     created_at: new Date().toISOString()
