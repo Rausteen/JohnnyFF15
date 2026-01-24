@@ -16,7 +16,8 @@ export interface Prop {
   title: string;
   description: string;
   odds: number;
-  category: 'KDA' | 'GAMEPLAY' | 'TOXICITY';
+  category: 'KDA' | 'GAMEPLAY' | 'TOXICITY' | 'EARLY' | 'LATE';
+  maxGameTime?: number; // Max game time in minutes when this prop is available
 }
 
 export interface Bet {
