@@ -6,7 +6,8 @@ import Dashboard from './pages/Dashboard';
 import MyBets from './pages/MyBets';
 import History from './pages/History';
 import Admin from './pages/Admin';
-
+import Login from './pages/Login';
+import Profile from './pages/Profile';
 const App = () => {
   return (
     <HashRouter>
@@ -17,6 +18,8 @@ const App = () => {
           <Route path="my-bets" element={<MyBets />} />
           <Route path="history" element={<History />} />
           <Route path="admin" element={<Admin />} />
+          <Route path="login" element={<Login />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>
     </HashRouter>

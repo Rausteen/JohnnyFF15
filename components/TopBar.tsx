@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles } from 'lucide-react';
+import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User } from 'lucide-react';
 import { useStore } from '../services/store';
 
 const TopBar = () => {
@@ -9,7 +9,7 @@ const TopBar = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
-  
+
   const navLinks = [
     { path: '/dashboard', label: 'Le Salon', icon: Skull },
     { path: '/my-bets', label: 'Mes Paris', icon: Coins },
@@ -38,8 +38,8 @@ const TopBar = () => {
               key={link.path}
               to={link.path}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold transition-all ${
-                isActive(link.path) 
-                  ? 'bg-primary text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]' 
+                isActive(link.path)
+                  ? 'bg-primary text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]'
                   : 'text-zinc-400 hover:text-white hover:bg-white/5'
               }`}
             >
@@ -49,8 +49,9 @@ const TopBar = () => {
           ))}
         </div>
 
-        {/* Balance & Mobile Menu */}
-        <div className="flex items-center gap-4">
+        {/* Balance + Profil + Login & Mobile Menu */}
+        <div className="flex items-center gap-3">
+          {/* Solde */}
           <div className="hidden sm:flex items-center gap-3 px-4 py-1.5 rounded-full bg-black/40 border border-gold/30 shadow-[0_0_10px_rgba(245,158,11,0.1)]">
             <div className="bg-gold/20 p-1 rounded-full">
               <Sparkles className="w-3 h-3 text-gold" />
@@ -59,8 +60,23 @@ const TopBar = () => {
               {balance.toLocaleString('fr-FR')}
             </span>
           </div>
-          
-          <button 
+
+          {/* Se connecter */}
+          <Link
+            to="/login"
+            className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition cursor-pointer font-bold text-sm"
+          >
+            Se connecter
+          </Link>
+          {/* Profil */}
+          <Link
+            to="/profile"
+            className="hidden sm:flex items-center justify-center w-10 h-10 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition cursor-pointer"
+          >
+            <User className="w-5 h-5 text-white" />
+          </Link>
+          {/* Mobile menu button */}
+          <button
             className="md:hidden p-2 text-zinc-400 hover:text-white"
             onClick={() => setIsOpen(!isOpen)}
           >
