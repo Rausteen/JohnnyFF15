@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JohnnyFF15 - Le Casino du Throw</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              background: "#09090b", // Zinc-950
+              foreground: "#fafafa", // Zinc-50
+              card: "#18181b", // Zinc-900
+              primary: {
+                DEFAULT: "#ef4444", // Red-500
+                glow: "#7f1d1d", // Red-900
+              },
+              accent: {
+                DEFAULT: "#8b5cf6", // Violet-500
+                glow: "#4c1d95", // Violet-900
+              },
+              gold: {
+                DEFAULT: "#f59e0b", // Amber-500
+                glow: "#78350f", // Amber-900
+              }
+            },
+            animation: {
+              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'shake': 'shake 0.82s cubic-bezier(.36,.07,.19,.97) both',
+              'float': 'float 6s ease-in-out infinite',
+              'marquee': 'marquee 25s linear infinite',
+            },
+            keyframes: {
+              shake: {
+                '10%, 90%': { transform: 'translate3d(-1px, 0, 0)' },
+                '20%, 80%': { transform: 'translate3d(2px, 0, 0)' },
+                '30%, 50%, 70%': { transform: 'translate3d(-4px, 0, 0)' },
+                '40%, 60%': { transform: 'translate3d(4px, 0, 0)' }
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-20px)' },
+              },
+              marquee: {
+                '0%': { transform: 'translateX(0%)' },
+                '100%': { transform: 'translateX(-100%)' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #09090b; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #27272a; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #3f3f46; 
+      }
+      body {
+        background-color: #000000;
+        color: #fafafa;
+      }
+      .bg-grid {
+        background-size: 40px 40px;
+        background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                          linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "zustand/": "https://esm.sh/zustand@^5.0.10/",
+    "zustand": "https://esm.sh/zustand@^5.0.10"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
