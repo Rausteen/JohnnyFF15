@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import PropCard from '../components/PropCard';
 import ComboBetSlip from '../components/ComboBetSlip';
 import { MOCK_PROPS } from '../services/mockData';
@@ -20,27 +20,10 @@ const Dashboard = () => {
     isPolling,
     lastMatchStats,
     testMode,
-    testMatchData,
-    loadJohnnyConfig,
-    startPolling,
-    stopPolling
+    testMatchData
   } = useGameStore();
 
-  // Load config and start polling
-  useEffect(() => {
-    const init = async () => {
-      await loadJohnnyConfig();
-    };
-    init();
-  }, [loadJohnnyConfig]);
-
-  // Auto-start polling if johnny is configured
-  useEffect(() => {
-    if (johnny.puuid && !isPolling) {
-      console.log('Starting surveillance for', johnny.gameName);
-      startPolling(30000);
-    }
-  }, [johnny.puuid, isPolling, startPolling]);
+  // Surveillance is now started globally in App.tsx
 
   const activeBets = bets.filter(b => b.status === BetStatus.PENDING);
   const gameTimeMinutes = currentGame

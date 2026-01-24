@@ -11,7 +11,7 @@ interface StoreState {
 
   // Actions
   addFunds: (amount: number) => void;
-  placeBet: (propId: string, propTitle: string, odds: number, amount: number, matchId?: string) => void;
+  placeBet: (propId: string, propTitle: string, odds: number, amount: number, matchId?: string, comboInfo?: { comboId: string; comboIndex: number; comboTotal: number }) => void;
   cancelBet: (betId: string) => void;
 
   // Admin Actions
@@ -34,13 +34,13 @@ export const useStore = create<StoreState>()(
 
       addFunds: (amount) => set((state) => ({ balance: state.balance + amount })),
 
-      placeBet: (propId, propTitle, odds, amount, matchId) => {
+      placeBet: (propId, propTitle, odds, amount, matchId, comboInfo) => {
         const { balance, gameState } = get();
         if (balance < amount) return;
         // Note: Game status check is now done in PropCard using gameStore.isInGame
 
         const newBet: Bet = {
-          id: `bet_${Date.now()}`,
+          id: `bet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           propId,
           propTitle,
           amount,
@@ -49,6 +49,11 @@ export const useStore = create<StoreState>()(
           status: BetStatus.PENDING,
           matchId: matchId || gameState.matchId, // Use provided matchId or fallback
           timestamp: Date.now(),
+          ...(comboInfo && {
+            comboId: comboInfo.comboId,
+            comboIndex: comboInfo.comboIndex,
+            comboTotal: comboInfo.comboTotal
+          })
         };
 
         set((state) => ({

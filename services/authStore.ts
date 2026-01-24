@@ -11,8 +11,8 @@ interface AuthState {
 
   // Actions
   initialize: () => Promise<void>;
-  signUp: (email: string, password: string, pseudo: string) => Promise<{ success: boolean; error?: string }>;
-  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (pseudo: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signIn: (pseudo: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -51,20 +51,43 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  signUp: async (email, password, pseudo) => {
+  signUp: async (pseudo, password) => {
     set({ loading: true, error: null });
     try {
+      // Normalize pseudo for email generation (lowercase, no special chars)
+      const normalizedPseudo = pseudo.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const fakeEmail = `${normalizedPseudo}@johnnyff15.local`;
+
+      // Check if pseudo is already taken
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('pseudo', pseudo)
+        .single();
+
+      if (existingUser) {
+        set({ error: 'Ce pseudo est déjà pris !', loading: false });
+        return { success: false, error: 'Ce pseudo est déjà pris !' };
+      }
+
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: fakeEmail,
         password,
         options: {
           data: {
             pseudo,
           },
+          // Skip email confirmation for fake emails
+          emailRedirectTo: undefined,
         },
       });
 
       if (error) {
+        // Handle duplicate email (same pseudo tried to register again)
+        if (error.message.includes('already registered')) {
+          set({ error: 'Ce pseudo est déjà pris !', loading: false });
+          return { success: false, error: 'Ce pseudo est déjà pris !' };
+        }
         set({ error: error.message, loading: false });
         return { success: false, error: error.message };
       }
@@ -87,15 +110,24 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  signIn: async (email, password) => {
+  signIn: async (pseudo, password) => {
     set({ loading: true, error: null });
     try {
+      // Generate email from pseudo
+      const normalizedPseudo = pseudo.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const fakeEmail = `${normalizedPseudo}@johnnyff15.local`;
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: fakeEmail,
         password,
       });
 
       if (error) {
+        // Translate common errors to French
+        if (error.message.includes('Invalid login')) {
+          set({ error: 'Pseudo ou mot de passe incorrect', loading: false });
+          return { success: false, error: 'Pseudo ou mot de passe incorrect' };
+        }
         set({ error: error.message, loading: false });
         return { success: false, error: error.message };
       }

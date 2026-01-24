@@ -149,11 +149,23 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
 
   console.log(`Resolving ${pendingBets.length} pending bets for match ${matchId}...`);
 
-  // Evaluate each bet
+  // Separate single bets from combo bets
+  const singleBets = pendingBets.filter(b => !b.comboId);
+  const comboBets = pendingBets.filter(b => b.comboId);
+
+  // Group combo bets by comboId
+  const comboGroups = new Map<string, typeof comboBets>();
+  for (const bet of comboBets) {
+    const existing = comboGroups.get(bet.comboId!) || [];
+    existing.push(bet);
+    comboGroups.set(bet.comboId!, existing);
+  }
+
   const updatedBets = [...store.bets];
   let totalWinnings = 0;
 
-  for (const bet of pendingBets) {
+  // Process single bets
+  for (const bet of singleBets) {
     const won = evaluateProp(bet.propId, johnnyStats, matchData);
     const betIndex = updatedBets.findIndex(b => b.id === bet.id);
 
@@ -165,10 +177,8 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
 
       if (won) {
         totalWinnings += bet.potentialPayout;
-        // Record bet won in credits store
         await creditsStore.recordBetWon(bet.potentialPayout - bet.amount);
       } else {
-        // Record bet lost
         await creditsStore.recordBetLost(bet.amount);
       }
 
@@ -179,7 +189,62 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
         payout: won ? bet.potentialPayout : 0
       });
 
-      console.log(`Bet ${bet.propTitle}: ${won ? 'WON' : 'LOST'}`);
+      console.log(`Single bet ${bet.propTitle}: ${won ? 'WON' : 'LOST'}`);
+    }
+  }
+
+  // Process combo bets - ALL bets in combo must win for payout
+  for (const [comboId, bets] of comboGroups) {
+    console.log(`Processing combo ${comboId} with ${bets.length} bets`);
+
+    // Evaluate each bet in the combo
+    const betResults = bets.map(bet => ({
+      bet,
+      won: evaluateProp(bet.propId, johnnyStats, matchData)
+    }));
+
+    // Combo wins only if ALL bets won
+    const comboWon = betResults.every(r => r.won);
+    console.log(`Combo ${comboId} results:`, betResults.map(r => `${r.bet.propId}: ${r.won}`), `=> Combo ${comboWon ? 'WON' : 'LOST'}`);
+
+    // Find the bet with the amount (first bet in combo)
+    const mainBet = bets.find(b => b.amount > 0) || bets[0];
+    const totalAmount = mainBet.amount;
+    const potentialPayout = mainBet.potentialPayout;
+
+    // Update all bets in the combo
+    for (const { bet, won } of betResults) {
+      const betIndex = updatedBets.findIndex(b => b.id === bet.id);
+      if (betIndex !== -1) {
+        // Individual prop status
+        updatedBets[betIndex] = {
+          ...updatedBets[betIndex],
+          status: comboWon ? BetStatus.WON : BetStatus.LOST
+        };
+
+        results.push({
+          betId: bet.id,
+          propId: bet.propId,
+          won: comboWon,
+          payout: 0 // Only main bet shows payout
+        });
+      }
+    }
+
+    // Record win/loss and payout for the combo
+    if (comboWon) {
+      totalWinnings += potentialPayout;
+      await creditsStore.recordBetWon(potentialPayout - totalAmount);
+      console.log(`Combo ${comboId} WON! Payout: ${potentialPayout} JC`);
+    } else {
+      await creditsStore.recordBetLost(totalAmount);
+      console.log(`Combo ${comboId} LOST. Lost: ${totalAmount} JC`);
+    }
+
+    // Update main bet payout in results
+    const mainBetResult = results.find(r => r.betId === mainBet.id);
+    if (mainBetResult) {
+      mainBetResult.payout = comboWon ? potentialPayout : 0;
     }
   }
 

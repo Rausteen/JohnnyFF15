@@ -80,13 +80,15 @@ const ComboBetSlip: React.FC = () => {
 
       // Place each bet in the combo as a linked bet
       const comboId = `combo_${Date.now()}`;
+      const comboTotal = selections.length;
       selections.forEach((sel, index) => {
         placeBet(
           sel.prop.id,
-          `[COMBO ${index + 1}/${selections.length}] ${sel.prop.title}`,
+          `[COMBO ${index + 1}/${comboTotal}] ${sel.prop.title}`,
           combinedOdds, // Use combined odds for display
           index === 0 ? val : 0, // Only first bet shows the amount
-          betMatchId || undefined
+          betMatchId || undefined,
+          { comboId, comboIndex: index + 1, comboTotal }
         );
       });
 

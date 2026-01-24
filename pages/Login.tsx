@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../services/authStore';
-import { Loader2, Mail, Lock, User, AlertCircle, CheckCircle, Skull } from 'lucide-react';
+import { Loader2, Lock, User, AlertCircle, CheckCircle, Skull } from 'lucide-react';
 
 const images = [
   '/background_image/vayne.PNG',
@@ -21,7 +21,6 @@ const Login = () => {
   const { signIn, signUp, user, loading, error, clearError } = useAuthStore();
 
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
   const [pseudo, setPseudo] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -62,12 +61,12 @@ const Login = () => {
     e.preventDefault();
     setLocalError('');
 
-    if (!email || !password) {
-      setLocalError('Email ou mot de passe manquant !');
+    if (!pseudo || !password) {
+      setLocalError('Pseudo ou mot de passe manquant !');
       return;
     }
 
-    const result = await signIn(email, password);
+    const result = await signIn(pseudo, password);
     if (result.success) {
       navigate('/dashboard');
     }
@@ -77,8 +76,13 @@ const Login = () => {
     e.preventDefault();
     setLocalError('');
 
-    if (!email || !password || !pseudo) {
+    if (!password || !pseudo) {
       setLocalError('Tous les champs sont requis !');
+      return;
+    }
+
+    if (pseudo.length < 3) {
+      setLocalError("Le pseudo doit contenir au moins 3 caractères !");
       return;
     }
 
@@ -92,9 +96,13 @@ const Login = () => {
       return;
     }
 
-    const result = await signUp(email, password, pseudo);
+    const result = await signUp(pseudo, password);
     if (result.success) {
-      setSuccessMessage('Inscription réussie ! Vérifie ton email pour confirmer ton compte.');
+      setSuccessMessage('Inscription réussie ! Tu peux maintenant te connecter.');
+      setIsLogin(true);
+      setPseudo('');
+      setPassword('');
+      setConfirmPassword('');
     }
   };
 
@@ -168,13 +176,13 @@ const Login = () => {
         {isLogin ? (
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
               <input
-                type="email"
-                placeholder="Email"
+                type="text"
+                placeholder="Pseudo"
                 className="w-full pl-11 pr-4 py-3 rounded-lg bg-zinc-800/80 text-white border border-zinc-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all placeholder:text-zinc-500"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={pseudo}
+                onChange={(e) => setPseudo(e.target.value)}
                 required
                 disabled={loading}
               />
@@ -207,18 +215,6 @@ const Login = () => {
           </form>
         ) : (
           <form onSubmit={handleSignUp} className="space-y-4">
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
-              <input
-                type="email"
-                placeholder="Email"
-                className="w-full pl-11 pr-4 py-3 rounded-lg bg-zinc-800/80 text-white border border-zinc-700 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all placeholder:text-zinc-500"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
               <input

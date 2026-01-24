@@ -12,10 +12,12 @@ import Leaderboard from './pages/Leaderboard';
 import PublicProfile from './pages/PublicProfile';
 import { useAuthStore } from './services/authStore';
 import { useMatchHistoryStore } from './services/matchHistoryStore';
+import { useGameStore } from './services/gameStore';
 
 const App = () => {
   const initialize = useAuthStore((state) => state.initialize);
   const { loadConfig, loadMatches, syncMatches, matches } = useMatchHistoryStore();
+  const { loadJohnnyConfig, startPolling, johnny, isPolling } = useGameStore();
 
   useEffect(() => {
     initialize();
@@ -37,6 +39,22 @@ const App = () => {
 
     initMatchHistory();
   }, [loadConfig, loadMatches, syncMatches]);
+
+  // Initialize surveillance on app load (always active)
+  useEffect(() => {
+    const initSurveillance = async () => {
+      await loadJohnnyConfig();
+    };
+    initSurveillance();
+  }, [loadJohnnyConfig]);
+
+  // Auto-start polling when Johnny is configured
+  useEffect(() => {
+    if (johnny.puuid && !isPolling) {
+      console.log('Auto-starting surveillance for', johnny.gameName);
+      startPolling(30000);
+    }
+  }, [johnny.puuid, isPolling, startPolling]);
 
   return (
     <HashRouter>

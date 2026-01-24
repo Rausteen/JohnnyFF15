@@ -42,6 +42,28 @@ const Leaderboard = () => {
     };
 
     fetchLeaderboard();
+
+    // Real-time subscription for instant updates
+    const subscription = supabase
+      .channel('leaderboard-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles'
+        },
+        (payload) => {
+          console.log('Leaderboard update:', payload);
+          // Refetch the full leaderboard to ensure correct order
+          fetchLeaderboard();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (loading) {

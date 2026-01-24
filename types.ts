@@ -30,6 +30,9 @@ export interface Bet {
   status: BetStatus;
   matchId: string;
   timestamp: number;
+  comboId?: string; // If part of a combo, all bets share this ID
+  comboIndex?: number; // Position in combo (1/3, 2/3, etc.)
+  comboTotal?: number; // Total bets in combo
 }
 
 export interface MatchStats {
