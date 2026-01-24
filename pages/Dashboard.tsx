@@ -7,7 +7,7 @@ import { useGameStore } from '../services/gameStore';
 import { useAuthStore } from '../services/authStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
 import { BetStatus } from '../types';
-import { XCircle, CheckCircle, Clock, Skull, Wifi, WifiOff, AlertTriangle, Gamepad2, Users, LogIn, Swords } from 'lucide-react';
+import { XCircle, CheckCircle, Clock, Skull, Wifi, WifiOff, AlertTriangle, Gamepad2, Users, LogIn, Swords, FlaskConical } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Dashboard = () => {
@@ -19,6 +19,8 @@ const Dashboard = () => {
     currentGame,
     isPolling,
     lastMatchStats,
+    testMode,
+    testMatchData,
     loadJohnnyConfig,
     startPolling,
     stopPolling
@@ -52,7 +54,58 @@ const Dashboard = () => {
     <div className="container mx-auto px-4 py-8 space-y-8">
       {/* Game Status Banner */}
       <section className="relative overflow-hidden rounded-2xl border border-white/10">
-        {isInGame ? (
+        {isInGame && testMode && testMatchData ? (
+          // TEST MODE BANNER
+          <div className="bg-gradient-to-r from-purple-900/30 via-purple-800/20 to-fuchsia-900/30 p-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
+                    <FlaskConical className="w-8 h-8 text-white" />
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-400 rounded-full animate-ping"></span>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-400 rounded-full"></span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-2xl font-black text-white">MODE TEST ACTIF</h2>
+                    <span className="px-2 py-0.5 bg-purple-500 text-white text-xs font-bold rounded-full animate-pulse">TEST</span>
+                  </div>
+                  <p className="text-purple-300">
+                    Parie sur cette ancienne game • Les résultats seront basés sur les vraies stats
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-6">
+                {testMatchData.info.participants.find(p => p.puuid === johnny.puuid) && (
+                  <>
+                    <div className="text-center px-4 py-2 bg-white/10 rounded-xl">
+                      <div className="text-lg font-bold text-white">
+                        {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.championName}
+                      </div>
+                      <div className="text-xs text-purple-300 uppercase">Champion</div>
+                    </div>
+                    <div className="text-center px-4 py-2 bg-white/10 rounded-xl">
+                      <div className="text-lg font-bold text-white">
+                        {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.kills}/
+                        {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.deaths}/
+                        {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.assists}
+                      </div>
+                      <div className="text-xs text-purple-300 uppercase">KDA réel</div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-purple-500/20 text-center">
+              <p className="text-xs text-purple-300">
+                Place tes paris puis retourne dans <Link to="/admin" className="underline font-bold">Admin</Link> pour terminer le test et voir les résultats
+              </p>
+            </div>
+          </div>
+        ) : isInGame ? (
+          // LIVE GAME BANNER
           <div className="bg-gradient-to-r from-green-900/30 via-green-800/20 to-emerald-900/30 p-6">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-4">

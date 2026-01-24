@@ -7,7 +7,7 @@ import { useMatchHistoryStore } from '../services/matchHistoryStore';
 import { Region, riotApi } from '../services/riotApi';
 import { resolveBets } from '../services/betResolutionService';
 import { useStore } from '../services/store';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel } from 'lucide-react';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square } from 'lucide-react';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -30,12 +30,16 @@ const Admin = () => {
     isPolling,
     loading,
     error,
+    testMode,
+    testMatchId,
     setJohnnyConfig,
     loadJohnnyConfig,
     startPolling,
     stopPolling,
     checkGameStatus,
-    clearError
+    clearError,
+    startTestMode,
+    endTestMode
   } = useGameStore();
 
   const { addCredits } = useCreditsStore();
@@ -54,6 +58,10 @@ const Admin = () => {
 
   const { bets } = useStore();
   const pendingBets = bets.filter(b => b.status === 'PENDING');
+
+  const [selectedTestMatch, setSelectedTestMatch] = useState<string>('');
+  const [testModeLoading, setTestModeLoading] = useState(false);
+  const [testModeResult, setTestModeResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Check if user is admin
   const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
@@ -173,6 +181,42 @@ const Admin = () => {
       setResolveLoading(false);
       setTimeout(() => setResolveResult(null), 5000);
     }
+  };
+
+  const handleStartTestMode = async () => {
+    if (!selectedTestMatch) {
+      setTestModeResult({ success: false, message: 'Sélectionne une game d\'abord' });
+      return;
+    }
+
+    setTestModeLoading(true);
+    setTestModeResult(null);
+
+    const success = await startTestMode(selectedTestMatch);
+
+    if (success) {
+      setTestModeResult({ success: true, message: 'Mode test activé ! Va sur le Dashboard pour parier.' });
+    } else {
+      setTestModeResult({ success: false, message: 'Erreur lors du démarrage du mode test' });
+    }
+
+    setTestModeLoading(false);
+  };
+
+  const handleEndTestMode = async () => {
+    setTestModeLoading(true);
+    setTestModeResult(null);
+
+    const results = await endTestMode();
+
+    setTestModeResult({
+      success: true,
+      message: `Mode test terminé ! ${results.won} paris gagnés, ${results.lost} paris perdus`
+    });
+
+    setTestModeLoading(false);
+    setSelectedTestMatch('');
+    setTimeout(() => setTestModeResult(null), 5000);
   };
 
   const handleTestApi = async () => {
@@ -486,52 +530,111 @@ const Admin = () => {
             )}
           </div>
 
-          {/* Bet Resolution */}
-          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+          {/* Test Mode */}
+          <div className="bg-gradient-to-b from-purple-950/20 to-zinc-900 p-6 rounded-2xl border border-purple-500/30">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                <Gavel className="w-5 h-5 text-blue-500" />
-                <h3 className="font-bold text-white">Résolution des Paris</h3>
+                <FlaskConical className="w-5 h-5 text-purple-400" />
+                <h3 className="font-bold text-white">Mode Test</h3>
               </div>
-              <span className="text-xs text-zinc-500">{pendingBets.length} paris en attente</span>
+              {testMode && (
+                <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs font-bold rounded-full border border-purple-500/30 animate-pulse">
+                  ACTIF
+                </span>
+              )}
             </div>
 
-            <p className="text-xs text-zinc-500 mb-4">
-              Résout tous les paris en attente basé sur la dernière game terminée.
+            <p className="text-xs text-zinc-400 mb-4">
+              Parie sur une ancienne game du musée pour tester le système. Les paris seront résolus selon les vraies stats de la game.
             </p>
 
-            <button
-              onClick={handleResolveBets}
-              disabled={resolveLoading || pendingBets.length === 0 || !johnny.puuid}
-              className="w-full py-3 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 text-blue-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
-            >
-              {resolveLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Résolution...
-                </>
-              ) : (
-                <>
-                  <Gavel className="w-4 h-4" />
-                  Résoudre les paris maintenant
-                </>
-              )}
-            </button>
+            {!testMode ? (
+              <>
+                {/* Select a match from history */}
+                <div className="mb-4">
+                  <label className="block text-sm text-zinc-400 mb-2">Sélectionne une game</label>
+                  <select
+                    value={selectedTestMatch}
+                    onChange={(e) => setSelectedTestMatch(e.target.value)}
+                    className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="">-- Choisir une game --</option>
+                    {matches.map((match) => (
+                      <option key={match.id} value={match.id}>
+                        {match.champion_name} - {match.kills}/{match.deaths}/{match.assists} - {match.win ? 'Victoire' : 'Défaite'} ({new Date(match.game_creation).toLocaleDateString()})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {resolveResult && (
+                <button
+                  onClick={handleStartTestMode}
+                  disabled={testModeLoading || !selectedTestMatch || matches.length === 0}
+                  className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  {testModeLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Chargement...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4" />
+                      Lancer le mode test
+                    </>
+                  )}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                  <div className="text-sm text-purple-300 mb-1">Game de test active:</div>
+                  <div className="font-mono text-xs text-zinc-400 truncate">{testMatchId}</div>
+                  <div className="text-xs text-zinc-500 mt-2">
+                    Va sur le <a href="/dashboard" className="text-purple-400 underline">Dashboard</a> pour placer tes paris, puis reviens ici pour terminer le test.
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleEndTestMode}
+                  disabled={testModeLoading}
+                  className="w-full py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  {testModeLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Résolution...
+                    </>
+                  ) : (
+                    <>
+                      <Square className="w-4 h-4" />
+                      Terminer le test et résoudre les paris
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+
+            {testModeResult && (
               <div className={`mt-3 p-3 rounded-xl text-sm ${
-                resolveResult.success
+                testModeResult.success
                   ? 'bg-green-500/10 border border-green-500/30 text-green-400'
                   : 'bg-red-500/10 border border-red-500/30 text-red-400'
               }`}>
                 <div className="flex items-center gap-2">
-                  {resolveResult.success ? (
+                  {testModeResult.success ? (
                     <CheckCircle className="w-4 h-4" />
                   ) : (
                     <AlertCircle className="w-4 h-4" />
                   )}
-                  <span>{resolveResult.message}</span>
+                  <span>{testModeResult.message}</span>
                 </div>
+              </div>
+            )}
+
+            {matches.length === 0 && (
+              <div className="mt-3 text-xs text-amber-400">
+                Aucune game dans le musée. Synchronise d'abord le musée pour avoir des games de test.
               </div>
             )}
           </div>

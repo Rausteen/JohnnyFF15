@@ -24,6 +24,11 @@ export interface GameState {
   lastMatch: MatchDto | null;
   lastMatchStats: MatchParticipant | null;
 
+  // Test mode (for betting on historical games)
+  testMode: boolean;
+  testMatchId: string | null;
+  testMatchData: MatchDto | null;
+
   // Polling
   isPolling: boolean;
   pollInterval: number | null;
@@ -40,6 +45,10 @@ export interface GameState {
   stopPolling: () => void;
   fetchLastMatch: () => Promise<void>;
   clearError: () => void;
+
+  // Test mode actions
+  startTestMode: (matchId: string) => Promise<boolean>;
+  endTestMode: () => Promise<{ won: number; lost: number }>;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -54,6 +63,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   gameStartTime: null,
   lastMatch: null,
   lastMatchStats: null,
+  testMode: false,
+  testMatchId: null,
+  testMatchData: null,
   isPolling: false,
   pollInterval: null,
   loading: false,
@@ -276,5 +288,91 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  clearError: () => set({ error: null })
+  clearError: () => set({ error: null }),
+
+  // Start test mode - simulate a live game using a historical match
+  startTestMode: async (matchId: string) => {
+    const { johnny } = get();
+
+    if (!johnny.puuid) {
+      set({ error: 'Johnny non configuré' });
+      return false;
+    }
+
+    set({ loading: true, error: null });
+
+    try {
+      // Fetch the match data from Riot API
+      const matchData = await riotApi.getMatch(matchId);
+
+      if (!matchData) {
+        set({ error: 'Impossible de charger cette game', loading: false });
+        return false;
+      }
+
+      console.log('Starting test mode with match:', matchId);
+
+      // Set test mode active - this makes isInGame true for betting
+      set({
+        testMode: true,
+        testMatchId: matchId,
+        testMatchData: matchData,
+        isInGame: true, // This enables betting
+        gameStartTime: matchData.info.gameStartTimestamp,
+        loading: false
+      });
+
+      return true;
+    } catch (error: any) {
+      console.error('Error starting test mode:', error);
+      set({ error: error.message, loading: false });
+      return false;
+    }
+  },
+
+  // End test mode - resolve all pending bets based on the test match
+  endTestMode: async () => {
+    const { testMatchData, johnny } = get();
+
+    if (!testMatchData || !johnny.puuid) {
+      set({ testMode: false, testMatchId: null, testMatchData: null, isInGame: false });
+      return { won: 0, lost: 0 };
+    }
+
+    console.log('Ending test mode, resolving bets...');
+
+    try {
+      // Resolve bets using the test match data
+      const results = await resolveBets(testMatchData, johnny.puuid);
+
+      const won = results.filter(r => r.won).length;
+      const lost = results.filter(r => !r.won).length;
+
+      console.log(`Test mode ended: ${won} won, ${lost} lost`);
+
+      // Reset test mode state
+      set({
+        testMode: false,
+        testMatchId: null,
+        testMatchData: null,
+        isInGame: false,
+        gameStartTime: null
+      });
+
+      return { won, lost };
+    } catch (error: any) {
+      console.error('Error ending test mode:', error);
+
+      // Reset anyway
+      set({
+        testMode: false,
+        testMatchId: null,
+        testMatchData: null,
+        isInGame: false,
+        gameStartTime: null
+      });
+
+      return { won: 0, lost: 0 };
+    }
+  }
 }));
