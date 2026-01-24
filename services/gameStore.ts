@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { riotApi, CurrentGameInfo, MatchDto, MatchParticipant, Region } from './riotApi';
 import { supabase } from './supabase';
+import { useMatchHistoryStore } from './matchHistoryStore';
 
 export interface JohnnyConfig {
   gameName: string;
@@ -71,7 +72,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         return false;
       }
 
-      // Save to Supabase (in a settings table or similar)
       const config = {
         gameName: account.gameName,
         tagLine: account.tagLine,
@@ -79,8 +79,23 @@ export const useGameStore = create<GameState>((set, get) => ({
         region
       };
 
-      // Store in localStorage for now (could be moved to Supabase)
-      localStorage.setItem('johnny_config', JSON.stringify(config));
+      // Save to Supabase
+      const riotId = `${account.gameName}#${account.tagLine}`;
+      const { error: upsertError } = await supabase
+        .from('johnny_config')
+        .upsert({
+          id: 1,
+          riot_id: riotId,
+          puuid: account.puuid,
+          region: region,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+
+      if (upsertError) {
+        console.error('Error saving config to Supabase:', upsertError);
+        // Fallback to localStorage
+        localStorage.setItem('johnny_config', JSON.stringify(config));
+      }
 
       set({
         johnny: config,
@@ -95,7 +110,31 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   loadJohnnyConfig: async () => {
-    // Load from localStorage
+    // Try to load from Supabase first
+    try {
+      const { data, error } = await supabase
+        .from('johnny_config')
+        .select('*')
+        .eq('id', 1)
+        .single();
+
+      if (!error && data && data.puuid) {
+        const [gameName, tagLine] = data.riot_id.split('#');
+        const config: JohnnyConfig = {
+          gameName: gameName || '',
+          tagLine: tagLine || '',
+          puuid: data.puuid,
+          region: (data.region as Region) || 'EUW'
+        };
+        riotApi.setRegion(config.region);
+        set({ johnny: config });
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to load config from Supabase, trying localStorage');
+    }
+
+    // Fallback to localStorage
     const saved = localStorage.getItem('johnny_config');
     if (saved) {
       try {
@@ -137,9 +176,19 @@ export const useGameStore = create<GameState>((set, get) => ({
           gameStartTime: null
         });
 
-        // If was in game and now isn't, fetch the last match
+        // If was in game and now isn't, fetch the last match and save it
         if (wasInGame) {
+          console.log('Game ended, fetching last match...');
           get().fetchLastMatch();
+
+          // Also save to match history (with a delay to ensure Riot API has the data)
+          setTimeout(async () => {
+            const matchHistoryStore = useMatchHistoryStore.getState();
+            const newMatch = await matchHistoryStore.checkForNewMatch();
+            if (newMatch) {
+              console.log('New match saved:', newMatch.id);
+            }
+          }, 60000); // Wait 1 minute for Riot API to process the match
         }
       }
     } catch (error: any) {

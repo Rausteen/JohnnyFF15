@@ -9,13 +9,32 @@ import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
 import { useAuthStore } from './services/authStore';
+import { useMatchHistoryStore } from './services/matchHistoryStore';
 
 const App = () => {
   const initialize = useAuthStore((state) => state.initialize);
+  const { loadConfig, loadMatches, syncMatches, matches } = useMatchHistoryStore();
 
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Initialize match history on app load
+  useEffect(() => {
+    const initMatchHistory = async () => {
+      await loadConfig();
+      await loadMatches();
+
+      // If no matches in DB, do initial sync
+      const currentMatches = useMatchHistoryStore.getState().matches;
+      if (currentMatches.length === 0) {
+        console.log('No matches in DB, syncing initial history...');
+        await syncMatches();
+      }
+    };
+
+    initMatchHistory();
+  }, [loadConfig, loadMatches, syncMatches]);
 
   return (
     <HashRouter>
