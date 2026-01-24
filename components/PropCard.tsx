@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { TrendingUp, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { TrendingUp, AlertCircle, CheckCircle, Loader2, Plus, Check, Layers } from 'lucide-react';
 import { Prop } from '../types';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useGameStore } from '../services/gameStore';
+import { useComboStore } from '../services/comboStore';
 
 interface PropCardProps {
   prop: Prop;
@@ -15,6 +16,9 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
   const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
   const { isInGame, currentGame } = useGameStore();
+  const { addToCombo, removeFromCombo, isInCombo, selections } = useComboStore();
+
+  const inCombo = isInCombo(prop.id);
 
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -136,9 +140,27 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-400 font-mono font-bold text-sm ml-3">
-          <TrendingUp className="w-3.5 h-3.5" />
-          x{prop.odds.toFixed(1)}
+        <div className="flex items-center gap-2 ml-3">
+          {/* Add to combo button */}
+          {canBetOnProp() && user && (
+            <button
+              onClick={() => inCombo ? removeFromCombo(prop.id) : addToCombo(prop)}
+              disabled={!inCombo && selections.length >= 5}
+              className={`p-2 rounded-lg transition-all ${
+                inCombo
+                  ? 'bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30'
+                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed'
+              }`}
+              title={inCombo ? 'Retirer du combiné' : 'Ajouter au combiné'}
+            >
+              {inCombo ? <Check className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
+            </button>
+          )}
+          {/* Odds badge */}
+          <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-400 font-mono font-bold text-sm">
+            <TrendingUp className="w-3.5 h-3.5" />
+            x{prop.odds.toFixed(1)}
+          </div>
         </div>
       </div>
 
@@ -182,7 +204,6 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
             disabled={!canBetOnProp()}
             className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
           />
-          <span className="absolute right-4 top-3.5 text-xs text-zinc-500 font-mono">JC</span>
         </div>
 
         {/* Potential gain display */}

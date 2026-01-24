@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import PropCard from '../components/PropCard';
+import ComboBetSlip from '../components/ComboBetSlip';
 import { MOCK_PROPS } from '../services/mockData';
 import { useStore } from '../services/store';
 import { useGameStore } from '../services/gameStore';
@@ -249,6 +250,9 @@ const Dashboard = () => {
           </div>
         </section>
       </div>
+
+      {/* Combo Bet Slip (floating) */}
+      <ComboBetSlip />
     </div>
   );
 };

@@ -54,3 +54,14 @@ export interface GameState {
   gameTime: number; // in seconds
   matchId: string;
 }
+
+export interface ComboBet {
+  id: string;
+  props: { propId: string; propTitle: string; odds: number }[];
+  amount: number;
+  totalOdds: number;
+  potentialPayout: number;
+  status: BetStatus;
+  matchId: string;
+  timestamp: number;
+}

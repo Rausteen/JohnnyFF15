@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGameStore, JohnnyConfig } from '../services/gameStore';
 import { useCreditsStore } from '../services/creditsStore';
+import { useAuthStore } from '../services/authStore';
 import { Region } from '../services/riotApi';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff } from 'lucide-react';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX } from 'lucide-react';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -11,7 +13,13 @@ const REGIONS: { value: Region; label: string }[] = [
   { value: 'KR', label: 'Korea (KR)' },
 ];
 
+// Admin users (by pseudo)
+const ADMIN_USERS = ['Rausteen'];
+
 const Admin = () => {
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const { profile } = useCreditsStore();
   const {
     johnny,
     isInGame,
@@ -34,9 +42,34 @@ const Admin = () => {
   const [region, setRegion] = useState<Region>('EUW');
   const [configSuccess, setConfigSuccess] = useState(false);
 
+  // Check if user is admin
+  const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
+
   useEffect(() => {
     loadJohnnyConfig();
   }, []);
+
+  // Redirect non-admin users
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center">
+        <ShieldX className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-white mb-2">Accès refusé</h1>
+        <p className="text-zinc-400">Tu dois être connecté pour accéder à cette page.</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center">
+        <ShieldX className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-white mb-2">Zone interdite</h1>
+        <p className="text-zinc-400">Seul Rausteen peut accéder à cette page.</p>
+        <p className="text-zinc-500 text-sm mt-2">Pseudo actuel: {profile?.pseudo || 'inconnu'}</p>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (johnny.gameName) {

@@ -13,12 +13,15 @@ const TopBar = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  // Check if user is admin (Rausteen)
+  const isAdmin = profile?.pseudo === 'Rausteen';
+
   const navLinks = [
     { path: '/dashboard', label: 'Le Salon', icon: Skull },
     { path: '/my-bets', label: 'Mes Paris', icon: Coins },
     { path: '/history', label: 'Musée', icon: History },
     { path: '/leaderboard', label: 'Classement', icon: Trophy },
-    { path: '/admin', label: 'Admin', icon: ShieldAlert },
+    ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: ShieldAlert }] : []),
   ];
 
   const handleSignOut = async () => {

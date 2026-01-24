@@ -66,7 +66,29 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
         .single();
 
       if (error) throw error;
-      set({ config: data as JohnnyConfig });
+
+      let config = data as JohnnyConfig;
+
+      // If we have a riot_id but no puuid, try to fetch it
+      if (config.riot_id && !config.puuid) {
+        const [gameName, tagLine] = config.riot_id.split('#');
+        if (gameName && tagLine) {
+          console.log('Fetching PUUID for', config.riot_id);
+          riotApi.setRegion((config.region as any) || 'EUW');
+          const account = await riotApi.getAccountByRiotId(gameName, tagLine);
+          if (account?.puuid) {
+            // Save PUUID to Supabase
+            await supabase
+              .from('johnny_config')
+              .update({ puuid: account.puuid })
+              .eq('id', 1);
+            config = { ...config, puuid: account.puuid };
+            console.log('PUUID saved:', account.puuid);
+          }
+        }
+      }
+
+      set({ config });
     } catch (error: any) {
       console.error('Error loading config:', error);
       set({ error: error.message });
