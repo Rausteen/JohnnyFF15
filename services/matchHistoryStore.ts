@@ -46,6 +46,7 @@ interface MatchHistoryState {
   loadMatches: () => Promise<void>;
   syncMatches: () => Promise<{ newMatches: number }>;
   checkForNewMatch: () => Promise<JohnnyMatch | null>;
+  clearAllMatches: () => Promise<boolean>;
 }
 
 export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
@@ -229,6 +230,36 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     } catch (error) {
       console.error('Error checking for new match:', error);
       return null;
+    }
+  },
+
+  // Clear all matches from Supabase (admin only)
+  clearAllMatches: async () => {
+    try {
+      set({ loading: true, error: null });
+
+      // Delete all matches from Supabase
+      const { error } = await supabase
+        .from('johnny_matches')
+        .delete()
+        .neq('id', ''); // This deletes all rows
+
+      if (error) throw error;
+
+      // Reset last_match_id in config
+      await supabase
+        .from('johnny_config')
+        .update({ last_match_id: null })
+        .eq('id', 1);
+
+      // Clear local state
+      set({ matches: [], loading: false });
+      console.log('All matches cleared');
+      return true;
+    } catch (error: any) {
+      console.error('Error clearing matches:', error);
+      set({ error: error.message, loading: false });
+      return false;
     }
   }
 }));

@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useGameStore, JohnnyConfig } from '../services/gameStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
+import { useMatchHistoryStore } from '../services/matchHistoryStore';
 import { Region, riotApi } from '../services/riotApi';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap } from 'lucide-react';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History } from 'lucide-react';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -36,6 +37,7 @@ const Admin = () => {
   } = useGameStore();
 
   const { addCredits } = useCreditsStore();
+  const { clearAllMatches, matches, loadMatches } = useMatchHistoryStore();
 
   const [gameName, setGameName] = useState('');
   const [tagLine, setTagLine] = useState('');
@@ -43,12 +45,15 @@ const Admin = () => {
   const [configSuccess, setConfigSuccess] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [apiTestLoading, setApiTestLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetResult, setResetResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Check if user is admin
   const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
 
   useEffect(() => {
     loadJohnnyConfig();
+    loadMatches();
   }, []);
 
   // Redirect non-admin users
@@ -98,6 +103,26 @@ const Admin = () => {
 
   const handleAddCredits = async () => {
     await addCredits(1000);
+  };
+
+  const handleResetMuseum = async () => {
+    if (!confirm('Es-tu sûr de vouloir supprimer TOUTES les games du Musée du Throw ?')) {
+      return;
+    }
+
+    setResetLoading(true);
+    setResetResult(null);
+
+    const success = await clearAllMatches();
+
+    if (success) {
+      setResetResult({ success: true, message: 'Musée vidé ! Toutes les games ont été supprimées.' });
+    } else {
+      setResetResult({ success: false, message: 'Erreur lors de la suppression.' });
+    }
+
+    setResetLoading(false);
+    setTimeout(() => setResetResult(null), 5000);
   };
 
   const handleTestApi = async () => {
@@ -363,6 +388,52 @@ const Admin = () => {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Musée du Throw */}
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <History className="w-5 h-5 text-amber-500" />
+                <h3 className="font-bold text-white">Musée du Throw</h3>
+              </div>
+              <span className="text-xs text-zinc-500">{matches.length} games enregistrées</span>
+            </div>
+
+            <button
+              onClick={handleResetMuseum}
+              disabled={resetLoading || matches.length === 0}
+              className="w-full py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+            >
+              {resetLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  Vider le Musée
+                </>
+              )}
+            </button>
+
+            {resetResult && (
+              <div className={`mt-3 p-3 rounded-xl text-sm ${
+                resetResult.success
+                  ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                  : 'bg-red-500/10 border border-red-500/30 text-red-400'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {resetResult.success ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4" />
+                  )}
+                  <span>{resetResult.message}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Simulation / Cheats */}
