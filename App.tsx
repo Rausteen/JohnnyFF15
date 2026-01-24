@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
@@ -8,7 +8,15 @@ import History from './pages/History';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
+import { useAuthStore } from './services/authStore';
+
 const App = () => {
+  const initialize = useAuthStore((state) => state.initialize);
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
   return (
     <HashRouter>
       <Routes>
