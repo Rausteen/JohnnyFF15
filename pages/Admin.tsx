@@ -1,76 +1,266 @@
-import React from 'react';
-import { useStore } from '../services/store';
-import { MatchStatus } from '../types';
-import { Power, Dices, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useGameStore, JohnnyConfig } from '../services/gameStore';
+import { useCreditsStore } from '../services/creditsStore';
+import { Region } from '../services/riotApi';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff } from 'lucide-react';
+
+const REGIONS: { value: Region; label: string }[] = [
+  { value: 'EUW', label: 'Europe West (EUW)' },
+  { value: 'EUNE', label: 'Europe Nordic & East (EUNE)' },
+  { value: 'NA', label: 'North America (NA)' },
+  { value: 'KR', label: 'Korea (KR)' },
+];
 
 const Admin = () => {
-  const { gameState, toggleMatchStatus, simulateGameEnd, addFunds } = useStore();
+  const {
+    johnny,
+    isInGame,
+    currentGame,
+    isPolling,
+    loading,
+    error,
+    setJohnnyConfig,
+    loadJohnnyConfig,
+    startPolling,
+    stopPolling,
+    checkGameStatus,
+    clearError
+  } = useGameStore();
+
+  const { addCredits } = useCreditsStore();
+
+  const [gameName, setGameName] = useState('');
+  const [tagLine, setTagLine] = useState('');
+  const [region, setRegion] = useState<Region>('EUW');
+  const [configSuccess, setConfigSuccess] = useState(false);
+
+  useEffect(() => {
+    loadJohnnyConfig();
+  }, []);
+
+  useEffect(() => {
+    if (johnny.gameName) {
+      setGameName(johnny.gameName);
+      setTagLine(johnny.tagLine);
+      setRegion(johnny.region);
+    }
+  }, [johnny]);
+
+  const handleSaveConfig = async () => {
+    setConfigSuccess(false);
+    clearError();
+
+    if (!gameName || !tagLine) {
+      return;
+    }
+
+    const success = await setJohnnyConfig(gameName, tagLine, region);
+    if (success) {
+      setConfigSuccess(true);
+      setTimeout(() => setConfigSuccess(false), 3000);
+    }
+  };
+
+  const handleAddCredits = async () => {
+    await addCredits(1000);
+  };
+
+  const gameTimeMinutes = currentGame
+    ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
+    : 0;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <div className="bg-red-950/10 border border-red-900/30 p-8 rounded-3xl">
+      <div className="bg-gradient-to-b from-red-950/20 to-zinc-950 border border-red-900/30 p-8 rounded-3xl">
         <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-red-900/20 rounded-xl">
-                <Power className="w-8 h-8 text-red-500" />
-            </div>
-            <div>
-                <h1 className="text-2xl font-bold text-white">Salle de Contrôle du Destin</h1>
-                <p className="text-red-400 text-sm">Attention : Grands pouvoirs, grandes responsabilités, tout ça.</p>
-            </div>
+          <div className="p-3 bg-red-900/20 rounded-xl">
+            <Power className="w-8 h-8 text-red-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Salle de Contrôle</h1>
+            <p className="text-red-400 text-sm">Configure Johnny et surveille ses games</p>
+          </div>
         </div>
 
         <div className="space-y-6">
-          {/* Game Status Toggle */}
-          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-white mb-1">État de Johnny</h3>
-              <p className="text-sm text-slate-500">
-                {gameState.status === MatchStatus.LIVE ? "En train de feed" : "Dort devant son PC"}
-              </p>
+          {/* Johnny Configuration */}
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+            <div className="flex items-center gap-3 mb-4">
+              <User className="w-5 h-5 text-primary" />
+              <h3 className="font-bold text-white">Configuration de Johnny</h3>
             </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-zinc-400 mb-2">Game Name</label>
+                  <input
+                    type="text"
+                    value={gameName}
+                    onChange={(e) => setGameName(e.target.value)}
+                    placeholder="JohnnyFF15"
+                    className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-primary focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-zinc-400 mb-2">Tag Line</label>
+                  <input
+                    type="text"
+                    value={tagLine}
+                    onChange={(e) => setTagLine(e.target.value)}
+                    placeholder="EUW"
+                    className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-primary focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-zinc-400 mb-2">
+                  <Globe className="w-4 h-4 inline mr-1" />
+                  Région
+                </label>
+                <select
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value as Region)}
+                  className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:border-primary focus:outline-none"
+                >
+                  {REGIONS.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  {error}
+                </div>
+              )}
+
+              {configSuccess && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-sm">
+                  <CheckCircle className="w-4 h-4" />
+                  Johnny configuré ! PUUID récupéré.
+                </div>
+              )}
+
+              <button
+                onClick={handleSaveConfig}
+                disabled={loading || !gameName || !tagLine}
+                className="w-full py-3 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 disabled:opacity-50 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Recherche du joueur...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Sauvegarder
+                  </>
+                )}
+              </button>
+
+              {johnny.puuid && (
+                <div className="text-xs text-zinc-500 font-mono truncate">
+                  PUUID: {johnny.puuid}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Game Monitoring */}
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Radio className="w-5 h-5 text-accent" />
+                <h3 className="font-bold text-white">Surveillance des Games</h3>
+              </div>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${
+                isInGame
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+              }`}>
+                {isInGame ? (
+                  <>
+                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                    EN GAME
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 bg-zinc-500 rounded-full"></span>
+                    HORS GAME
+                  </>
+                )}
+              </div>
+            </div>
+
+            {isInGame && currentGame && (
+              <div className="mb-4 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-zinc-400">Mode</div>
+                    <div className="text-white font-bold">{currentGame.gameMode}</div>
+                  </div>
+                  <div>
+                    <div className="text-zinc-400">Durée</div>
+                    <div className="text-white font-bold">{gameTimeMinutes} min</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              {isPolling ? (
+                <button
+                  onClick={stopPolling}
+                  className="flex-1 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  <WifiOff className="w-4 h-4" />
+                  Arrêter la surveillance
+                </button>
+              ) : (
+                <button
+                  onClick={() => startPolling(30000)}
+                  disabled={!johnny.puuid}
+                  className="flex-1 py-3 bg-accent/20 hover:bg-accent/30 border border-accent/30 text-accent disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  <Wifi className="w-4 h-4" />
+                  Lancer la surveillance
+                </button>
+              )}
+
+              <button
+                onClick={checkGameStatus}
+                disabled={!johnny.puuid || loading}
+                className="py-3 px-4 bg-zinc-800 hover:bg-zinc-700 text-white disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                <RotateCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            {isPolling && (
+              <div className="mt-3 text-xs text-zinc-500 text-center">
+                Vérification toutes les 30 secondes...
+              </div>
+            )}
+          </div>
+
+          {/* Simulation / Cheats */}
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+            <div className="flex items-center gap-3 mb-4">
+              <Dices className="w-5 h-5 text-gold" />
+              <h3 className="font-bold text-white">Cheats (pour tester)</h3>
+            </div>
+
             <button
-              onClick={() => toggleMatchStatus(gameState.status === MatchStatus.LIVE ? MatchStatus.OFFLINE : MatchStatus.LIVE)}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-                gameState.status === MatchStatus.LIVE ? 'bg-red-600' : 'bg-slate-700'
-              }`}
+              onClick={handleAddCredits}
+              className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-medium flex items-center justify-center gap-2 transition-all"
             >
-              <span
-                className={`inline-block h-6 w-6 transform rounded-full bg-white transition transition-transform duration-200 ease-in-out ${
-                  gameState.status === MatchStatus.LIVE ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              />
+              <RotateCcw className="w-4 h-4" />
+              S'injecter 1000 crédits
             </button>
-          </div>
-
-          {/* Simulation */}
-          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-             <div className="mb-4">
-                <h3 className="font-bold text-white mb-1">Résolution du match</h3>
-                <p className="text-sm text-slate-500">Met fin à la game actuelle et calcule les paris.</p>
-             </div>
-             <button
-                onClick={simulateGameEnd}
-                disabled={gameState.status !== MatchStatus.LIVE}
-                className="w-full py-3 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
-             >
-                <Dices className="w-5 h-5" />
-                Simuler la fin (Random)
-             </button>
-          </div>
-
-          {/* Cheats */}
-          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-             <div className="mb-4">
-                <h3 className="font-bold text-white mb-1">Code de triche</h3>
-                <p className="text-sm text-slate-500">Besoin de crédits pour tester ?</p>
-             </div>
-             <button
-                onClick={() => addFunds(1000)}
-                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium flex items-center justify-center gap-2 transition-all"
-             >
-                <RotateCcw className="w-4 h-4" />
-                S'injecter 1000 crédits
-             </button>
           </div>
         </div>
       </div>
