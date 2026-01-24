@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift } from 'lucide-react';
+import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift, Trophy } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 
@@ -17,6 +17,7 @@ const TopBar = () => {
     { path: '/dashboard', label: 'Le Salon', icon: Skull },
     { path: '/my-bets', label: 'Mes Paris', icon: Coins },
     { path: '/history', label: 'Musée', icon: History },
+    { path: '/leaderboard', label: 'Classement', icon: Trophy },
     { path: '/admin', label: 'Admin', icon: ShieldAlert },
   ];
 

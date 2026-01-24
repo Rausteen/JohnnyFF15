@@ -8,6 +8,8 @@ import History from './pages/History';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
+import Leaderboard from './pages/Leaderboard';
+import PublicProfile from './pages/PublicProfile';
 import { useAuthStore } from './services/authStore';
 import { useMatchHistoryStore } from './services/matchHistoryStore';
 
@@ -47,6 +49,8 @@ const App = () => {
           <Route path="admin" element={<Admin />} />
           <Route path="login" element={<Login />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="leaderboard" element={<Leaderboard />} />
+          <Route path="user/:userId" element={<PublicProfile />} />
         </Route>
       </Routes>
     </HashRouter>

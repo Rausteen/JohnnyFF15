@@ -10,9 +10,24 @@ create table if not exists public.profiles (
   pseudo text not null,
   credits integer not null default 10000,
   last_daily_bonus timestamp with time zone,
+
+  -- Betting stats
+  total_bets integer not null default 0,
+  bets_won integer not null default 0,
+  bets_lost integer not null default 0,
+  jc_won integer not null default 0,
+  jc_lost integer not null default 0,
+
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Add stats columns if they don't exist (for existing tables)
+alter table public.profiles add column if not exists total_bets integer not null default 0;
+alter table public.profiles add column if not exists bets_won integer not null default 0;
+alter table public.profiles add column if not exists bets_lost integer not null default 0;
+alter table public.profiles add column if not exists jc_won integer not null default 0;
+alter table public.profiles add column if not exists jc_lost integer not null default 0;
 
 -- Enable Row Level Security
 alter table public.profiles enable row level security;
@@ -21,11 +36,12 @@ alter table public.profiles enable row level security;
 drop policy if exists "Users can view own profile" on public.profiles;
 drop policy if exists "Users can update own profile" on public.profiles;
 drop policy if exists "Users can insert own profile" on public.profiles;
+drop policy if exists "Anyone can view profiles" on public.profiles;
 
 -- Create policies
--- Users can view their own profile
-create policy "Users can view own profile" on public.profiles
-  for select using (auth.uid() = id);
+-- Anyone can view all profiles (for leaderboard and public profiles)
+create policy "Anyone can view profiles" on public.profiles
+  for select using (true);
 
 -- Users can update their own profile
 create policy "Users can update own profile" on public.profiles

@@ -12,7 +12,7 @@ interface PropCardProps {
 
 const PropCard: React.FC<PropCardProps> = ({ prop }) => {
   const { placeBet } = useStore();
-  const { profile, subtractCredits } = useCreditsStore();
+  const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
   const { isInGame, currentGame } = useGameStore();
 
@@ -93,6 +93,9 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
 
       // Place bet in local store
       placeBet(prop.id, prop.title, prop.odds, val);
+
+      // Record bet for stats
+      await recordBetPlaced(val);
 
       setAmount('');
       setSuccess(true);

@@ -6,6 +6,11 @@ interface UserProfile {
   pseudo: string;
   credits: number;
   last_daily_bonus: string | null;
+  total_bets: number;
+  bets_won: number;
+  bets_lost: number;
+  jc_won: number;
+  jc_lost: number;
   created_at: string;
 }
 
@@ -19,6 +24,9 @@ interface CreditsState {
   updateCredits: (amount: number) => Promise<boolean>;
   addCredits: (amount: number) => Promise<boolean>;
   subtractCredits: (amount: number) => Promise<boolean>;
+  recordBetPlaced: (amount: number) => Promise<boolean>;
+  recordBetWon: (winnings: number) => Promise<boolean>;
+  recordBetLost: (amount: number) => Promise<boolean>;
   claimDailyBonus: () => Promise<{ success: boolean; error?: string }>;
   canClaimDailyBonus: () => boolean;
   getTimeUntilNextBonus: () => { hours: number; minutes: number } | null;
@@ -106,6 +114,94 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
     const { profile, updateCredits } = get();
     if (!profile || profile.credits < amount) return false;
     return updateCredits(profile.credits - amount);
+  },
+
+  // Record a bet being placed (increment total_bets)
+  recordBetPlaced: async (amount: number) => {
+    const { profile } = get();
+    if (!profile) return false;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          total_bets: (profile.total_bets || 0) + 1,
+          jc_lost: (profile.jc_lost || 0) + amount
+        })
+        .eq('id', profile.id);
+
+      if (error) throw error;
+
+      set({
+        profile: {
+          ...profile,
+          total_bets: (profile.total_bets || 0) + 1,
+          jc_lost: (profile.jc_lost || 0) + amount
+        }
+      });
+      return true;
+    } catch (error: any) {
+      console.error('Error recording bet:', error);
+      return false;
+    }
+  },
+
+  // Record a winning bet (add winnings to jc_won and increment bets_won)
+  recordBetWon: async (winnings: number) => {
+    const { profile } = get();
+    if (!profile) return false;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          bets_won: (profile.bets_won || 0) + 1,
+          jc_won: (profile.jc_won || 0) + winnings
+        })
+        .eq('id', profile.id);
+
+      if (error) throw error;
+
+      set({
+        profile: {
+          ...profile,
+          bets_won: (profile.bets_won || 0) + 1,
+          jc_won: (profile.jc_won || 0) + winnings
+        }
+      });
+      return true;
+    } catch (error: any) {
+      console.error('Error recording win:', error);
+      return false;
+    }
+  },
+
+  // Record a losing bet (increment bets_lost)
+  recordBetLost: async (amount: number) => {
+    const { profile } = get();
+    if (!profile) return false;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          bets_lost: (profile.bets_lost || 0) + 1
+        })
+        .eq('id', profile.id);
+
+      if (error) throw error;
+
+      set({
+        profile: {
+          ...profile,
+          bets_lost: (profile.bets_lost || 0) + 1
+        }
+      });
+      return true;
+    } catch (error: any) {
+      console.error('Error recording loss:', error);
+      return false;
+    }
   },
 
   canClaimDailyBonus: () => {
