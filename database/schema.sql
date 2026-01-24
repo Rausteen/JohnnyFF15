@@ -17,6 +17,11 @@ create table if not exists public.profiles (
 -- Enable Row Level Security
 alter table public.profiles enable row level security;
 
+-- Drop existing policies if they exist
+drop policy if exists "Users can view own profile" on public.profiles;
+drop policy if exists "Users can update own profile" on public.profiles;
+drop policy if exists "Users can insert own profile" on public.profiles;
+
 -- Create policies
 -- Users can view their own profile
 create policy "Users can view own profile" on public.profiles
@@ -107,6 +112,10 @@ create index if not exists idx_johnny_matches_game_creation on public.johnny_mat
 -- Enable RLS (public read, no write from client - only server/admin)
 alter table public.johnny_matches enable row level security;
 
+-- Drop existing policies if they exist
+drop policy if exists "Anyone can view matches" on public.johnny_matches;
+drop policy if exists "Authenticated users can insert matches" on public.johnny_matches;
+
 -- Everyone can read matches (it's public data)
 create policy "Anyone can view matches" on public.johnny_matches
   for select using (true);
@@ -134,6 +143,11 @@ create table if not exists public.johnny_config (
 -- Enable RLS
 alter table public.johnny_config enable row level security;
 
+-- Drop existing policies if they exist
+drop policy if exists "Anyone can view config" on public.johnny_config;
+drop policy if exists "Authenticated users can update config" on public.johnny_config;
+drop policy if exists "Authenticated users can insert config" on public.johnny_config;
+
 -- Everyone can read config
 create policy "Anyone can view config" on public.johnny_config
   for select using (true);
@@ -141,6 +155,10 @@ create policy "Anyone can view config" on public.johnny_config
 -- Only authenticated users can update config
 create policy "Authenticated users can update config" on public.johnny_config
   for update using (auth.role() = 'authenticated');
+
+-- Only authenticated users can insert config
+create policy "Authenticated users can insert config" on public.johnny_config
+  for insert with check (auth.role() = 'authenticated');
 
 -- Insert default config
 insert into public.johnny_config (id, riot_id, region)
