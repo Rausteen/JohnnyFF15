@@ -14,6 +14,9 @@ interface StoreState {
   placeBet: (propId: string, propTitle: string, odds: number, amount: number, matchId?: string, comboInfo?: { comboId: string; comboIndex: number; comboTotal: number }, userId?: string, championName?: string) => void;
   cancelBet: (betId: string) => void;
 
+  // Manual resolution
+  resolveManualBet: (betId: string, won: boolean) => Bet | null;
+
   // Admin Actions
   toggleMatchStatus: (status: MatchStatus) => void;
   simulateGameEnd: () => void;
@@ -76,6 +79,25 @@ export const useStore = create<StoreState>()(
           balance: state.balance + bet.amount,
           bets: state.bets.filter((b) => b.id !== betId),
         }));
+      },
+
+      // Manually resolve a bet as WIN or LOSE
+      resolveManualBet: (betId, won) => {
+        const { bets } = get();
+        const bet = bets.find((b) => b.id === betId);
+        if (!bet || bet.status !== BetStatus.PENDING) return null;
+
+        const updatedBet: Bet = {
+          ...bet,
+          status: won ? BetStatus.WON : BetStatus.LOST,
+          resolvedStat: won ? '✓ Résolu manuellement (WIN)' : '✗ Résolu manuellement (LOSE)'
+        };
+
+        set((state) => ({
+          bets: state.bets.map((b) => (b.id === betId ? updatedBet : b)),
+        }));
+
+        return updatedBet;
       },
 
       toggleMatchStatus: (status) => {

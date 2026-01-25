@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from './supabase';
 import { riotApi, MatchDto, getChampionName, getQueueName } from './riotApi';
+import { resolveBets } from './betResolutionService';
+import { useGameStore } from './gameStore';
 
 // Type for a saved match in Supabase
 export interface JohnnyMatch {
@@ -46,6 +48,7 @@ interface MatchHistoryState {
   loadConfig: () => Promise<void>;
   loadMatches: () => Promise<void>;
   syncMatches: () => Promise<{ newMatches: number }>;
+  syncLastGame: () => Promise<{ success: boolean; match?: JohnnyMatch; error?: string }>;
   checkForNewMatch: () => Promise<JohnnyMatch | null>;
   clearAllMatches: () => Promise<boolean>;
 }
@@ -196,6 +199,87 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     }
   },
 
+  // Force sync only the last game (for admin when auto-sync fails)
+  syncLastGame: async () => {
+    const { config, matches } = get();
+
+    if (!config?.puuid) {
+      return { success: false, error: 'PUUID non configuré' };
+    }
+
+    set({ syncing: true, error: null });
+
+    try {
+      // Get just the last match ID
+      const matchIds = await riotApi.getMatchHistory(config.puuid, 1);
+      if (!matchIds || matchIds.length === 0) {
+        set({ syncing: false });
+        return { success: false, error: 'Aucune game trouvée via l\'API Riot' };
+      }
+
+      const latestMatchId = matchIds[0];
+
+      // Check if already in museum
+      const existingIds = new Set(matches.map(m => m.id));
+      if (existingIds.has(latestMatchId)) {
+        set({ syncing: false, lastSync: new Date() });
+        return { success: false, error: 'Cette game est déjà dans le musée' };
+      }
+
+      // Fetch the match details
+      const match = await riotApi.getMatch(latestMatchId);
+      if (!match) {
+        set({ syncing: false });
+        return { success: false, error: 'Impossible de récupérer les détails de la game' };
+      }
+
+      const johnnyMatch = convertMatchToJohnnyMatch(match, config.puuid);
+      if (!johnnyMatch) {
+        set({ syncing: false });
+        return { success: false, error: 'Johnny n\'est pas trouvé dans cette game' };
+      }
+
+      // Save to Supabase
+      const { error: insertError } = await supabase
+        .from('johnny_matches')
+        .upsert([johnnyMatch], { onConflict: 'id' });
+
+      if (insertError) throw insertError;
+
+      // Update local state
+      set({
+        matches: [johnnyMatch, ...matches],
+        syncing: false,
+        lastSync: new Date()
+      });
+
+      // Update last_match_id in config
+      await supabase
+        .from('johnny_config')
+        .update({ last_match_id: latestMatchId })
+        .eq('id', 1);
+
+      // Auto-resolve pending bets for this match
+      try {
+        console.log('Auto-resolving pending bets for match:', johnnyMatch.id);
+        const results = await resolveBets(match, config.puuid);
+        if (results.length > 0) {
+          const won = results.filter(r => r.won).length;
+          const lost = results.length - won;
+          console.log(`Auto-resolved ${results.length} bets: ${won} won, ${lost} lost`);
+        }
+      } catch (resolveError) {
+        console.error('Error auto-resolving bets:', resolveError);
+      }
+
+      return { success: true, match: johnnyMatch };
+    } catch (error: any) {
+      console.error('Error syncing last game:', error);
+      set({ error: error.message, syncing: false });
+      return { success: false, error: error.message };
+    }
+  },
+
   // Check if there's a new match (call this after game ends)
   checkForNewMatch: async () => {
     const { config, matches } = get();
@@ -234,6 +318,19 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
         .from('johnny_config')
         .update({ last_match_id: latestMatchId })
         .eq('id', 1);
+
+      // Auto-resolve pending bets for this match
+      try {
+        console.log('Auto-resolving pending bets for new match:', johnnyMatch.id);
+        const results = await resolveBets(match, config.puuid);
+        if (results.length > 0) {
+          const won = results.filter(r => r.won).length;
+          const lost = results.length - won;
+          console.log(`Auto-resolved ${results.length} bets: ${won} won, ${lost} lost`);
+        }
+      } catch (resolveError) {
+        console.error('Error auto-resolving bets:', resolveError);
+      }
 
       return johnnyMatch;
     } catch (error) {

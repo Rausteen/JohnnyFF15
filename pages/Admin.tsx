@@ -10,7 +10,7 @@ import { useStore } from '../services/store';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download } from 'lucide-react';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -46,7 +46,7 @@ const Admin = () => {
   } = useGameStore();
 
   const { addCredits } = useCreditsStore();
-  const { clearAllMatches, matches, loadMatches, syncMatches, syncing } = useMatchHistoryStore();
+  const { clearAllMatches, matches, loadMatches, syncMatches, syncLastGame, syncing } = useMatchHistoryStore();
 
   const [gameName, setGameName] = useState('');
   const [tagLine, setTagLine] = useState('');
@@ -59,8 +59,11 @@ const Admin = () => {
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
   const [resolveLoading, setResolveLoading] = useState(false);
   const [resolveResult, setResolveResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [resolvingBetId, setResolvingBetId] = useState<string | null>(null);
+  const [forceSyncLoading, setForceSyncLoading] = useState(false);
+  const [forceSyncResult, setForceSyncResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const { bets } = useStore();
+  const { bets, resolveManualBet } = useStore();
   const pendingBets = bets.filter(b => b.status === 'PENDING');
 
   const [selectedTestMatch, setSelectedTestMatch] = useState<string>('');
@@ -172,6 +175,65 @@ const Admin = () => {
     }
 
     setTimeout(() => setSyncResult(null), 5000);
+  };
+
+  const handleForceSyncLastGame = async () => {
+    setForceSyncLoading(true);
+    setForceSyncResult(null);
+
+    const result = await syncLastGame();
+
+    if (result.success && result.match) {
+      setForceSyncResult({
+        success: true,
+        message: `Game ajoutée: ${result.match.champion_name} ${result.match.kills}/${result.match.deaths}/${result.match.assists} (${result.match.win ? 'Victoire' : 'Défaite'})`
+      });
+    } else {
+      setForceSyncResult({
+        success: false,
+        message: result.error || 'Erreur inconnue'
+      });
+    }
+
+    setForceSyncLoading(false);
+    setTimeout(() => setForceSyncResult(null), 5000);
+  };
+
+  // Manually resolve a single bet
+  const handleManualResolve = async (betId: string, won: boolean) => {
+    const bet = pendingBets.find(b => b.id === betId);
+    if (!bet) return;
+
+    setResolvingBetId(betId);
+
+    try {
+      const resolvedBet = resolveManualBet(betId, won);
+      if (!resolvedBet) {
+        setResolveResult({ success: false, message: 'Pari non trouvé ou déjà résolu' });
+        return;
+      }
+
+      // Update credits for the user
+      const creditsStore = useCreditsStore.getState();
+
+      if (won) {
+        // Add winnings
+        await creditsStore.addCredits(resolvedBet.potentialPayout);
+        await creditsStore.recordBetWon(resolvedBet.potentialPayout - resolvedBet.amount);
+      } else {
+        await creditsStore.recordBetLost(resolvedBet.amount);
+      }
+
+      setResolveResult({
+        success: true,
+        message: `${resolvedBet.propTitle}: ${won ? 'WIN (+' + resolvedBet.potentialPayout + ' JC)' : 'LOSE'}`
+      });
+    } catch (err: any) {
+      setResolveResult({ success: false, message: `Erreur: ${err.message}` });
+    } finally {
+      setResolvingBetId(null);
+      setTimeout(() => setResolveResult(null), 3000);
+    }
   };
 
   const handleResolveBets = async () => {
@@ -618,9 +680,45 @@ const Admin = () => {
             </div>
 
             <div className="space-y-3">
+              {/* Force sync last game - primary action */}
+              <button
+                onClick={handleForceSyncLastGame}
+                disabled={forceSyncLoading || syncing || !johnny.puuid}
+                className="w-full py-3 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                {forceSyncLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Récupération de la dernière game...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Forcer sync dernière game
+                  </>
+                )}
+              </button>
+
+              {forceSyncResult && (
+                <div className={`p-3 rounded-xl text-sm ${
+                  forceSyncResult.success
+                    ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                    : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {forceSyncResult.success ? (
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    )}
+                    <span className="text-xs">{forceSyncResult.message}</span>
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={handleSyncMuseum}
-                disabled={syncing || !johnny.puuid}
+                disabled={syncing || forceSyncLoading || !johnny.puuid}
                 className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
               >
                 {syncing ? (
@@ -631,7 +729,7 @@ const Admin = () => {
                 ) : (
                   <>
                     <RefreshCw className="w-4 h-4" />
-                    Synchroniser les games depuis Riot
+                    Sync toutes les games (20 dernières)
                   </>
                 )}
               </button>
@@ -705,30 +803,11 @@ const Admin = () => {
             </div>
 
             <p className="text-xs text-zinc-400 mb-4">
-              Résout tous les paris en attente en utilisant les stats de la dernière game de Johnny.
-              Utilise ça si la résolution automatique n'a pas fonctionné.
+              Choisis WIN ou LOSE pour chaque pari individuellement.
             </p>
 
-            <button
-              onClick={handleResolveBets}
-              disabled={resolveLoading || pendingBets.length === 0 || !johnny.puuid}
-              className="w-full py-3 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
-            >
-              {resolveLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Résolution en cours...
-                </>
-              ) : (
-                <>
-                  <Gavel className="w-4 h-4" />
-                  Résoudre {pendingBets.length} paris maintenant
-                </>
-              )}
-            </button>
-
             {resolveResult && (
-              <div className={`mt-3 p-3 rounded-xl text-sm ${
+              <div className={`mb-4 p-3 rounded-xl text-sm ${
                 resolveResult.success
                   ? 'bg-green-500/10 border border-green-500/30 text-green-400'
                   : 'bg-red-500/10 border border-red-500/30 text-red-400'
@@ -739,27 +818,62 @@ const Admin = () => {
                   ) : (
                     <AlertCircle className="w-4 h-4" />
                   )}
-                  <span>{resolveResult.message}</span>
+                  <span className="text-xs">{resolveResult.message}</span>
                 </div>
               </div>
             )}
 
-            {pendingBets.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-zinc-800">
-                <div className="text-xs text-zinc-500 mb-2">Paris en attente:</div>
-                <div className="max-h-32 overflow-y-auto space-y-1">
-                  {pendingBets.slice(0, 10).map(bet => (
-                    <div key={bet.id} className="text-xs text-zinc-400 flex justify-between">
-                      <span className="truncate flex-1">{bet.propTitle}</span>
-                      <span className="text-amber-400 ml-2">{bet.amount} JC</span>
+            {pendingBets.length > 0 ? (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {pendingBets.map(bet => (
+                  <div key={bet.id} className="p-3 bg-zinc-800/50 rounded-xl border border-zinc-700">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-white truncate">
+                          {bet.propTitle}
+                        </div>
+                        <div className="text-xs text-zinc-500 mt-0.5">
+                          Mise: {bet.amount} JC • Gain: {bet.potentialPayout} JC (x{bet.odds.toFixed(1)})
+                        </div>
+                        {bet.comboId && (
+                          <div className="text-xs text-purple-400 mt-0.5">
+                            Combo {bet.comboIndex}/{bet.comboTotal}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={() => handleManualResolve(bet.id, true)}
+                          disabled={resolvingBetId === bet.id}
+                          className="px-3 py-2 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 text-green-400 rounded-lg font-bold text-xs flex items-center gap-1 transition-all disabled:opacity-50"
+                        >
+                          {resolvingBetId === bet.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Check className="w-3 h-3" />
+                          )}
+                          WIN
+                        </button>
+                        <button
+                          onClick={() => handleManualResolve(bet.id, false)}
+                          disabled={resolvingBetId === bet.id}
+                          className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 rounded-lg font-bold text-xs flex items-center gap-1 transition-all disabled:opacity-50"
+                        >
+                          {resolvingBetId === bet.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <X className="w-3 h-3" />
+                          )}
+                          LOSE
+                        </button>
+                      </div>
                     </div>
-                  ))}
-                  {pendingBets.length > 10 && (
-                    <div className="text-xs text-zinc-500">
-                      ... et {pendingBets.length - 10} autres
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6 text-zinc-500 text-sm">
+                Aucun pari en attente à résoudre
               </div>
             )}
           </div>
