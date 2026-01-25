@@ -216,6 +216,47 @@ export interface ObjectiveDto {
   kills: number;
 }
 
+// ========== CLASH API TYPES ==========
+export interface ClashPlayer {
+  summonerId: string;
+  puuid: string;
+  teamId: string;
+  position: 'UNSELECTED' | 'FILL' | 'TOP' | 'JUNGLE' | 'MIDDLE' | 'BOTTOM' | 'UTILITY';
+  role: 'CAPTAIN' | 'MEMBER';
+}
+
+export interface ClashTeam {
+  id: string;
+  tournamentId: number;
+  name: string;
+  iconId: number;
+  tier: number;
+  captain: string; // Summoner ID
+  abbreviation: string;
+  players: ClashTeamMember[];
+}
+
+export interface ClashTeamMember {
+  summonerId: string;
+  position: 'UNSELECTED' | 'FILL' | 'TOP' | 'JUNGLE' | 'MIDDLE' | 'BOTTOM' | 'UTILITY';
+  role: 'CAPTAIN' | 'MEMBER';
+}
+
+export interface ClashTournament {
+  id: number;
+  themeId: number;
+  nameKey: string;
+  nameKeySecondary: string;
+  schedule: ClashTournamentPhase[];
+}
+
+export interface ClashTournamentPhase {
+  id: number;
+  registrationTime: number;
+  startTime: number;
+  cancelled: boolean;
+}
+
 class RiotApiService {
   private region: Region = 'EUW';
   private lastRequestTime = 0;
@@ -351,6 +392,51 @@ class RiotApiService {
   // Helper: Calculate KDA ratio
   getKDARatio(stats: MatchParticipant): number {
     return (stats.kills + stats.assists) / Math.max(1, stats.deaths);
+  }
+
+  // ========== CLASH API ==========
+
+  // Get player's Clash info by PUUID
+  async getClashPlayerByPuuid(puuid: string): Promise<ClashPlayer[] | null> {
+    const url = `${this.platformUrl}/lol/clash/v1/players/by-puuid/${puuid}`;
+    return this.fetch<ClashPlayer[]>(url);
+  }
+
+  // Get Clash team by team ID
+  async getClashTeam(teamId: string): Promise<ClashTeam | null> {
+    const url = `${this.platformUrl}/lol/clash/v1/teams/${teamId}`;
+    return this.fetch<ClashTeam>(url);
+  }
+
+  // Get all active and upcoming Clash tournaments
+  async getClashTournaments(): Promise<ClashTournament[] | null> {
+    const url = `${this.platformUrl}/lol/clash/v1/tournaments`;
+    return this.fetch<ClashTournament[]>(url);
+  }
+
+  // Get Clash tournament by ID
+  async getClashTournament(tournamentId: number): Promise<ClashTournament | null> {
+    const url = `${this.platformUrl}/lol/clash/v1/tournaments/${tournamentId}`;
+    return this.fetch<ClashTournament>(url);
+  }
+
+  // Get Clash tournament by team ID
+  async getClashTournamentByTeam(teamId: string): Promise<ClashTournament | null> {
+    const url = `${this.platformUrl}/lol/clash/v1/tournaments/by-team/${teamId}`;
+    return this.fetch<ClashTournament>(url);
+  }
+
+  // Helper: Check if player is currently registered for Clash
+  async isPlayerInClash(puuid: string): Promise<boolean> {
+    const clashInfo = await this.getClashPlayerByPuuid(puuid);
+    return clashInfo !== null && clashInfo.length > 0;
+  }
+
+  // Helper: Get player's current Clash team info
+  async getPlayerClashTeam(puuid: string): Promise<ClashTeam | null> {
+    const clashInfo = await this.getClashPlayerByPuuid(puuid);
+    if (!clashInfo || clashInfo.length === 0) return null;
+    return this.getClashTeam(clashInfo[0].teamId);
   }
 }
 
