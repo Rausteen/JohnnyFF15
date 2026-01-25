@@ -122,22 +122,10 @@ const Dashboard = () => {
     return allProps.filter(p => p.category === categoryFilter);
   }, [categoryFilter, allProps]);
 
-  // Sort props: available first, then by odds
+  // Sort props by odds (lower first = more likely)
   const sortedProps = useMemo(() => {
-    return [...filteredProps].sort((a, b) => {
-      // Early game props that expired go to the end
-      const aExpired = a.maxGameTime && gameTimeMinutes > a.maxGameTime;
-      const bExpired = b.maxGameTime && gameTimeMinutes > b.maxGameTime;
-      if (aExpired && !bExpired) return 1;
-      if (!aExpired && bExpired) return -1;
-      // Then sort by odds (lower first = more likely)
-      return a.odds - b.odds;
-    });
-  }, [filteredProps, gameTimeMinutes]);
-
-  // Stats for current game
-  const availableProps = allProps.filter(p => !p.maxGameTime || gameTimeMinutes <= p.maxGameTime);
-  const expiredProps = allProps.filter(p => p.maxGameTime && gameTimeMinutes > p.maxGameTime);
+    return [...filteredProps].sort((a, b) => a.odds - b.odds);
+  }, [filteredProps]);
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">

@@ -42,11 +42,6 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
       return false;
     }
 
-    // Some props are only available early game (e.g., "First Blood avant 1min")
-    if (prop.maxGameTime && gameTimeMinutes > prop.maxGameTime) {
-      return false;
-    }
-
     return true;
   };
 
@@ -167,12 +162,6 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
           <p className="text-xs sm:text-sm text-zinc-500 mt-1 line-clamp-2">
             {prop.description}
           </p>
-          {prop.maxGameTime && (
-            <p className="text-xs text-amber-500 mt-1.5 sm:mt-2">
-              ⏱️ Avant {prop.maxGameTime}min
-              {gameTimeMinutes > 0 && ` (${gameTimeMinutes}min)`}
-            </p>
-          )}
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Add to combo button */}

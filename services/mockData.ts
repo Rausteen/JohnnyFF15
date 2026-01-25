@@ -4,46 +4,41 @@ import { Prop, MatchHistoryItem } from '../types';
 // Les cotes sont ajustées pour être drôles et réalistes selon le niveau de Johnny
 
 export const MOCK_PROPS: Prop[] = [
-  // ========== PARIS EARLY GAME (temps limité) ==========
+  // ========== PARIS EARLY GAME ==========
   {
     id: 'early1',
     title: "First Blood victime",
     description: "Johnny est la première victime de la game.",
     odds: 1.4, // Très probable
-    category: 'EARLY',
-    maxGameTime: 1
+    category: 'EARLY'
   },
   {
     id: 'early5',
     title: "First Blood kill",
     description: "Johnny fait le premier kill de la game.",
     odds: 12.0, // Très improbable
-    category: 'EARLY',
-    maxGameTime: 1
+    category: 'EARLY'
   },
   {
     id: 'early2',
-    title: "0/3 avant 10 min",
-    description: "Johnny meurt 3 fois avant la 10ème minute.",
+    title: "3 morts ou plus",
+    description: "Johnny meurt au moins 3 fois dans la game.",
     odds: 1.6,
-    category: 'EARLY',
-    maxGameTime: 10
+    category: 'EARLY'
   },
   {
     id: 'early3',
-    title: "0/5 avant 15 min",
-    description: "5 morts avant 15 minutes. Le speedrun.",
+    title: "5 morts ou plus",
+    description: "Johnny meurt au moins 5 fois. Le speedrun.",
     odds: 1.9,
-    category: 'EARLY',
-    maxGameTime: 15
+    category: 'EARLY'
   },
   {
     id: 'early4',
-    title: "Survit 10 min sans mourir",
-    description: "Johnny ne meurt pas pendant les 10 premières minutes.",
+    title: "0 mort toute la game",
+    description: "Johnny ne meurt pas une seule fois.",
     odds: 4.5, // Rare
-    category: 'EARLY',
-    maxGameTime: 10
+    category: 'EARLY'
   },
 
   // ========== PARIS KDA ==========
