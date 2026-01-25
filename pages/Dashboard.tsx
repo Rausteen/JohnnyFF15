@@ -539,54 +539,83 @@ const Dashboard = () => {
         </section>
       </div>
 
-      {/* Public Pending Bets Section */}
+      {/* Public Pending Bets Section - Grouped by User */}
       {publicPendingBets.length > 0 && (
-        <section className="mt-6 bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
-          <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Eye className="w-5 h-5 text-amber-400" />
-              <h2 className="font-bold text-white">Paris en attente</h2>
-            </div>
+        <section className="mt-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Eye className="w-5 h-5 text-amber-400" />
+            <h2 className="font-bold text-white">Qui parie sur quoi ?</h2>
             <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded-full font-bold">
-              {publicPendingBets.length} paris
+              {publicPendingBets.length} paris en attente
             </span>
           </div>
-          <div className="divide-y divide-zinc-800 max-h-80 overflow-y-auto">
-            {publicPendingBets.slice(0, 20).map(bet => (
-              <div key={bet.id} className="p-3 hover:bg-zinc-800/50 transition-colors">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs px-2 py-0.5 bg-primary/20 text-primary rounded-full font-medium truncate max-w-24">
-                        {bet.userPseudo}
-                      </span>
-                      {bet.comboId && (
-                        <span className="text-xs px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded-full">
-                          Combo
-                        </span>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Group bets by user */}
+            {(() => {
+              const betsByUser = new Map<string, typeof publicPendingBets>();
+              publicPendingBets.forEach(bet => {
+                const pseudo = bet.userPseudo || 'Inconnu';
+                if (!betsByUser.has(pseudo)) {
+                  betsByUser.set(pseudo, []);
+                }
+                betsByUser.get(pseudo)!.push(bet);
+              });
+
+              return Array.from(betsByUser.entries()).map(([pseudo, userBets]) => {
+                const totalMise = userBets.reduce((sum, b) => sum + b.amount, 0);
+                const totalPotentiel = userBets.reduce((sum, b) => sum + b.potentialPayout, 0);
+
+                return (
+                  <div key={pseudo} className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                    {/* User header */}
+                    <div className="p-3 bg-gradient-to-r from-primary/10 to-transparent border-b border-zinc-800 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+                          <span className="text-primary font-bold text-sm">{pseudo.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <span className="font-bold text-white">{pseudo}</span>
+                      </div>
+                      <span className="text-xs text-zinc-400">{userBets.length} paris</span>
+                    </div>
+
+                    {/* User's bets */}
+                    <div className="divide-y divide-zinc-800/50 max-h-48 overflow-y-auto">
+                      {userBets.slice(0, 5).map(bet => (
+                        <div key={bet.id} className="p-2.5 hover:bg-zinc-800/30 transition-colors">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-zinc-300 truncate">
+                                {bet.propTitle.replace(/^\[COMBO \d+\/\d+\] /, '')}
+                              </div>
+                              {bet.comboId && (
+                                <span className="text-[10px] text-purple-400">Combo</span>
+                              )}
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-amber-400 font-mono text-xs">x{bet.odds.toFixed(1)}</div>
+                              <div className="text-[10px] text-zinc-500">{bet.amount} JC</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {userBets.length > 5 && (
+                        <div className="p-2 text-center text-[10px] text-zinc-500">
+                          +{userBets.length - 5} autres paris
+                        </div>
                       )}
                     </div>
-                    <div className="text-sm text-zinc-200 truncate">
-                      {bet.propTitle.replace(/^\[COMBO \d+\/\d+\] /, '')}
+
+                    {/* User total */}
+                    <div className="p-2.5 bg-zinc-800/50 border-t border-zinc-800 flex items-center justify-between text-xs">
+                      <span className="text-zinc-400">Total misé: <span className="text-white font-mono">{totalMise} JC</span></span>
+                      <span className="text-gold font-bold">→ {totalPotentiel} JC</span>
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-amber-400 font-mono text-xs bg-amber-500/10 px-1.5 py-0.5 rounded">
-                      x{bet.odds.toFixed(1)}
-                    </div>
-                    <div className="text-xs text-zinc-500 mt-0.5">
-                      {bet.amount} JC
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+                );
+              });
+            })()}
           </div>
-          {publicPendingBets.length > 20 && (
-            <div className="p-3 text-center text-xs text-zinc-500 border-t border-zinc-800">
-              ... et {publicPendingBets.length - 20} autres paris
-            </div>
-          )}
         </section>
       )}
 
