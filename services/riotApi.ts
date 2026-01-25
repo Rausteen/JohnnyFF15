@@ -218,6 +218,8 @@ export interface ObjectiveDto {
 
 class RiotApiService {
   private region: Region = 'EUW';
+  private lastRequestTime = 0;
+  private minRequestInterval = 50; // 50ms between requests (20 req/s limit)
 
   setRegion(region: Region) {
     this.region = region;
@@ -231,11 +233,24 @@ class RiotApiService {
     return `https://${REGIONS[this.region].regional}.api.riotgames.com`;
   }
 
-  private async fetch<T>(url: string): Promise<T | null> {
+  // Wait to respect rate limits
+  private async waitForRateLimit(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    if (timeSinceLastRequest < this.minRequestInterval) {
+      await new Promise(resolve => setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest));
+    }
+    this.lastRequestTime = Date.now();
+  }
+
+  private async fetch<T>(url: string, retryCount = 0): Promise<T | null> {
     if (!RIOT_API_KEY) {
       console.error('RIOT_API_KEY not configured in .env');
       return null;
     }
+
+    // Respect rate limits
+    await this.waitForRateLimit();
 
     try {
       console.log('Riot API Request:', url);
@@ -258,7 +273,15 @@ class RiotApiService {
       }
 
       if (response.status === 429) {
-        console.error('Riot API: Rate limited - Too many requests');
+        // Rate limited - retry with exponential backoff (max 3 retries)
+        if (retryCount < 3) {
+          const retryAfter = parseInt(response.headers.get('Retry-After') || '1', 10);
+          const waitTime = Math.max(retryAfter * 1000, Math.pow(2, retryCount) * 1000);
+          console.warn(`Riot API: Rate limited, retrying in ${waitTime}ms (attempt ${retryCount + 1}/3)`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          return this.fetch<T>(url, retryCount + 1);
+        }
+        console.error('Riot API: Rate limited - Max retries exceeded');
         return null;
       }
 
