@@ -209,40 +209,60 @@ export const useGameStore = create<GameState>((set, get) => ({
         // If was in game and now isn't, fetch the last match, resolve bets and save it
         if (wasInGame && previousGameId) {
           console.log('Game ended! Previous game ID:', previousGameId);
-          console.log('Waiting for Riot API to process match data...');
+          console.log('Waiting for Riot API to process match data (90 seconds)...');
 
-          // Wait for Riot API to have the match data (usually takes 30-60 seconds)
+          // Wait for Riot API to have the match data (can take up to 2-3 minutes)
           setTimeout(async () => {
-            const { johnny, currentGameId } = get();
+            const { johnny } = get();
             if (!johnny.puuid) return;
 
             console.log('Fetching last match for bet resolution...');
 
-            // Fetch the match data
-            const lastMatch = await riotApi.getLastMatch(johnny.puuid);
+            // Try to fetch the match data, retry once if not found
+            let lastMatch = await riotApi.getLastMatch(johnny.puuid);
+
+            if (!lastMatch) {
+              console.log('Match not found yet, retrying in 30 seconds...');
+              await new Promise(resolve => setTimeout(resolve, 30000));
+              lastMatch = await riotApi.getLastMatch(johnny.puuid);
+            }
+
             if (lastMatch) {
               const stats = riotApi.getPlayerStatsFromMatch(lastMatch, johnny.puuid);
               set({ lastMatch, lastMatchStats: stats });
 
               console.log('Match found:', lastMatch.metadata.matchId);
+              console.log('Johnny stats:', stats?.kills, '/', stats?.deaths, '/', stats?.assists);
 
               // Resolve bets based on actual match data
-              console.log('Resolving bets for game:', currentGameId);
+              console.log('Resolving all pending bets...');
               const results = await resolveBets(lastMatch, johnny.puuid);
               console.log('Bet resolution complete:', results.length, 'bets resolved');
 
+              if (results.length > 0) {
+                const won = results.filter(r => r.won).length;
+                const lost = results.length - won;
+                console.log(`Results: ${won} won, ${lost} lost`);
+              }
+
               // Now clear the game ID
               set({ currentGameId: null });
-            }
 
-            // Save to match history (auto-sync)
-            console.log('Auto-syncing match to museum...');
-            const matchHistoryStore = useMatchHistoryStore.getState();
-            const newMatch = await matchHistoryStore.checkForNewMatch();
-            if (newMatch) {
-              console.log('New match saved to museum:', newMatch.id);
+              // Save to match history (auto-sync)
+              console.log('Auto-syncing match to museum...');
+              const matchHistoryStore = useMatchHistoryStore.getState();
+              const newMatch = await matchHistoryStore.checkForNewMatch();
+              if (newMatch) {
+                console.log('New match saved to museum:', newMatch.id);
+              } else {
+                console.log('Match not saved to museum (might already exist)');
+              }
+            } else {
+              console.error('Could not fetch match data after retry');
+              // Clear game ID anyway to avoid blocking future games
+              set({ currentGameId: null });
             }
-          }, 45000); // Wait 45 seconds for Riot API to process the match
+          }, 90000); // Wait 90 seconds for Riot API to process the match
         }
       }
     } catch (error: any) {

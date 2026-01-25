@@ -228,16 +228,16 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
     return results;
   }
 
-  // Get all pending bets for this match (or all pending bets if matchId not specified on bet)
-  const pendingBets = store.bets.filter(b =>
-    b.status === BetStatus.PENDING &&
-    (b.matchId === matchId || !b.matchId || b.matchId.startsWith('m_')) // Support legacy bets without proper matchId
-  );
+  // Get all pending bets - resolve ALL pending bets since we only track Johnny's games
+  // The match ID comparison was causing issues, so we simplify to resolve all pending
+  const pendingBets = store.bets.filter(b => b.status === BetStatus.PENDING);
 
   if (pendingBets.length === 0) {
-    console.log('No pending bets to resolve for match:', matchId);
+    console.log('No pending bets to resolve');
     return results;
   }
+
+  console.log(`Match data: ${matchId}, Johnny KDA: ${johnnyStats.kills}/${johnnyStats.deaths}/${johnnyStats.assists}`);
 
   console.log(`Resolving ${pendingBets.length} pending bets for match ${matchId}...`);
 

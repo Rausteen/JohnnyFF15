@@ -46,7 +46,7 @@ const Admin = () => {
   } = useGameStore();
 
   const { addCredits } = useCreditsStore();
-  const { clearAllMatches, matches, loadMatches } = useMatchHistoryStore();
+  const { clearAllMatches, matches, loadMatches, syncMatches, syncing } = useMatchHistoryStore();
 
   const [gameName, setGameName] = useState('');
   const [tagLine, setTagLine] = useState('');
@@ -56,6 +56,7 @@ const Admin = () => {
   const [apiTestLoading, setApiTestLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [resetResult, setResetResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string } | null>(null);
   const [resolveLoading, setResolveLoading] = useState(false);
   const [resolveResult, setResolveResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -153,6 +154,24 @@ const Admin = () => {
 
     setResetLoading(false);
     setTimeout(() => setResetResult(null), 5000);
+  };
+
+  const handleSyncMuseum = async () => {
+    setSyncResult(null);
+
+    try {
+      const result = await syncMatches();
+      setSyncResult({
+        success: true,
+        message: result.newMatches > 0
+          ? `${result.newMatches} nouvelle(s) game(s) ajoutée(s) au musée !`
+          : 'Musée déjà à jour, aucune nouvelle game.'
+      });
+    } catch (err: any) {
+      setSyncResult({ success: false, message: `Erreur: ${err.message}` });
+    }
+
+    setTimeout(() => setSyncResult(null), 5000);
   };
 
   const handleResolveBets = async () => {
@@ -598,23 +617,60 @@ const Admin = () => {
               <span className="text-xs text-zinc-500">{matches.length} games enregistrées</span>
             </div>
 
-            <button
-              onClick={handleResetMuseum}
-              disabled={resetLoading || matches.length === 0}
-              className="w-full py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
-            >
-              {resetLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Suppression...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4" />
-                  Vider le Musée
-                </>
-              )}
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={handleSyncMuseum}
+                disabled={syncing || !johnny.puuid}
+                className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                {syncing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Synchronisation...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Synchroniser les games depuis Riot
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleResetMuseum}
+                disabled={resetLoading || matches.length === 0}
+                className="w-full py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                {resetLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Suppression...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Vider le Musée
+                  </>
+                )}
+              </button>
+            </div>
+
+            {syncResult && (
+              <div className={`mt-3 p-3 rounded-xl text-sm ${
+                syncResult.success
+                  ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                  : 'bg-red-500/10 border border-red-500/30 text-red-400'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {syncResult.success ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4" />
+                  )}
+                  <span>{syncResult.message}</span>
+                </div>
+              </div>
+            )}
 
             {resetResult && (
               <div className={`mt-3 p-3 rounded-xl text-sm ${
@@ -629,6 +685,80 @@ const Admin = () => {
                     <AlertCircle className="w-4 h-4" />
                   )}
                   <span>{resetResult.message}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Manual Bet Resolution */}
+          <div className="bg-gradient-to-b from-green-950/20 to-zinc-900 p-6 rounded-2xl border border-green-500/30">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Gavel className="w-5 h-5 text-green-400" />
+                <h3 className="font-bold text-white">Résolution Manuelle des Paris</h3>
+              </div>
+              {pendingBets.length > 0 && (
+                <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-full">
+                  {pendingBets.length} en attente
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-zinc-400 mb-4">
+              Résout tous les paris en attente en utilisant les stats de la dernière game de Johnny.
+              Utilise ça si la résolution automatique n'a pas fonctionné.
+            </p>
+
+            <button
+              onClick={handleResolveBets}
+              disabled={resolveLoading || pendingBets.length === 0 || !johnny.puuid}
+              className="w-full py-3 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+            >
+              {resolveLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Résolution en cours...
+                </>
+              ) : (
+                <>
+                  <Gavel className="w-4 h-4" />
+                  Résoudre {pendingBets.length} paris maintenant
+                </>
+              )}
+            </button>
+
+            {resolveResult && (
+              <div className={`mt-3 p-3 rounded-xl text-sm ${
+                resolveResult.success
+                  ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                  : 'bg-red-500/10 border border-red-500/30 text-red-400'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {resolveResult.success ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4" />
+                  )}
+                  <span>{resolveResult.message}</span>
+                </div>
+              </div>
+            )}
+
+            {pendingBets.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-zinc-800">
+                <div className="text-xs text-zinc-500 mb-2">Paris en attente:</div>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {pendingBets.slice(0, 10).map(bet => (
+                    <div key={bet.id} className="text-xs text-zinc-400 flex justify-between">
+                      <span className="truncate flex-1">{bet.propTitle}</span>
+                      <span className="text-amber-400 ml-2">{bet.amount} JC</span>
+                    </div>
+                  ))}
+                  {pendingBets.length > 10 && (
+                    <div className="text-xs text-zinc-500">
+                      ... et {pendingBets.length - 10} autres
+                    </div>
+                  )}
                 </div>
               </div>
             )}
