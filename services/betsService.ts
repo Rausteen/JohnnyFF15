@@ -274,8 +274,50 @@ export async function getUserPendingBets(userId: string): Promise<Bet[]> {
   }
 }
 
+// Get all bets (for public history - all users can see all bets)
+export async function getAllBets(): Promise<Bet[]> {
+  try {
+    const { data, error } = await supabase
+      .from('bets')
+      .select('*')
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching all bets:', error);
+      return [];
+    }
+
+    return (data || []).map(supabaseBetToLocal);
+  } catch (err) {
+    console.error('Error fetching all bets:', err);
+    return [];
+  }
+}
+
+// Get bets for a specific user (for public profile view)
+export async function getBetsByUserId(userId: string): Promise<Bet[]> {
+  try {
+    const { data, error } = await supabase
+      .from('bets')
+      .select('*')
+      .eq('user_id', userId)
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user bets:', error);
+      return [];
+    }
+
+    return (data || []).map(supabaseBetToLocal);
+  } catch (err) {
+    console.error('Error fetching user bets:', err);
+    return [];
+  }
+}
+
 // Migrate local bets to Supabase (for old bets before Supabase integration)
 // This should be called when a user loads their bets
+// IMPORTANT: Skips bets that were placed before an account reset
 export async function migrateLocalBetsToSupabase(localBets: Bet[], userId: string): Promise<number> {
   if (!localBets || localBets.length === 0) return 0;
 
@@ -284,6 +326,31 @@ export async function migrateLocalBetsToSupabase(localBets: Bet[], userId: strin
   if (userBets.length === 0) return 0;
 
   try {
+    // Check if the account has been reset - get reset_at timestamp
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('reset_at')
+      .eq('id', userId)
+      .single();
+
+    if (profileError && profileError.code !== 'PGRST116') {
+      console.error('Error fetching profile for migration:', profileError);
+      return 0;
+    }
+
+    // If account was reset, filter out bets placed before the reset
+    let betsToConsider = userBets;
+    if (profile?.reset_at) {
+      const resetTimestamp = new Date(profile.reset_at).getTime();
+      betsToConsider = userBets.filter(b => b.timestamp > resetTimestamp);
+      console.log(`Account was reset at ${profile.reset_at}, filtering bets. ${userBets.length} -> ${betsToConsider.length} bets`);
+
+      if (betsToConsider.length === 0) {
+        console.log('All local bets are from before account reset, skipping migration');
+        return 0;
+      }
+    }
+
     // Get existing bet IDs from Supabase
     const { data: existingBets, error: fetchError } = await supabase
       .from('bets')
@@ -297,8 +364,8 @@ export async function migrateLocalBetsToSupabase(localBets: Bet[], userId: strin
 
     const existingIds = new Set((existingBets || []).map(b => b.id));
 
-    // Find bets that don't exist in Supabase
-    const betsToMigrate = userBets.filter(b => !existingIds.has(b.id));
+    // Find bets that don't exist in Supabase (from betsToConsider, not userBets)
+    const betsToMigrate = betsToConsider.filter(b => !existingIds.has(b.id));
 
     if (betsToMigrate.length === 0) {
       console.log('No bets to migrate');

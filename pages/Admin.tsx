@@ -326,7 +326,7 @@ const Admin = () => {
       return;
     }
 
-    if (pendingBets.length === 0) {
+    if (mergedPendingBets.length === 0) {
       setResolveResult({ success: false, message: 'Aucun pari en attente' });
       return;
     }
@@ -433,7 +433,7 @@ const Admin = () => {
     setResetAccountResult(null);
 
     try {
-      // Reset profile in Supabase
+      // Reset profile in Supabase (including reset_at timestamp to prevent bet re-migration)
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -443,7 +443,8 @@ const Admin = () => {
           bets_won: 0,
           bets_lost: 0,
           jc_won: 0,
-          jc_lost: 0
+          jc_lost: 0,
+          reset_at: new Date().toISOString()
         })
         .eq('id', selectedUserId);
 

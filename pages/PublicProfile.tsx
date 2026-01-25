@@ -1,9 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { User, Calendar, Sparkles, Trophy, TrendingUp, TrendingDown, Target, ArrowLeft, Loader2, Crown, ChevronDown, ChevronUp, Layers, Swords } from 'lucide-react';
+import { User, Calendar, Sparkles, Trophy, TrendingUp, TrendingDown, Target, ArrowLeft, Loader2, Crown, ChevronDown, ChevronUp, Layers, Swords, RefreshCw } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../services/authStore';
-import { useStore } from '../services/store';
+import { getBetsByUserId } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
 
 interface PublicUser {
@@ -25,15 +25,27 @@ const PublicProfile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user: currentUser } = useAuthStore();
-  const { bets } = useStore();
   const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set());
+
+  // Load bets from Supabase (public for all users)
+  const [userBets, setUserBets] = useState<Bet[]>([]);
+  const [betsLoading, setBetsLoading] = useState(true);
 
   const isOwnProfile = currentUser?.id === userId;
 
-  // Filter and group bets by user
-  const userBets = useMemo(() => {
-    return bets.filter(bet => bet.userId === userId);
-  }, [bets, userId]);
+  // Load user bets from Supabase
+  const loadUserBets = async () => {
+    if (!userId) return;
+    setBetsLoading(true);
+    try {
+      const bets = await getBetsByUserId(userId);
+      setUserBets(bets);
+    } catch (err) {
+      console.error('Error loading user bets:', err);
+    } finally {
+      setBetsLoading(false);
+    }
+  };
 
   // Group bets by matchId/champion
   const groupedBets = useMemo(() => {
@@ -106,6 +118,7 @@ const PublicProfile = () => {
     };
 
     fetchProfile();
+    loadUserBets();
   }, [userId]);
 
   if (loading) {
@@ -273,12 +286,27 @@ const PublicProfile = () => {
 
       {/* Betting History */}
       <div className="mt-8">
-        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-          <Target className="w-5 h-5 text-primary" />
-          Historique des paris
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Target className="w-5 h-5 text-primary" />
+            Historique des paris
+          </h2>
+          <button
+            onClick={loadUserBets}
+            disabled={betsLoading}
+            className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg transition-all"
+            title="Rafraîchir"
+          >
+            <RefreshCw className={`w-4 h-4 ${betsLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
 
-        {groupedBets.length === 0 ? (
+        {betsLoading ? (
+          <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-8 text-center">
+            <Loader2 className="w-8 h-8 text-zinc-500 animate-spin mx-auto mb-4" />
+            <p className="text-zinc-500">Chargement des paris...</p>
+          </div>
+        ) : groupedBets.length === 0 ? (
           <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-8 text-center">
             <Swords className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
             <p className="text-zinc-500">Aucun pari enregistré</p>
