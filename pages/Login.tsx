@@ -110,15 +110,22 @@ const Login = () => {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black p-4">
-      {/* Fond avec animation de zoom */}
+      {/* Fond avec animation */}
       {images.map((img, index) => (
         <img
           key={img}
           src={img}
           alt=""
-          className={`absolute inset-0 w-full h-full object-cover transition-all duration-[1500ms] ease-out ${
-            index === currentIndex && fade ? 'opacity-100 scale-110' : 'opacity-0 scale-100'
-          }`}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            opacity: index === currentIndex && fade ? 1 : 0,
+            transition: 'opacity 1.5s ease-out',
+          }}
         />
       ))}
 
