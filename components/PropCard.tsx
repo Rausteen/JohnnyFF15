@@ -132,6 +132,9 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
       // Record bet for stats
       await recordBetPlaced(val);
 
+      // Notify Dashboard to refresh bets list
+      window.dispatchEvent(new Event('betPlaced'));
+
       setAmount('');
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);

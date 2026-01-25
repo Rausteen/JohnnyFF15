@@ -5,6 +5,7 @@ import { usePropsStore } from '../services/propsStore';
 import { useStore } from '../services/store';
 import { useGameStore } from '../services/gameStore';
 import { useAuthStore } from '../services/authStore';
+import { useCreditsStore } from '../services/creditsStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
 import { getUserPendingBets } from '../services/betsService';
 import { Bet } from '../types';
@@ -33,6 +34,7 @@ const Dashboard = () => {
   const { cancelBet } = useStore();
   const { user } = useAuthStore();
   const { getProps } = usePropsStore();
+  const { addCredits } = useCreditsStore();
   const {
     johnny,
     isInGame,
@@ -69,6 +71,15 @@ const Dashboard = () => {
   useEffect(() => {
     const interval = setInterval(loadPendingBets, 30000); // Every 30 seconds
     return () => clearInterval(interval);
+  }, [user?.id]);
+
+  // Listen for bet placed events to refresh immediately
+  useEffect(() => {
+    const handleBetPlaced = () => {
+      loadPendingBets();
+    };
+    window.addEventListener('betPlaced', handleBetPlaced);
+    return () => window.removeEventListener('betPlaced', handleBetPlaced);
   }, [user?.id]);
 
   // Update current time every second for cancel button countdown
@@ -340,6 +351,8 @@ const Dashboard = () => {
                           onClick={async () => {
                             const success = await cancelBet(bet.id, bet.amount, bet.timestamp);
                             if (success) {
+                              // Refund the bet amount
+                              await addCredits(bet.amount);
                               loadPendingBets(); // Reload bets after cancellation
                             }
                           }}
