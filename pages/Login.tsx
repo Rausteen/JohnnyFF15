@@ -110,22 +110,15 @@ const Login = () => {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black p-4">
-      {/* Fond avec animation */}
-      {images.map((img, index) => (
+      {/* Fond avec animation de rotation */}
+      {images.map((src, index) => (
         <img
-          key={img}
-          src={img}
-          alt=""
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            opacity: index === currentIndex && fade ? 1 : 0,
-            transition: 'opacity 1.5s ease-out',
-          }}
+          key={src}
+          src={src}
+          alt="background"
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+            index === currentIndex && fade ? 'opacity-100' : 'opacity-0'
+          }`}
         />
       ))}
 
