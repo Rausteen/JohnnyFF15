@@ -120,8 +120,14 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
         }
       }
 
-      // Place bet in local store with match ID, user ID and champion
-      placeBet(prop.id, prop.title, prop.odds, val, betMatchId || undefined, undefined, user.id, championName);
+      // Place bet in Supabase with match ID, user ID and champion
+      const bet = await placeBet(prop.id, prop.title, prop.odds, val, betMatchId || undefined, undefined, user.id, championName);
+
+      if (!bet) {
+        setError("Erreur lors de l'enregistrement du pari");
+        setLoading(false);
+        return;
+      }
 
       // Record bet for stats
       await recordBetPlaced(val);

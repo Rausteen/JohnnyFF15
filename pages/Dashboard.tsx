@@ -6,8 +6,8 @@ import { useStore } from '../services/store';
 import { useGameStore } from '../services/gameStore';
 import { useAuthStore } from '../services/authStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
-import { getUserPendingBets, migrateLocalBetsToSupabase } from '../services/betsService';
-import { BetStatus, Bet } from '../types';
+import { getUserPendingBets } from '../services/betsService';
+import { Bet } from '../types';
 import {
   Clock, Skull, Wifi, WifiOff, AlertTriangle,
   Gamepad2, Users, LogIn, FlaskConical, Zap, Target, Swords,
@@ -30,7 +30,7 @@ const CATEGORY_INFO = {
 const POPULAR_PROP_IDS = ['kda1', 'out2', 'early1', 'kda5', 'out1', 'gp1'];
 
 const Dashboard = () => {
-  const { bets, cancelBet } = useStore();
+  const { cancelBet } = useStore();
   const { user } = useAuthStore();
   const { getProps } = usePropsStore();
   const {
@@ -49,14 +49,10 @@ const Dashboard = () => {
   // Supabase pending bets
   const [supabasePendingBets, setSupabasePendingBets] = useState<Bet[]>([]);
 
-  // Load pending bets from Supabase (and migrate local bets first)
+  // Load pending bets from Supabase
   const loadPendingBets = async () => {
     if (!user) return;
     try {
-      // First, migrate any local bets that aren't in Supabase yet
-      await migrateLocalBetsToSupabase(bets, user.id);
-
-      // Then load pending bets from Supabase
       const pendingBets = await getUserPendingBets(user.id);
       setSupabasePendingBets(pendingBets);
     } catch (err) {
@@ -95,27 +91,10 @@ const Dashboard = () => {
   // Get props with custom odds applied
   const allProps = getProps();
 
-  // Use Supabase pending bets, fallback to local
-  // Merge Supabase and local pending bets (deduplicate by ID)
+  // Active bets from Supabase only (sorted by timestamp, newest first)
   const activeBets = useMemo(() => {
-    const localPendingBets = bets.filter(b => b.status === BetStatus.PENDING && b.userId === user?.id);
-
-    // Create a map of all bets, Supabase takes priority for duplicates
-    const betsMap = new Map<string, Bet>();
-
-    // Add local bets first
-    localPendingBets.forEach(bet => {
-      betsMap.set(bet.id, bet);
-    });
-
-    // Override with Supabase bets (more up-to-date status)
-    supabasePendingBets.forEach(bet => {
-      betsMap.set(bet.id, bet);
-    });
-
-    // Convert back to array and sort by timestamp (newest first)
-    return Array.from(betsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
-  }, [supabasePendingBets, bets, user?.id]);
+    return [...supabasePendingBets].sort((a, b) => b.timestamp - a.timestamp);
+  }, [supabasePendingBets]);
   const gameTimeMinutes = currentGame
     ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
     : 0;
@@ -358,7 +337,12 @@ const Dashboard = () => {
                       </span>
                       {canCancelBet(bet.timestamp) ? (
                         <button
-                          onClick={() => cancelBet(bet.id)}
+                          onClick={async () => {
+                            const success = await cancelBet(bet.id, bet.amount, bet.timestamp);
+                            if (success) {
+                              loadPendingBets(); // Reload bets after cancellation
+                            }
+                          }}
                           className="text-red-400 hover:text-red-300 p-1 flex items-center gap-1"
                           title={`${getCancelTimeLeft(bet.timestamp)}s pour annuler`}
                         >

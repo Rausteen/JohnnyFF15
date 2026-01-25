@@ -6,7 +6,6 @@ import { useAuthStore } from '../services/authStore';
 import { useMatchHistoryStore } from '../services/matchHistoryStore';
 import { Region, riotApi } from '../services/riotApi';
 import { resolveBets } from '../services/betResolutionService';
-import { useStore } from '../services/store';
 import { getAllPendingBets, updateBetStatus, deleteUserBets } from '../services/betsService';
 import { Bet } from '../types';
 import { usePropsStore } from '../services/propsStore';
@@ -65,8 +64,7 @@ const Admin = () => {
   const [forceSyncLoading, setForceSyncLoading] = useState(false);
   const [forceSyncResult, setForceSyncResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  const { bets, resolveManualBet } = useStore();
-  const localPendingBets = bets.filter(b => b.status === 'PENDING');
+  // Note: bets are now Supabase-only (no local storage)
 
   // All pending bets from Supabase (all users)
   const [allPendingBets, setAllPendingBets] = useState<Bet[]>([]);
@@ -85,23 +83,10 @@ const Admin = () => {
     }
   };
 
-  // Merge Supabase pending bets with local pending bets (for old bets before Supabase integration)
+  // Pending bets from Supabase (sorted by timestamp, newest first)
   const mergedPendingBets = useMemo(() => {
-    const betsMap = new Map<string, Bet>();
-
-    // Add local pending bets first
-    localPendingBets.forEach(bet => {
-      betsMap.set(bet.id, bet);
-    });
-
-    // Override with Supabase bets (more up-to-date)
-    allPendingBets.forEach(bet => {
-      betsMap.set(bet.id, bet);
-    });
-
-    // Convert back to array and sort by timestamp (newest first)
-    return Array.from(betsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
-  }, [allPendingBets, localPendingBets]);
+    return [...allPendingBets].sort((a, b) => b.timestamp - a.timestamp);
+  }, [allPendingBets]);
 
   const [selectedTestMatch, setSelectedTestMatch] = useState<string>('');
   const [testModeLoading, setTestModeLoading] = useState(false);
@@ -302,9 +287,6 @@ const Admin = () => {
         }
       }
 
-      // Also update in local store if it's the admin's own bet
-      resolveManualBet(betId, won);
-
       // Remove from local list
       setAllPendingBets(prev => prev.filter(b => b.id !== betId));
 
@@ -455,11 +437,6 @@ const Admin = () => {
       if (!deleteResult.success) {
         throw new Error(deleteResult.error || 'Impossible de supprimer les paris');
       }
-
-      // Remove user's bets from local store
-      const store = useStore.getState();
-      const filteredBets = store.bets.filter(b => b.userId !== selectedUserId);
-      useStore.setState({ bets: filteredBets });
 
       setResetAccountResult({
         success: true,

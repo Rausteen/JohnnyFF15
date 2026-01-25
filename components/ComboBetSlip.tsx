@@ -91,10 +91,10 @@ const ComboBetSlip: React.FC = () => {
         }
       }
 
-      // Place each bet in the combo as a linked bet
+      // Place each bet in the combo as a linked bet (all bets must succeed)
       const comboId = `combo_${Date.now()}`;
       const comboTotal = selections.length;
-      selections.forEach((sel, index) => {
+      const betPromises = selections.map((sel, index) =>
         placeBet(
           sel.prop.id,
           `[COMBO ${index + 1}/${comboTotal}] ${sel.prop.title}`,
@@ -104,8 +104,15 @@ const ComboBetSlip: React.FC = () => {
           { comboId, comboIndex: index + 1, comboTotal },
           user.id,
           championName
-        );
-      });
+        )
+      );
+
+      const results = await Promise.all(betPromises);
+      if (results.some(r => r === null)) {
+        setError("Erreur lors de l'enregistrement du combiné");
+        setLoading(false);
+        return;
+      }
 
       // Record bet for stats
       await recordBetPlaced(val);

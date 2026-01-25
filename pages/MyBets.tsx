@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useStore } from '../services/store';
 import { useAuthStore } from '../services/authStore';
-import { getUserBets, migrateLocalBetsToSupabase } from '../services/betsService';
+import { getUserBets } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
 import {
   Filter, TrendingDown, TrendingUp, Wallet, ChevronDown, ChevronUp,
@@ -23,7 +22,6 @@ interface GameGroup {
 type SortOption = 'date' | 'amount' | 'result';
 
 const MyBets = () => {
-  const { bets: localBets } = useStore();
   const { user } = useAuthStore();
   const [filter, setFilter] = useState<BetStatus | 'ALL'>('ALL');
   const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set());
@@ -34,18 +32,11 @@ const MyBets = () => {
   const [supabaseBets, setSupabaseBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load bets from Supabase (and migrate local bets first)
+  // Load bets from Supabase
   const loadBets = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      // First, migrate any local bets that aren't in Supabase yet
-      const migrated = await migrateLocalBetsToSupabase(localBets, user.id);
-      if (migrated > 0) {
-        console.log(`Migrated ${migrated} local bets to Supabase`);
-      }
-
-      // Then load all bets from Supabase
       const bets = await getUserBets(user.id);
       setSupabaseBets(bets);
     } catch (err) {
@@ -65,26 +56,10 @@ const MyBets = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Merge Supabase bets with local bets (deduplicate by ID)
+  // User bets from Supabase (sorted by timestamp, newest first)
   const userBets = useMemo(() => {
-    const userLocalBets = localBets.filter(b => b.userId === user.id);
-
-    // Create a map of all bets, Supabase takes priority for duplicates
-    const betsMap = new Map<string, Bet>();
-
-    // Add local bets first
-    userLocalBets.forEach(bet => {
-      betsMap.set(bet.id, bet);
-    });
-
-    // Override with Supabase bets (more up-to-date status)
-    supabaseBets.forEach(bet => {
-      betsMap.set(bet.id, bet);
-    });
-
-    // Convert back to array and sort by timestamp (newest first)
-    return Array.from(betsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
-  }, [supabaseBets, localBets, user.id]);
+    return [...supabaseBets].sort((a, b) => b.timestamp - a.timestamp);
+  }, [supabaseBets]);
 
   const filteredBets = filter === 'ALL' ? userBets : userBets.filter(b => b.status === filter);
 
