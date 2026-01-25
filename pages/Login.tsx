@@ -7,6 +7,10 @@ const images = [
   '/background_image/vayne.PNG',
   '/background_image/gateau.PNG',
   '/background_image/teemo.png',
+  '/background_image/syndra.png',
+  '/background_image/heimer.png',
+  '/background_image/kha.png',
+  '/background_image/nauti.png',
 ];
 
 const funnySubtitles = [
