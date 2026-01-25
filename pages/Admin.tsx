@@ -7,6 +7,8 @@ import { useMatchHistoryStore } from '../services/matchHistoryStore';
 import { Region, riotApi } from '../services/riotApi';
 import { resolveBets } from '../services/betResolutionService';
 import { useStore } from '../services/store';
+import { getAllPendingBets, updateBetStatus } from '../services/betsService';
+import { Bet } from '../types';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
@@ -64,7 +66,24 @@ const Admin = () => {
   const [forceSyncResult, setForceSyncResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const { bets, resolveManualBet } = useStore();
-  const pendingBets = bets.filter(b => b.status === 'PENDING');
+  const localPendingBets = bets.filter(b => b.status === 'PENDING');
+
+  // All pending bets from Supabase (all users)
+  const [allPendingBets, setAllPendingBets] = useState<Bet[]>([]);
+  const [loadingBets, setLoadingBets] = useState(false);
+
+  // Load all pending bets from Supabase
+  const loadAllPendingBets = async () => {
+    setLoadingBets(true);
+    try {
+      const bets = await getAllPendingBets();
+      setAllPendingBets(bets);
+    } catch (err) {
+      console.error('Error loading bets:', err);
+    } finally {
+      setLoadingBets(false);
+    }
+  };
 
   const [selectedTestMatch, setSelectedTestMatch] = useState<string>('');
   const [testModeLoading, setTestModeLoading] = useState(false);
@@ -88,6 +107,7 @@ const Admin = () => {
   useEffect(() => {
     loadJohnnyConfig();
     loadMatches();
+    loadAllPendingBets();
   }, []);
 
   // Redirect non-admin users
@@ -199,34 +219,80 @@ const Admin = () => {
     setTimeout(() => setForceSyncResult(null), 5000);
   };
 
-  // Manually resolve a single bet
+  // Manually resolve a single bet (works with Supabase bets from all users)
   const handleManualResolve = async (betId: string, won: boolean) => {
-    const bet = pendingBets.find(b => b.id === betId);
+    const bet = allPendingBets.find(b => b.id === betId);
     if (!bet) return;
 
     setResolvingBetId(betId);
 
     try {
-      const resolvedBet = resolveManualBet(betId, won);
-      if (!resolvedBet) {
-        setResolveResult({ success: false, message: 'Pari non trouvé ou déjà résolu' });
+      const newStatus = won ? 'WON' : 'LOST';
+      const resolvedStat = won ? '✓ Résolu manuellement (WIN)' : '✗ Résolu manuellement (LOSE)';
+
+      // Update in Supabase
+      const success = await updateBetStatus(betId, newStatus as any, resolvedStat);
+      if (!success) {
+        setResolveResult({ success: false, message: 'Erreur lors de la mise à jour dans Supabase' });
         return;
       }
 
-      // Update credits for the user
-      const creditsStore = useCreditsStore.getState();
+      // Update user's credits in Supabase
+      if (bet.userId) {
+        if (won) {
+          // Add winnings to user's credits
+          const { error: creditError } = await supabase
+            .from('profiles')
+            .select('credits, bets_won, jc_won')
+            .eq('id', bet.userId)
+            .single()
+            .then(async ({ data, error }) => {
+              if (error || !data) return { error };
+              return supabase
+                .from('profiles')
+                .update({
+                  credits: data.credits + bet.potentialPayout,
+                  bets_won: (data.bets_won || 0) + 1,
+                  jc_won: (data.jc_won || 0) + (bet.potentialPayout - bet.amount)
+                })
+                .eq('id', bet.userId);
+            });
 
-      if (won) {
-        // Add winnings
-        await creditsStore.addCredits(resolvedBet.potentialPayout);
-        await creditsStore.recordBetWon(resolvedBet.potentialPayout - resolvedBet.amount);
-      } else {
-        await creditsStore.recordBetLost(resolvedBet.amount);
+          if (creditError) {
+            console.error('Error updating user credits:', creditError);
+          }
+        } else {
+          // Record loss in stats
+          const { error: lossError } = await supabase
+            .from('profiles')
+            .select('bets_lost')
+            .eq('id', bet.userId)
+            .single()
+            .then(async ({ data, error }) => {
+              if (error || !data) return { error };
+              return supabase
+                .from('profiles')
+                .update({
+                  bets_lost: (data.bets_lost || 0) + 1
+                })
+                .eq('id', bet.userId);
+            });
+
+          if (lossError) {
+            console.error('Error updating user stats:', lossError);
+          }
+        }
       }
+
+      // Also update in local store if it's the admin's own bet
+      resolveManualBet(betId, won);
+
+      // Remove from local list
+      setAllPendingBets(prev => prev.filter(b => b.id !== betId));
 
       setResolveResult({
         success: true,
-        message: `${resolvedBet.propTitle}: ${won ? 'WIN (+' + resolvedBet.potentialPayout + ' JC)' : 'LOSE'}`
+        message: `${bet.propTitle}: ${won ? 'WIN (+' + bet.potentialPayout + ' JC)' : 'LOSE'}`
       });
     } catch (err: any) {
       setResolveResult({ success: false, message: `Erreur: ${err.message}` });
@@ -795,15 +861,25 @@ const Admin = () => {
                 <Gavel className="w-5 h-5 text-green-400" />
                 <h3 className="font-bold text-white">Résolution Manuelle des Paris</h3>
               </div>
-              {pendingBets.length > 0 && (
-                <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-full">
-                  {pendingBets.length} en attente
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {allPendingBets.length > 0 && (
+                  <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-full">
+                    {allPendingBets.length} en attente
+                  </span>
+                )}
+                <button
+                  onClick={loadAllPendingBets}
+                  disabled={loadingBets}
+                  className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg transition-all"
+                  title="Rafraîchir les paris"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingBets ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
             </div>
 
             <p className="text-xs text-zinc-400 mb-4">
-              Choisis WIN ou LOSE pour chaque pari individuellement.
+              Paris de tous les utilisateurs. Choisis WIN ou LOSE pour chaque pari.
             </p>
 
             {resolveResult && (
@@ -823,9 +899,14 @@ const Admin = () => {
               </div>
             )}
 
-            {pendingBets.length > 0 ? (
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {pendingBets.map(bet => (
+            {loadingBets ? (
+              <div className="text-center py-6">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto text-zinc-500" />
+                <div className="text-zinc-500 text-sm mt-2">Chargement des paris...</div>
+              </div>
+            ) : allPendingBets.length > 0 ? (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {allPendingBets.map(bet => (
                   <div key={bet.id} className="p-3 bg-zinc-800/50 rounded-xl border border-zinc-700">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -834,6 +915,11 @@ const Admin = () => {
                         </div>
                         <div className="text-xs text-zinc-500 mt-0.5">
                           Mise: {bet.amount} JC • Gain: {bet.potentialPayout} JC (x{bet.odds.toFixed(1)})
+                        </div>
+                        <div className="text-xs text-primary mt-0.5 flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          {bet.userId ? `ID: ${bet.userId.slice(0, 8)}...` : 'Inconnu'}
+                          {bet.championName && <span className="text-zinc-500">• {bet.championName}</span>}
                         </div>
                         {bet.comboId && (
                           <div className="text-xs text-purple-400 mt-0.5">

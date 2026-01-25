@@ -201,7 +201,13 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
 
   // Force sync only the last game (for admin when auto-sync fails)
   syncLastGame: async () => {
-    const { config, matches } = get();
+    let { config, matches } = get();
+
+    // Load config if not loaded
+    if (!config?.puuid) {
+      await get().loadConfig();
+      config = get().config;
+    }
 
     if (!config?.puuid) {
       return { success: false, error: 'PUUID non configuré' };
@@ -282,9 +288,18 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
 
   // Check if there's a new match (call this after game ends)
   checkForNewMatch: async () => {
-    const { config, matches } = get();
+    let { config, matches } = get();
 
-    if (!config?.puuid) return null;
+    // Load config if not loaded
+    if (!config?.puuid) {
+      await get().loadConfig();
+      config = get().config;
+    }
+
+    if (!config?.puuid) {
+      console.warn('checkForNewMatch: No PUUID configured');
+      return null;
+    }
 
     try {
       const matchIds = await riotApi.getMatchHistory(config.puuid, 1);

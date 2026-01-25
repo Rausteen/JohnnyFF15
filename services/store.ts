@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Bet, BetStatus, GameState, MatchStatus, MatchHistoryItem } from '../types';
 import { MOCK_HISTORY } from './mockData';
+import { saveBetToSupabase, deleteBetFromSupabase, updateBetStatus } from './betsService';
 
 interface StoreState {
   balance: number;
@@ -64,6 +65,11 @@ export const useStore = create<StoreState>()(
         set((state) => ({
           bets: [newBet, ...state.bets],
         }));
+
+        // Save to Supabase (async, don't block)
+        saveBetToSupabase(newBet).catch(err => {
+          console.error('Failed to save bet to Supabase:', err);
+        });
       },
 
       cancelBet: (betId) => {
@@ -79,6 +85,11 @@ export const useStore = create<StoreState>()(
           balance: state.balance + bet.amount,
           bets: state.bets.filter((b) => b.id !== betId),
         }));
+
+        // Delete from Supabase (async, don't block)
+        deleteBetFromSupabase(betId).catch(err => {
+          console.error('Failed to delete bet from Supabase:', err);
+        });
       },
 
       // Manually resolve a bet as WIN or LOSE
@@ -87,15 +98,23 @@ export const useStore = create<StoreState>()(
         const bet = bets.find((b) => b.id === betId);
         if (!bet || bet.status !== BetStatus.PENDING) return null;
 
+        const newStatus = won ? BetStatus.WON : BetStatus.LOST;
+        const resolvedStat = won ? '✓ Résolu manuellement (WIN)' : '✗ Résolu manuellement (LOSE)';
+
         const updatedBet: Bet = {
           ...bet,
-          status: won ? BetStatus.WON : BetStatus.LOST,
-          resolvedStat: won ? '✓ Résolu manuellement (WIN)' : '✗ Résolu manuellement (LOSE)'
+          status: newStatus,
+          resolvedStat
         };
 
         set((state) => ({
           bets: state.bets.map((b) => (b.id === betId ? updatedBet : b)),
         }));
+
+        // Update in Supabase (async, don't block)
+        updateBetStatus(betId, newStatus, resolvedStat).catch(err => {
+          console.error('Failed to update bet in Supabase:', err);
+        });
 
         return updatedBet;
       },
