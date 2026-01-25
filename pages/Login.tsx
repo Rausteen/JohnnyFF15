@@ -6,7 +6,7 @@ import { Loader2, Lock, User, AlertCircle, CheckCircle, Skull } from 'lucide-rea
 const images = [
   '/background_image/vayne.PNG',
   '/background_image/gateau.PNG',
-  '/background_image/teemo.PNG',
+  '/background_image/teemo.png',
 ];
 
 const funnySubtitles = [
