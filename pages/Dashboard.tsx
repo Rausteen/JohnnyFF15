@@ -7,12 +7,12 @@ import { useGameStore } from '../services/gameStore';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
-import { getUserPendingBets } from '../services/betsService';
+import { getUserPendingBets, getAllPendingBetsWithPseudos, BetWithPseudo } from '../services/betsService';
 import { Bet } from '../types';
 import {
   Clock, Skull, Wifi, WifiOff, AlertTriangle,
   Gamepad2, Users, LogIn, FlaskConical, Zap, Target, Swords,
-  Star, Timer, Award, Layers
+  Star, Timer, Award, Layers, Eye
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -51,6 +51,9 @@ const Dashboard = () => {
   // Supabase pending bets
   const [supabasePendingBets, setSupabasePendingBets] = useState<Bet[]>([]);
 
+  // Public pending bets (all users with pseudos)
+  const [publicPendingBets, setPublicPendingBets] = useState<BetWithPseudo[]>([]);
+
   // Load pending bets from Supabase
   const loadPendingBets = async () => {
     if (!user) return;
@@ -62,14 +65,28 @@ const Dashboard = () => {
     }
   };
 
+  // Load public pending bets
+  const loadPublicPendingBets = async () => {
+    try {
+      const bets = await getAllPendingBetsWithPseudos();
+      setPublicPendingBets(bets);
+    } catch (err) {
+      console.error('Error loading public pending bets:', err);
+    }
+  };
+
   // Load on mount and when user changes
   useEffect(() => {
     loadPendingBets();
+    loadPublicPendingBets();
   }, [user?.id]);
 
   // Reload bets periodically to stay in sync
   useEffect(() => {
-    const interval = setInterval(loadPendingBets, 30000); // Every 30 seconds
+    const interval = setInterval(() => {
+      loadPendingBets();
+      loadPublicPendingBets();
+    }, 30000); // Every 30 seconds
     return () => clearInterval(interval);
   }, [user?.id]);
 
@@ -77,6 +94,7 @@ const Dashboard = () => {
   useEffect(() => {
     const handleBetPlaced = () => {
       loadPendingBets();
+      loadPublicPendingBets();
     };
     window.addEventListener('betPlaced', handleBetPlaced);
     return () => window.removeEventListener('betPlaced', handleBetPlaced);
@@ -520,6 +538,57 @@ const Dashboard = () => {
           </div>
         </section>
       </div>
+
+      {/* Public Pending Bets Section */}
+      {publicPendingBets.length > 0 && (
+        <section className="mt-6 bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+          <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Eye className="w-5 h-5 text-amber-400" />
+              <h2 className="font-bold text-white">Paris en attente</h2>
+            </div>
+            <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-1 rounded-full font-bold">
+              {publicPendingBets.length} paris
+            </span>
+          </div>
+          <div className="divide-y divide-zinc-800 max-h-80 overflow-y-auto">
+            {publicPendingBets.slice(0, 20).map(bet => (
+              <div key={bet.id} className="p-3 hover:bg-zinc-800/50 transition-colors">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs px-2 py-0.5 bg-primary/20 text-primary rounded-full font-medium truncate max-w-24">
+                        {bet.userPseudo}
+                      </span>
+                      {bet.comboId && (
+                        <span className="text-xs px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded-full">
+                          Combo
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-zinc-200 truncate">
+                      {bet.propTitle.replace(/^\[COMBO \d+\/\d+\] /, '')}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-amber-400 font-mono text-xs bg-amber-500/10 px-1.5 py-0.5 rounded">
+                      x{bet.odds.toFixed(1)}
+                    </div>
+                    <div className="text-xs text-zinc-500 mt-0.5">
+                      {bet.amount} JC
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {publicPendingBets.length > 20 && (
+            <div className="p-3 text-center text-xs text-zinc-500 border-t border-zinc-800">
+              ... et {publicPendingBets.length - 20} autres paris
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Combo Bet Slip (floating) */}
       <ComboBetSlip />

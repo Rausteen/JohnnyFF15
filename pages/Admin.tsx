@@ -11,7 +11,7 @@ import { Bet } from '../types';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download } from 'lucide-react';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins } from 'lucide-react';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -103,6 +103,12 @@ const Admin = () => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [resetAccountLoading, setResetAccountLoading] = useState(false);
   const [resetAccountResult, setResetAccountResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Add credits to user
+  const [addCreditsUserId, setAddCreditsUserId] = useState<string>('');
+  const [addCreditsAmount, setAddCreditsAmount] = useState<string>('1000');
+  const [addCreditsLoading, setAddCreditsLoading] = useState(false);
+  const [addCreditsResult, setAddCreditsResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Check if user is admin
   const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
@@ -453,6 +459,63 @@ const Admin = () => {
     } finally {
       setResetAccountLoading(false);
       setTimeout(() => setResetAccountResult(null), 5000);
+    }
+  };
+
+  // Add credits to a specific user
+  const handleAddCreditsToUser = async () => {
+    if (!addCreditsUserId) {
+      setAddCreditsResult({ success: false, message: 'Sélectionne un utilisateur' });
+      return;
+    }
+
+    const amount = parseInt(addCreditsAmount, 10);
+    if (isNaN(amount) || amount <= 0) {
+      setAddCreditsResult({ success: false, message: 'Montant invalide' });
+      return;
+    }
+
+    const selectedUser = allUsers.find(u => u.id === addCreditsUserId);
+    if (!confirm(`Ajouter ${amount.toLocaleString()} JC à ${selectedUser?.pseudo} ?`)) {
+      return;
+    }
+
+    setAddCreditsLoading(true);
+    setAddCreditsResult(null);
+
+    try {
+      // Get current credits and add the amount
+      const { data: currentProfile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('credits')
+        .eq('id', addCreditsUserId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const newCredits = (currentProfile?.credits || 0) + amount;
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ credits: newCredits })
+        .eq('id', addCreditsUserId);
+
+      if (updateError) throw updateError;
+
+      setAddCreditsResult({
+        success: true,
+        message: `+${amount.toLocaleString()} JC ajoutés à ${selectedUser?.pseudo} ! (Total: ${newCredits.toLocaleString()} JC)`
+      });
+
+      // Refresh users list
+      fetchAllUsers();
+      setAddCreditsUserId('');
+    } catch (err: any) {
+      console.error('Add credits error:', err);
+      setAddCreditsResult({ success: false, message: `Erreur: ${err.message}` });
+    } finally {
+      setAddCreditsLoading(false);
+      setTimeout(() => setAddCreditsResult(null), 5000);
     }
   };
 
@@ -1272,6 +1335,93 @@ const Admin = () => {
                       <AlertCircle className="w-4 h-4" />
                     )}
                     <span>{resetAccountResult.message}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Add Credits to User */}
+          <div className="bg-gradient-to-b from-amber-950/20 to-zinc-900 p-6 rounded-2xl border border-amber-500/30">
+            <div className="flex items-center gap-3 mb-4">
+              <Coins className="w-5 h-5 text-amber-400" />
+              <h3 className="font-bold text-white">Ajouter des Crédits</h3>
+            </div>
+
+            <p className="text-xs text-zinc-400 mb-4">
+              Ajoute des JohnnyCoins à un utilisateur. Utile pour compenser des bugs ou des erreurs.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <select
+                  value={addCreditsUserId}
+                  onChange={(e) => setAddCreditsUserId(e.target.value)}
+                  onClick={() => {
+                    if (allUsers.length === 0) fetchAllUsers();
+                  }}
+                  className="flex-1 p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:border-amber-500 focus:outline-none"
+                >
+                  <option value="">-- Sélectionner un utilisateur --</option>
+                  {allUsers.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.pseudo} ({u.credits.toLocaleString()} JC)
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={fetchAllUsers}
+                  disabled={usersLoading}
+                  className="px-3 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-xl transition-all"
+                >
+                  <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-sm text-zinc-400 mb-2">Montant à ajouter</label>
+                <input
+                  type="number"
+                  value={addCreditsAmount}
+                  onChange={(e) => setAddCreditsAmount(e.target.value)}
+                  min="1"
+                  step="100"
+                  placeholder="1000"
+                  className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <button
+                onClick={handleAddCreditsToUser}
+                disabled={addCreditsLoading || !addCreditsUserId}
+                className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                {addCreditsLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Ajout en cours...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Ajouter les crédits
+                  </>
+                )}
+              </button>
+
+              {addCreditsResult && (
+                <div className={`p-3 rounded-xl text-sm ${
+                  addCreditsResult.success
+                    ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                    : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {addCreditsResult.success ? (
+                      <CheckCircle className="w-4 h-4" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4" />
+                    )}
+                    <span>{addCreditsResult.message}</span>
                   </div>
                 </div>
               )}

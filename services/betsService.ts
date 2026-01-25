@@ -315,3 +315,57 @@ export async function getBetsByUserId(userId: string): Promise<Bet[]> {
   }
 }
 
+// Extended bet type with user pseudo
+export interface BetWithPseudo extends Bet {
+  userPseudo?: string;
+}
+
+// Get all pending bets with user pseudos (for public view)
+export async function getAllPendingBetsWithPseudos(): Promise<BetWithPseudo[]> {
+  try {
+    // Get all pending bets
+    const { data: bets, error: betsError } = await supabase
+      .from('bets')
+      .select('*')
+      .eq('status', 'PENDING')
+      .order('timestamp', { ascending: false });
+
+    if (betsError) {
+      console.error('Error fetching pending bets:', betsError);
+      return [];
+    }
+
+    if (!bets || bets.length === 0) {
+      return [];
+    }
+
+    // Get unique user IDs
+    const userIds = [...new Set(bets.map(b => b.user_id).filter(Boolean))];
+
+    // Fetch user pseudos
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, pseudo')
+      .in('id', userIds);
+
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+    }
+
+    // Create a map of user ID to pseudo
+    const pseudoMap = new Map<string, string>();
+    (profiles || []).forEach(p => {
+      pseudoMap.set(p.id, p.pseudo);
+    });
+
+    // Convert bets and add pseudos
+    return bets.map(sb => ({
+      ...supabaseBetToLocal(sb),
+      userPseudo: pseudoMap.get(sb.user_id) || 'Inconnu'
+    }));
+  } catch (err) {
+    console.error('Error fetching pending bets with pseudos:', err);
+    return [];
+  }
+}
+
