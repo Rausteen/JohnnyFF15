@@ -191,19 +191,27 @@ const Profile = () => {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center p-4 bg-black/20 rounded-xl">
-              <div className="text-3xl font-bold text-white">0</div>
+              <div className="text-3xl font-bold text-white">{profile?.total_bets || 0}</div>
               <div className="text-xs text-zinc-500 uppercase mt-1">Paris totaux</div>
             </div>
             <div className="text-center p-4 bg-black/20 rounded-xl">
-              <div className="text-3xl font-bold text-green-400">0%</div>
+              {(() => {
+                const resolved = (profile?.bets_won || 0) + (profile?.bets_lost || 0);
+                const winRate = resolved > 0 ? Math.round((profile?.bets_won || 0) / resolved * 100) : 0;
+                return (
+                  <div className={`text-3xl font-bold ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                    {winRate}%
+                  </div>
+                );
+              })()}
               <div className="text-xs text-zinc-500 uppercase mt-1">Taux de réussite</div>
             </div>
             <div className="text-center p-4 bg-black/20 rounded-xl">
-              <div className="text-3xl font-bold text-gold">0</div>
+              <div className="text-3xl font-bold text-green-400">+{(profile?.jc_won || 0).toLocaleString('fr-FR')}</div>
               <div className="text-xs text-zinc-500 uppercase mt-1">JC gagnés</div>
             </div>
             <div className="text-center p-4 bg-black/20 rounded-xl">
-              <div className="text-3xl font-bold text-red-400">0</div>
+              <div className="text-3xl font-bold text-red-400">-{(profile?.jc_lost || 0).toLocaleString('fr-FR')}</div>
               <div className="text-xs text-zinc-500 uppercase mt-1">JC perdus</div>
             </div>
           </div>

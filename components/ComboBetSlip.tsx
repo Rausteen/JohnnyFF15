@@ -115,7 +115,7 @@ const ComboBetSlip: React.FC = () => {
       }
 
       // Record bet for stats
-      await recordBetPlaced(val);
+      await recordBetPlaced();
 
       // Notify Dashboard to refresh bets list
       window.dispatchEvent(new Event('betPlaced'));

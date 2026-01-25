@@ -24,7 +24,7 @@ interface CreditsState {
   updateCredits: (amount: number) => Promise<boolean>;
   addCredits: (amount: number) => Promise<boolean>;
   subtractCredits: (amount: number) => Promise<boolean>;
-  recordBetPlaced: (amount: number) => Promise<boolean>;
+  recordBetPlaced: () => Promise<boolean>;
   recordBetWon: (winnings: number) => Promise<boolean>;
   recordBetLost: (amount: number) => Promise<boolean>;
   claimDailyBonus: () => Promise<{ success: boolean; error?: string }>;
@@ -116,8 +116,9 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
     return updateCredits(profile.credits - amount);
   },
 
-  // Record a bet being placed (increment total_bets)
-  recordBetPlaced: async (amount: number) => {
+  // Record a bet being placed (increment total_bets only)
+  // jc_lost is updated when bet is resolved, not when placed
+  recordBetPlaced: async () => {
     const { profile } = get();
     if (!profile) return false;
 
@@ -125,8 +126,7 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
       const { error } = await supabase
         .from('profiles')
         .update({
-          total_bets: (profile.total_bets || 0) + 1,
-          jc_lost: (profile.jc_lost || 0) + amount
+          total_bets: (profile.total_bets || 0) + 1
         })
         .eq('id', profile.id);
 
@@ -135,8 +135,7 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
       set({
         profile: {
           ...profile,
-          total_bets: (profile.total_bets || 0) + 1,
-          jc_lost: (profile.jc_lost || 0) + amount
+          total_bets: (profile.total_bets || 0) + 1
         }
       });
       return true;
