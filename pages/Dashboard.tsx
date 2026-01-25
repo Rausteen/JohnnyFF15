@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import PropCard from '../components/PropCard';
 import ComboBetSlip from '../components/ComboBetSlip';
 import { MOCK_PROPS } from '../services/mockData';
@@ -7,8 +7,26 @@ import { useGameStore } from '../services/gameStore';
 import { useAuthStore } from '../services/authStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
 import { BetStatus } from '../types';
-import { XCircle, CheckCircle, Clock, Skull, Wifi, WifiOff, AlertTriangle, Gamepad2, Users, LogIn, Swords, FlaskConical } from 'lucide-react';
+import {
+  Clock, Skull, Wifi, WifiOff, AlertTriangle,
+  Gamepad2, Users, LogIn, FlaskConical, Zap, Target, Swords,
+  Star, Timer, Award, Layers
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
+
+type CategoryFilter = 'ALL' | 'EARLY' | 'KDA' | 'GAMEPLAY' | 'LATE' | 'POPULAR';
+
+const CATEGORY_INFO = {
+  ALL: { label: 'Tous', icon: Swords, color: 'zinc' },
+  POPULAR: { label: 'Populaires', icon: Star, color: 'gold' },
+  EARLY: { label: 'Early Game', icon: Timer, color: 'amber' },
+  KDA: { label: 'KDA', icon: Target, color: 'red' },
+  GAMEPLAY: { label: 'Gameplay', icon: Zap, color: 'blue' },
+  LATE: { label: 'Résultats', icon: Award, color: 'green' },
+};
+
+// Popular props (most bet on)
+const POPULAR_PROP_IDS = ['kda1', 'out2', 'early1', 'kda5', 'out1', 'gp1'];
 
 const Dashboard = () => {
   const { bets, cancelBet } = useStore();
@@ -23,9 +41,9 @@ const Dashboard = () => {
     testMatchData
   } = useGameStore();
 
-  // Surveillance is now started globally in App.tsx
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('POPULAR');
 
-  const activeBets = bets.filter(b => b.status === BetStatus.PENDING);
+  const activeBets = bets.filter(b => b.status === BetStatus.PENDING && b.userId === user?.id);
   const gameTimeMinutes = currentGame
     ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
     : 0;
@@ -33,257 +51,307 @@ const Dashboard = () => {
   // Find Johnny in the current game participants
   const johnnyInGame = currentGame?.participants.find(p => p.puuid === johnny.puuid);
 
+  // Filter props by category
+  const filteredProps = useMemo(() => {
+    if (categoryFilter === 'ALL') return MOCK_PROPS;
+    if (categoryFilter === 'POPULAR') {
+      return MOCK_PROPS.filter(p => POPULAR_PROP_IDS.includes(p.id));
+    }
+    return MOCK_PROPS.filter(p => p.category === categoryFilter);
+  }, [categoryFilter]);
+
+  // Sort props: available first, then by odds
+  const sortedProps = useMemo(() => {
+    return [...filteredProps].sort((a, b) => {
+      // Early game props that expired go to the end
+      const aExpired = a.maxGameTime && gameTimeMinutes > a.maxGameTime;
+      const bExpired = b.maxGameTime && gameTimeMinutes > b.maxGameTime;
+      if (aExpired && !bExpired) return 1;
+      if (!aExpired && bExpired) return -1;
+      // Then sort by odds (lower first = more likely)
+      return a.odds - b.odds;
+    });
+  }, [filteredProps, gameTimeMinutes]);
+
+  // Stats for current game
+  const availableProps = MOCK_PROPS.filter(p => !p.maxGameTime || gameTimeMinutes <= p.maxGameTime);
+  const expiredProps = MOCK_PROPS.filter(p => p.maxGameTime && gameTimeMinutes > p.maxGameTime);
+
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
+    <div className="container mx-auto px-4 py-6 space-y-6">
       {/* Game Status Banner */}
       <section className="relative overflow-hidden rounded-2xl border border-white/10">
         {isInGame && testMode && testMatchData ? (
           // TEST MODE BANNER
-          <div className="bg-gradient-to-r from-purple-900/30 via-purple-800/20 to-fuchsia-900/30 p-6">
+          <div className="bg-gradient-to-r from-purple-900/30 via-purple-800/20 to-fuchsia-900/30 p-5">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                    <FlaskConical className="w-8 h-8 text-white" />
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
+                    <FlaskConical className="w-7 h-7 text-white" />
                   </div>
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-400 rounded-full animate-ping"></span>
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-400 rounded-full"></span>
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-purple-400 rounded-full animate-ping"></span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <h2 className="text-2xl font-black text-white">MODE TEST ACTIF</h2>
-                    <span className="px-2 py-0.5 bg-purple-500 text-white text-xs font-bold rounded-full animate-pulse">TEST</span>
+                    <h2 className="text-xl font-black text-white">MODE TEST</h2>
+                    <span className="px-2 py-0.5 bg-purple-500 text-white text-xs font-bold rounded-full">TEST</span>
                   </div>
-                  <p className="text-purple-300">
-                    Parie sur cette ancienne game • Les résultats seront basés sur les vraies stats
-                  </p>
+                  <p className="text-purple-300 text-sm">Parie sur cette ancienne game</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-3">
                 {testMatchData.info.participants.find(p => p.puuid === johnny.puuid) && (
                   <>
-                    <div className="text-center px-4 py-2 bg-white/10 rounded-xl">
-                      <div className="text-lg font-bold text-white">
+                    <div className="text-center px-3 py-2 bg-white/10 rounded-xl">
+                      <div className="text-sm font-bold text-white">
                         {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.championName}
                       </div>
-                      <div className="text-xs text-purple-300 uppercase">Champion</div>
+                      <div className="text-xs text-purple-300">Champion</div>
                     </div>
-                    <div className="text-center px-4 py-2 bg-white/10 rounded-xl">
-                      <div className="text-lg font-bold text-white">
+                    <div className="text-center px-3 py-2 bg-white/10 rounded-xl">
+                      <div className="text-sm font-bold text-white font-mono">
                         {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.kills}/
                         {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.deaths}/
                         {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.assists}
                       </div>
-                      <div className="text-xs text-purple-300 uppercase">KDA réel</div>
+                      <div className="text-xs text-purple-300">KDA</div>
                     </div>
                   </>
                 )}
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-purple-500/20 text-center">
-              <p className="text-xs text-purple-300">
-                Place tes paris puis retourne dans <Link to="/admin" className="underline font-bold">Admin</Link> pour terminer le test et voir les résultats
-              </p>
-            </div>
           </div>
         ) : isInGame ? (
           // LIVE GAME BANNER
-          <div className="bg-gradient-to-r from-green-900/30 via-green-800/20 to-emerald-900/30 p-6">
+          <div className="bg-gradient-to-r from-green-900/30 via-green-800/20 to-emerald-900/30 p-5">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/30">
-                    <Gamepad2 className="w-8 h-8 text-white" />
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/30">
+                    <Gamepad2 className="w-7 h-7 text-white" />
                   </div>
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full animate-ping"></span>
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full"></span>
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <h2 className="text-2xl font-black text-white">JOHNNY EST EN GAME !</h2>
+                    <h2 className="text-xl font-black text-white">JOHNNY EN GAME</h2>
                     <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full animate-pulse">LIVE</span>
                   </div>
-                  <p className="text-green-300">
-                    {johnny.gameName}#{johnny.tagLine} • {currentGame ? getQueueName(currentGame.gameQueueConfigId) : ''}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-6">
-                <div className="text-center">
-                  <div className="text-3xl font-mono font-bold text-white">{gameTimeMinutes}</div>
-                  <div className="text-xs text-green-300 uppercase">Minutes</div>
-                </div>
-                {johnnyInGame && (
-                  <div className="text-center px-4 py-2 bg-white/10 rounded-xl">
-                    <div className="text-lg font-bold text-white">{getChampionName(johnnyInGame.championId)}</div>
-                    <div className="text-xs text-green-300 uppercase">Champion</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-gradient-to-r from-zinc-900/80 via-zinc-800/50 to-zinc-900/80 p-6">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-xl bg-zinc-800 flex items-center justify-center border border-zinc-700">
-                  <Skull className="w-8 h-8 text-zinc-500" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-black text-white mb-1">Johnny est AFK</h2>
-                  <p className="text-zinc-400">
-                    {johnny.puuid ? (
-                      <>En attente de sa prochaine game... {isPolling && <span className="text-accent">(surveillance active)</span>}</>
-                    ) : (
-                      <span className="text-amber-400">⚠️ Configure Johnny dans Admin pour activer le tracking</span>
-                    )}
+                  <p className="text-green-300 text-sm">
+                    {johnny.gameName} • {currentGame ? getQueueName(currentGame.gameQueueConfigId) : ''}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
-                {isPolling ? (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-accent/20 rounded-full border border-accent/30">
-                    <Wifi className="w-4 h-4 text-accent animate-pulse" />
-                    <span className="text-accent text-sm font-bold">Surveillance active</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-zinc-800 rounded-full border border-zinc-700">
-                    <WifiOff className="w-4 h-4 text-zinc-500" />
-                    <span className="text-zinc-500 text-sm font-bold">Surveillance inactive</span>
+                <div className="text-center px-3 py-2 bg-white/10 rounded-xl">
+                  <div className="text-xl font-mono font-bold text-white">{gameTimeMinutes}'</div>
+                  <div className="text-xs text-green-300">Temps</div>
+                </div>
+                {johnnyInGame && (
+                  <div className="text-center px-3 py-2 bg-white/10 rounded-xl">
+                    <div className="text-sm font-bold text-white">{getChampionName(johnnyInGame.championId)}</div>
+                    <div className="text-xs text-green-300">Champion</div>
                   </div>
                 )}
+                <div className="text-center px-3 py-2 bg-white/10 rounded-xl">
+                  <div className="text-sm font-bold text-white">{availableProps.length}</div>
+                  <div className="text-xs text-green-300">Paris</div>
+                </div>
               </div>
             </div>
 
-            {/* Last Match Stats */}
-            {lastMatchStats && (
-              <div className="mt-4 pt-4 border-t border-white/5">
-                <div className="text-xs text-zinc-500 uppercase mb-2">Dernière game</div>
-                <div className="flex items-center gap-4 text-sm">
-                  <span className={`font-bold ${lastMatchStats.win ? 'text-green-400' : 'text-red-400'}`}>
-                    {lastMatchStats.win ? 'Victoire' : 'Défaite'}
-                  </span>
-                  <span className="text-white font-mono">
-                    {lastMatchStats.kills}/{lastMatchStats.deaths}/{lastMatchStats.assists}
-                  </span>
-                  <span className="text-zinc-400">{lastMatchStats.championName}</span>
-                  {lastMatchStats.gameEndedInEarlySurrender && (
-                    <span className="text-amber-400 font-bold">FF15!</span>
-                  )}
+            {gameTimeMinutes > 0 && expiredProps.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-2 text-xs">
+                <AlertTriangle className="w-3 h-3 text-amber-400" />
+                <span className="text-amber-400">{expiredProps.length} paris Early expirés</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          // OFFLINE BANNER
+          <div className="bg-gradient-to-r from-zinc-900/80 via-zinc-800/50 to-zinc-900/80 p-5">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                  <Skull className="w-7 h-7 text-zinc-500" />
                 </div>
+                <div>
+                  <h2 className="text-xl font-black text-white mb-1">Johnny AFK</h2>
+                  <p className="text-zinc-400 text-sm">
+                    {johnny.puuid ? (
+                      <>En attente... {isPolling && <span className="text-accent">(surveillance)</span>}</>
+                    ) : (
+                      <span className="text-amber-400">Configure Johnny dans Admin</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {isPolling ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-accent/20 rounded-full border border-accent/30">
+                  <Wifi className="w-4 h-4 text-accent animate-pulse" />
+                  <span className="text-accent text-sm font-bold">Active</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800 rounded-full border border-zinc-700">
+                  <WifiOff className="w-4 h-4 text-zinc-500" />
+                  <span className="text-zinc-500 text-sm">Inactive</span>
+                </div>
+              )}
+            </div>
+
+            {lastMatchStats && (
+              <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-4 text-sm">
+                <span className="text-zinc-500">Dernière:</span>
+                <span className={`font-bold ${lastMatchStats.win ? 'text-green-400' : 'text-red-400'}`}>
+                  {lastMatchStats.win ? 'Victoire' : 'Défaite'}
+                </span>
+                <span className="text-white font-mono">
+                  {lastMatchStats.kills}/{lastMatchStats.deaths}/{lastMatchStats.assists}
+                </span>
+                <span className="text-zinc-400">{lastMatchStats.championName}</span>
               </div>
             )}
           </div>
         )}
       </section>
 
-      {/* Login prompt for non-logged users */}
+      {/* Login prompt */}
       {!user && (
-        <div className="bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10 border border-primary/20 rounded-2xl p-6 text-center">
-          <AlertTriangle className="w-10 h-10 text-primary mx-auto mb-3" />
-          <h3 className="text-xl font-bold text-white mb-2">Connecte-toi pour parier !</h3>
-          <p className="text-zinc-400 mb-4">Tu dois être connecté pour placer des paris et suivre tes gains.</p>
+        <div className="bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10 border border-primary/20 rounded-xl p-4 flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-6 h-6 text-primary" />
+            <span className="text-white font-medium">Connecte-toi pour parier</span>
+          </div>
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary to-accent rounded-xl text-white font-bold hover:scale-105 transition-transform"
+            className="flex items-center gap-2 px-4 py-2 bg-primary rounded-lg text-white font-bold hover:bg-primary/90 transition text-sm"
           >
-            <LogIn className="w-5 h-5" />
-            Se connecter
+            <LogIn className="w-4 h-4" />
+            Connexion
           </Link>
         </div>
       )}
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Left Column: Betting Props */}
-        <section className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              Pariez sur le chaos
-              {isInGame && (
-                <span className="text-xs font-normal px-2 py-1 bg-red-900/30 text-red-400 rounded-full border border-red-900/50 animate-pulse">
-                  PARIS OUVERTS
-                </span>
-              )}
-            </h2>
+      <div className="grid lg:grid-cols-4 gap-6">
+        {/* Left Column: Betting Props (3 cols) */}
+        <section className="lg:col-span-3 space-y-4">
+          {/* Category Tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            {(Object.entries(CATEGORY_INFO) as [CategoryFilter, typeof CATEGORY_INFO.ALL][]).map(([key, info]) => {
+              const Icon = info.icon;
+              const isActive = categoryFilter === key;
+              const count = key === 'ALL' ? MOCK_PROPS.length :
+                           key === 'POPULAR' ? POPULAR_PROP_IDS.length :
+                           MOCK_PROPS.filter(p => p.category === key).length;
+
+              return (
+                <button
+                  key={key}
+                  onClick={() => setCategoryFilter(key)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
+                    isActive
+                      ? 'bg-primary text-white shadow-lg shadow-primary/25'
+                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 border border-zinc-800'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {info.label}
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    isActive ? 'bg-white/20' : 'bg-zinc-800'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
+          {/* Props Grid */}
           {isInGame ? (
-            <div className="grid md:grid-cols-2 gap-4">
-              {MOCK_PROPS.map(prop => (
+            <div className="grid md:grid-cols-2 gap-3">
+              {sortedProps.map(prop => (
                 <PropCard key={prop.id} prop={prop} />
               ))}
             </div>
           ) : (
             <div className="p-12 rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/50 text-center">
               <Skull className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-              <p className="text-zinc-400 text-lg font-bold mb-2">Les paris sont fermés</p>
-              <p className="text-sm text-zinc-500">
-                Attendez que Johnny lance une game pour parier sur sa déchéance.
-              </p>
-              {!johnny.puuid && (
-                <Link to="/admin" className="inline-block mt-4 text-primary hover:underline text-sm">
-                  → Configurer Johnny dans Admin
-                </Link>
-              )}
+              <p className="text-zinc-400 text-lg font-bold mb-2">Paris fermés</p>
+              <p className="text-sm text-zinc-500">Attendez que Johnny lance une game.</p>
             </div>
           )}
         </section>
 
-        {/* Right Column: Active Bets */}
-        <section className="space-y-6">
-          <h2 className="text-xl font-bold text-white">Tes paris en cours</h2>
+        {/* Right Column: Active Bets (1 col) */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white">Tes paris</h2>
+            {activeBets.length > 0 && (
+              <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full font-bold">
+                {activeBets.length}
+              </span>
+            )}
+          </div>
 
-          <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden lg:sticky lg:top-4">
             {!user ? (
-              <div className="p-8 text-center text-zinc-500 text-sm">
-                <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                Connecte-toi pour voir tes paris
+              <div className="p-6 text-center text-zinc-500 text-sm">
+                <Users className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                Connecte-toi
               </div>
             ) : activeBets.length === 0 ? (
-              <div className="p-8 text-center text-zinc-500 text-sm">
-                <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                Aucun pari en cours.<br />Tu as peur ou quoi ?
+              <div className="p-6 text-center text-zinc-500 text-sm">
+                <Clock className="w-6 h-6 mx-auto mb-2 opacity-50" />
+                Aucun pari en cours
               </div>
             ) : (
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-zinc-800 max-h-[50vh] overflow-y-auto">
                 {activeBets.map(bet => (
-                  <div key={bet.id} className="p-4 hover:bg-zinc-800/50 transition-colors">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="font-medium text-zinc-200 text-sm">{bet.propTitle}</span>
-                      <span className="text-amber-500 font-mono text-xs bg-amber-500/10 px-2 py-0.5 rounded">x{bet.odds}</span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs text-zinc-400 mb-3">
-                      <span>Mise: <span className="text-white font-bold">{bet.amount}</span></span>
-                      <span>Gain potentiel: <span className="text-gold font-bold">{bet.potentialPayout}</span></span>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full border
-                        ${bet.status === BetStatus.PENDING ? 'bg-zinc-800 border-zinc-700 text-zinc-400' : ''}
-                        ${bet.status === BetStatus.WON ? 'bg-green-900/20 border-green-900 text-green-400' : ''}
-                        ${bet.status === BetStatus.LOST ? 'bg-red-900/20 border-red-900 text-red-400' : ''}
-                      `}>
-                        {bet.status === BetStatus.PENDING && <><Clock className="w-3 h-3" /> En attente</>}
-                        {bet.status === BetStatus.WON && <><CheckCircle className="w-3 h-3" /> Gagné</>}
-                        {bet.status === BetStatus.LOST && <><XCircle className="w-3 h-3" /> Perdu</>}
+                  <div key={bet.id} className="p-3 hover:bg-zinc-800/50 transition-colors">
+                    <div className="flex justify-between items-start gap-2 mb-1">
+                      <span className="font-medium text-zinc-200 text-sm leading-tight">
+                        {bet.propTitle.replace(/^\[COMBO \d+\/\d+\] /, '')}
                       </span>
+                      <span className="text-amber-400 font-mono text-xs bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
+                        x{bet.odds.toFixed(1)}
+                      </span>
+                    </div>
 
-                      {bet.status === BetStatus.PENDING && (
-                        <button
-                          onClick={() => cancelBet(bet.id)}
-                          className="text-xs text-red-400 hover:text-red-300 hover:underline"
-                        >
-                          Annuler
-                        </button>
-                      )}
+                    {bet.comboId && (
+                      <div className="flex items-center gap-1 text-xs text-purple-400 mb-1">
+                        <Layers className="w-3 h-3" />
+                        Combo [{bet.comboIndex}/{bet.comboTotal}]
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-zinc-500">
+                        {bet.amount} → <span className="text-gold font-bold">{bet.potentialPayout} JC</span>
+                      </span>
+                      <button
+                        onClick={() => cancelBet(bet.id)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        ✕
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
+            )}
+
+            {user && (
+              <Link
+                to="/my-bets"
+                className="block p-3 text-center text-sm text-zinc-400 hover:text-white hover:bg-zinc-800 border-t border-zinc-800 transition"
+              >
+                Voir tout →
+              </Link>
             )}
           </div>
         </section>

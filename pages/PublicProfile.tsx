@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { User, Calendar, Sparkles, Trophy, TrendingUp, TrendingDown, Target, ArrowLeft, Loader2, Crown } from 'lucide-react';
+import { User, Calendar, Sparkles, Trophy, TrendingUp, TrendingDown, Target, ArrowLeft, Loader2, Crown, ChevronDown, ChevronUp, Layers, Swords } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../services/authStore';
+import { useStore } from '../services/store';
+import { BetStatus, Bet } from '../types';
 
 interface PublicUser {
   id: string;
@@ -23,8 +25,52 @@ const PublicProfile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user: currentUser } = useAuthStore();
+  const { bets } = useStore();
+  const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set());
 
   const isOwnProfile = currentUser?.id === userId;
+
+  // Filter and group bets by user
+  const userBets = useMemo(() => {
+    return bets.filter(bet => bet.userId === userId);
+  }, [bets, userId]);
+
+  // Group bets by matchId/champion
+  const groupedBets = useMemo(() => {
+    const groups: Record<string, { champion: string; bets: Bet[]; date: number }> = {};
+
+    userBets.forEach(bet => {
+      const key = bet.matchId || `unknown_${bet.timestamp}`;
+      if (!groups[key]) {
+        groups[key] = {
+          champion: bet.championName || 'Inconnu',
+          bets: [],
+          date: bet.timestamp
+        };
+      }
+      groups[key].bets.push(bet);
+      // Keep earliest timestamp for the group
+      if (bet.timestamp < groups[key].date) {
+        groups[key].date = bet.timestamp;
+      }
+    });
+
+    // Sort groups by date (most recent first)
+    return Object.entries(groups)
+      .sort(([, a], [, b]) => b.date - a.date);
+  }, [userBets]);
+
+  const toggleGameExpanded = (matchId: string) => {
+    setExpandedGames(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(matchId)) {
+        newSet.delete(matchId);
+      } else {
+        newSet.add(matchId);
+      }
+      return newSet;
+    });
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -223,6 +269,174 @@ const PublicProfile = () => {
             {netGain >= 0 ? '+' : ''}{netGain.toLocaleString('fr-FR')} JC
           </span>
         </div>
+      </div>
+
+      {/* Betting History */}
+      <div className="mt-8">
+        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          <Target className="w-5 h-5 text-primary" />
+          Historique des paris
+        </h2>
+
+        {groupedBets.length === 0 ? (
+          <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-8 text-center">
+            <Swords className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
+            <p className="text-zinc-500">Aucun pari enregistré</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {groupedBets.map(([matchId, group]) => {
+              const isExpanded = expandedGames.has(matchId);
+              const pendingCount = group.bets.filter(b => b.status === BetStatus.PENDING).length;
+              const wonCount = group.bets.filter(b => b.status === BetStatus.WON).length;
+              const lostCount = group.bets.filter(b => b.status === BetStatus.LOST).length;
+              const totalBet = group.bets.reduce((sum, b) => sum + (b.comboIndex && b.comboIndex > 1 ? 0 : b.amount), 0);
+              const totalWon = group.bets
+                .filter(b => b.status === BetStatus.WON)
+                .reduce((sum, b) => sum + b.potentialPayout, 0);
+              const isCombo = group.bets.some(b => b.comboId);
+              const dateStr = new Date(group.date).toLocaleDateString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+
+              return (
+                <div
+                  key={matchId}
+                  className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden"
+                >
+                  {/* Game header */}
+                  <button
+                    onClick={() => toggleGameExpanded(matchId)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-zinc-800/50 transition"
+                  >
+                    <div className="flex items-center gap-4">
+                      {/* Champion icon */}
+                      <div className="w-12 h-12 rounded-lg bg-zinc-800 overflow-hidden flex-shrink-0">
+                        <img
+                          src={`https://ddragon.leagueoflegends.com/cdn/14.9.1/img/champion/${group.champion}.png`}
+                          alt={group.champion}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      <div className="text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white">{group.champion}</span>
+                          {isCombo && (
+                            <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center gap-1">
+                              <Layers className="w-3 h-3" />
+                              Combiné
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-zinc-500">
+                          <span>{dateStr}</span>
+                          <span>•</span>
+                          <span>{group.bets.length} pari{group.bets.length > 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                      {/* Status badges */}
+                      <div className="flex items-center gap-2">
+                        {pendingCount > 0 && (
+                          <span className="px-2 py-1 rounded-lg bg-amber-500/20 text-amber-400 text-xs font-bold">
+                            {pendingCount} en cours
+                          </span>
+                        )}
+                        {wonCount > 0 && (
+                          <span className="px-2 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs font-bold">
+                            {wonCount} gagné{wonCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {lostCount > 0 && (
+                          <span className="px-2 py-1 rounded-lg bg-red-500/20 text-red-400 text-xs font-bold">
+                            {lostCount} perdu{lostCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                      {isExpanded ? (
+                        <ChevronUp className="w-5 h-5 text-zinc-400" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-zinc-400" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Expanded bets list */}
+                  {isExpanded && (
+                    <div className="border-t border-zinc-800 divide-y divide-zinc-800/50">
+                      {group.bets.map(bet => (
+                        <div
+                          key={bet.id}
+                          className={`p-4 ${
+                            bet.status === BetStatus.WON
+                              ? 'bg-green-500/5'
+                              : bet.status === BetStatus.LOST
+                              ? 'bg-red-500/5'
+                              : 'bg-zinc-800/30'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-white font-medium">{bet.propTitle}</span>
+                                <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-lg">
+                                  x{bet.odds.toFixed(1)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 text-right">
+                              {(!bet.comboIndex || bet.comboIndex === 1) && (
+                                <div>
+                                  <div className="text-sm text-zinc-500">Mise</div>
+                                  <div className="font-mono font-bold text-white">{bet.amount} JC</div>
+                                </div>
+                              )}
+                              <div>
+                                <div className="text-sm text-zinc-500">Statut</div>
+                                <div className={`font-bold ${
+                                  bet.status === BetStatus.WON
+                                    ? 'text-green-400'
+                                    : bet.status === BetStatus.LOST
+                                    ? 'text-red-400'
+                                    : 'text-amber-400'
+                                }`}>
+                                  {bet.status === BetStatus.WON && `+${bet.potentialPayout} JC`}
+                                  {bet.status === BetStatus.LOST && 'Perdu'}
+                                  {bet.status === BetStatus.PENDING && 'En cours'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Game summary */}
+                      <div className="p-4 bg-zinc-800/50">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-zinc-400">Bilan de la game</span>
+                          <div className="flex items-center gap-4">
+                            <span className="text-sm text-zinc-500">Misé: <span className="font-mono text-white">{totalBet} JC</span></span>
+                            {totalWon > 0 && (
+                              <span className="text-sm text-green-400">Gagné: <span className="font-mono font-bold">+{totalWon} JC</span></span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
