@@ -413,7 +413,16 @@ const Dashboard = () => {
               </div>
             </div>
           )}
-          {/* Betting window message disabled for testing */}
+          {/* Betting window closed message */}
+          {isInGame && gameTimeMinutes >= 3 && (
+            <div className="p-3 sm:p-4 rounded-xl border border-red-500/30 bg-red-500/5 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
+              <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 shrink-0" />
+              <div>
+                <p className="text-red-400 font-bold text-xs sm:text-sm">Fenêtre de paris fermée</p>
+                <p className="text-xs text-zinc-400">Les paris sont fermés après 3 minutes de jeu. Attends la prochaine game !</p>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {sortedProps.map(prop => (
               <PropCard key={prop.id} prop={prop} />

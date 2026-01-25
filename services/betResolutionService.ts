@@ -1,8 +1,9 @@
 // Service to resolve bets based on actual match data from Riot API
+// Uses Supabase for all bets (ALL users, not just current user)
 import { MatchDto, MatchParticipant } from './riotApi';
 import { Bet, BetStatus } from '../types';
-import { useStore } from './store';
-import { useCreditsStore } from './creditsStore';
+import { getAllPendingBets, updateBetStatus } from './betsService';
+import { supabase } from './supabase';
 
 export interface BetResolutionResult {
   betId: string;
@@ -213,12 +214,58 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
   }
 }
 
-// Resolve all pending bets for a specific match
-export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Promise<BetResolutionResult[]> {
-  const store = useStore.getState();
-  const creditsStore = useCreditsStore.getState();
-  const results: BetResolutionResult[] = [];
+// Update user credits in Supabase
+async function updateUserCredits(userId: string, won: boolean, amount: number, payout: number): Promise<void> {
+  try {
+    // Fetch current user stats
+    const { data: profile, error: fetchError } = await supabase
+      .from('profiles')
+      .select('credits, bets_won, bets_lost, jc_won, jc_lost')
+      .eq('id', userId)
+      .single();
 
+    if (fetchError || !profile) {
+      console.error('Error fetching user profile:', fetchError);
+      return;
+    }
+
+    if (won) {
+      // Add winnings to credits and update stats
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          credits: profile.credits + payout,
+          bets_won: (profile.bets_won || 0) + 1,
+          jc_won: (profile.jc_won || 0) + (payout - amount)
+        })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('Error updating user credits (win):', updateError);
+      }
+    } else {
+      // Update loss stats (credits already deducted when bet was placed)
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          bets_lost: (profile.bets_lost || 0) + 1,
+          jc_lost: (profile.jc_lost || 0) + amount
+        })
+        .eq('id', userId);
+
+      if (updateError) {
+        console.error('Error updating user stats (loss):', updateError);
+      }
+    }
+  } catch (err) {
+    console.error('Error updating user credits:', err);
+  }
+}
+
+// Resolve all pending bets for a specific match
+// This function resolves ALL pending bets from ALL users in Supabase
+export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Promise<BetResolutionResult[]> {
+  const results: BetResolutionResult[] = [];
   const matchId = matchData.metadata.matchId;
 
   // Get Johnny's stats from the match
@@ -228,9 +275,8 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
     return results;
   }
 
-  // Get all pending bets - resolve ALL pending bets since we only track Johnny's games
-  // The match ID comparison was causing issues, so we simplify to resolve all pending
-  const pendingBets = store.bets.filter(b => b.status === BetStatus.PENDING);
+  // Get ALL pending bets from Supabase (all users)
+  const pendingBets = await getAllPendingBets();
 
   if (pendingBets.length === 0) {
     console.log('No pending bets to resolve');
@@ -238,42 +284,32 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
   }
 
   console.log(`Match data: ${matchId}, Johnny KDA: ${johnnyStats.kills}/${johnnyStats.deaths}/${johnnyStats.assists}`);
-
-  console.log(`Resolving ${pendingBets.length} pending bets for match ${matchId}...`);
+  console.log(`Resolving ${pendingBets.length} pending bets for all users...`);
 
   // Separate single bets from combo bets
   const singleBets = pendingBets.filter(b => !b.comboId);
   const comboBets = pendingBets.filter(b => b.comboId);
 
   // Group combo bets by comboId
-  const comboGroups = new Map<string, typeof comboBets>();
+  const comboGroups = new Map<string, Bet[]>();
   for (const bet of comboBets) {
     const existing = comboGroups.get(bet.comboId!) || [];
     existing.push(bet);
     comboGroups.set(bet.comboId!, existing);
   }
 
-  const updatedBets = [...store.bets];
-  let totalWinnings = 0;
-
   // Process single bets
   for (const bet of singleBets) {
     const won = evaluateProp(bet.propId, johnnyStats, matchData);
     const resolvedStat = getResolvedStat(bet.propId, johnnyStats, matchData);
-    const betIndex = updatedBets.findIndex(b => b.id === bet.id);
 
-    if (betIndex !== -1) {
-      updatedBets[betIndex] = {
-        ...updatedBets[betIndex],
-        status: won ? BetStatus.WON : BetStatus.LOST,
-        resolvedStat
-      };
+    // Update bet status in Supabase
+    const success = await updateBetStatus(bet.id, won ? BetStatus.WON : BetStatus.LOST, resolvedStat);
 
-      if (won) {
-        totalWinnings += bet.potentialPayout;
-        await creditsStore.recordBetWon(bet.potentialPayout - bet.amount);
-      } else {
-        await creditsStore.recordBetLost(bet.amount);
+    if (success) {
+      // Update user's credits in Supabase
+      if (bet.userId) {
+        await updateUserCredits(bet.userId, won, bet.amount, bet.potentialPayout);
       }
 
       results.push({
@@ -284,7 +320,7 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
         resolvedStat
       });
 
-      console.log(`Single bet ${bet.propTitle}: ${won ? 'WON' : 'LOST'} (${resolvedStat})`);
+      console.log(`Single bet ${bet.propTitle} (user: ${bet.userId?.slice(0, 8)}...): ${won ? 'WON' : 'LOST'} (${resolvedStat})`);
     }
   }
 
@@ -308,17 +344,11 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
     const totalAmount = mainBet.amount;
     const potentialPayout = mainBet.potentialPayout;
 
-    // Update all bets in the combo
-    for (const { bet, won, resolvedStat } of betResults) {
-      const betIndex = updatedBets.findIndex(b => b.id === bet.id);
-      if (betIndex !== -1) {
-        // Individual prop status
-        updatedBets[betIndex] = {
-          ...updatedBets[betIndex],
-          status: comboWon ? BetStatus.WON : BetStatus.LOST,
-          resolvedStat
-        };
+    // Update all bets in the combo in Supabase
+    for (const { bet, resolvedStat } of betResults) {
+      const success = await updateBetStatus(bet.id, comboWon ? BetStatus.WON : BetStatus.LOST, resolvedStat);
 
+      if (success) {
         results.push({
           betId: bet.id,
           propId: bet.propId,
@@ -329,14 +359,15 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
       }
     }
 
-    // Record win/loss and payout for the combo
+    // Update user credits for the combo (only once per combo)
+    if (mainBet.userId) {
+      await updateUserCredits(mainBet.userId, comboWon, totalAmount, potentialPayout);
+    }
+
     if (comboWon) {
-      totalWinnings += potentialPayout;
-      await creditsStore.recordBetWon(potentialPayout - totalAmount);
-      console.log(`Combo ${comboId} WON! Payout: ${potentialPayout} JC`);
+      console.log(`Combo ${comboId} WON! Payout: ${potentialPayout} JC to user ${mainBet.userId?.slice(0, 8)}...`);
     } else {
-      await creditsStore.recordBetLost(totalAmount);
-      console.log(`Combo ${comboId} LOST. Lost: ${totalAmount} JC`);
+      console.log(`Combo ${comboId} LOST. Lost: ${totalAmount} JC from user ${mainBet.userId?.slice(0, 8)}...`);
     }
 
     // Update main bet payout in results
@@ -346,14 +377,7 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
     }
   }
 
-  // Update store with resolved bets
-  useStore.setState({ bets: updatedBets });
-
-  // Add winnings to user's credits
-  if (totalWinnings > 0) {
-    await creditsStore.addCredits(totalWinnings);
-    console.log(`Total winnings: ${totalWinnings} JC`);
-  }
+  console.log(`Resolution complete: ${results.filter(r => r.won).length} won, ${results.filter(r => !r.won).length} lost`);
 
   return results;
 }
