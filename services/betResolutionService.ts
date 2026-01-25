@@ -9,6 +9,95 @@ export interface BetResolutionResult {
   propId: string;
   won: boolean;
   payout: number;
+  resolvedStat?: string;
+}
+
+// Get the actual stat string that explains the bet result
+export function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDto): string {
+  const kda = (stats.kills + stats.assists) / Math.max(1, stats.deaths);
+  const csPerMin = (stats.totalMinionsKilled + stats.neutralMinionsKilled) / (match.info.gameDuration / 60);
+  const gameDurationMin = Math.floor(match.info.gameDuration / 60);
+
+  // Get Johnny's team kills for kill participation
+  const team = match.info.participants.filter(p => p.teamId === stats.teamId);
+  const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
+  const killParticipation = teamKills > 0 ? (stats.kills + stats.assists) / teamKills * 100 : 0;
+
+  // Get lowest teammate gold
+  const teammates = match.info.participants.filter(p => p.teamId === stats.teamId && p.puuid !== stats.puuid);
+  const lowestTeammateGold = teammates.length > 0 ? Math.min(...teammates.map(p => p.goldEarned)) : 0;
+
+  switch (propId) {
+    // ========== EARLY GAME ==========
+    case 'early1': // First Blood victime
+      return stats.firstBloodVictim ? '🩸 First Blood victime' : '✓ Pas First Blood victime';
+    case 'early5': // First Blood kill
+      return stats.firstBloodKill ? '🗡️ First Blood kill' : '✗ Pas First Blood';
+    case 'early2': // 0/3 avant 10 min
+      return `${stats.deaths} morts`;
+    case 'early3': // 0/5 avant 15 min
+      return `${stats.deaths} morts`;
+    case 'early4': // Survit 10 min sans mourir
+      return `${stats.deaths} morts`;
+
+    // ========== KDA ==========
+    case 'kda1': // Le 0/10 Powerspike
+      return `${stats.deaths} morts`;
+    case 'kda2': // Le 0/15 Légendaire
+      return `${stats.deaths} morts`;
+    case 'kda3': // KDA < 0.5
+      return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
+    case 'kda4': // 0 Kill toute la game
+      return `${stats.kills} kills`;
+    case 'kda5': // Johnny fait un kill
+      return `${stats.kills} kills`;
+    case 'kda6': // KDA positif
+      return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
+    case 'kda7': // Double kill ou plus
+      return `${stats.doubleKills} double kills`;
+
+    // ========== GAMEPLAY ==========
+    case 'gp1': // CS de la honte
+      return `${csPerMin.toFixed(1)} CS/min`;
+    case 'gp2': // 0 Vision Score
+      return `Vision: ${stats.visionScore}`;
+    case 'gp3': // Vision < 5
+      return `Vision: ${stats.visionScore}`;
+    case 'gp4': // Moins de 8k dégâts
+      return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dégâts`;
+    case 'gp5': // Moins d'or que le support
+      return `${stats.goldEarned} or (min équipe: ${lowestTeammateGold})`;
+    case 'gp6': // Participation < 15%
+      return `${killParticipation.toFixed(0)}% KP`;
+
+    // ========== RÉSULTAT ==========
+    case 'out1': // FF avant 20 min
+      return `${stats.gameEndedInSurrender ? 'FF' : 'Pas FF'} à ${gameDurationMin}min`;
+    case 'out2': // Défaite
+      return stats.win ? 'Victoire' : 'Défaite';
+    case 'out3': // VICTOIRE
+      return stats.win ? 'Victoire' : 'Défaite';
+    case 'out4': // Game > 40 min
+      return `Durée: ${gameDurationMin}min`;
+
+    // ========== LÉGENDAIRES ==========
+    case 'sp1': // Le Perfect Int
+      return `${stats.deaths} morts, ${stats.kills} kills, ${stats.win ? 'Win' : 'Défaite'}`;
+    case 'sp2': // Le Miracle KDA
+      return `KDA: ${kda.toFixed(2)}`;
+    case 'sp3': // Le Carry Mystique
+      const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
+      return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg (max: ${(maxTeamDamage / 1000).toFixed(1)}k)`;
+    case 'sp4': // Victoire + KDA > 2
+      return `${stats.win ? 'Win' : 'Défaite'}, KDA: ${kda.toFixed(2)}`;
+    case 'sp5': // L'Invisible
+      return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg, ${killParticipation.toFixed(0)}% KP`;
+    case 'sp6': // Le Pentakill
+      return `${stats.pentaKills} pentakill${stats.pentaKills > 1 ? 's' : ''}`;
+
+    default:
+      return `${stats.kills}/${stats.deaths}/${stats.assists}`;
+  }
 }
 
 // Evaluate if a prop condition was met based on match stats
@@ -170,12 +259,14 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
   // Process single bets
   for (const bet of singleBets) {
     const won = evaluateProp(bet.propId, johnnyStats, matchData);
+    const resolvedStat = getResolvedStat(bet.propId, johnnyStats, matchData);
     const betIndex = updatedBets.findIndex(b => b.id === bet.id);
 
     if (betIndex !== -1) {
       updatedBets[betIndex] = {
         ...updatedBets[betIndex],
-        status: won ? BetStatus.WON : BetStatus.LOST
+        status: won ? BetStatus.WON : BetStatus.LOST,
+        resolvedStat
       };
 
       if (won) {
@@ -189,10 +280,11 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
         betId: bet.id,
         propId: bet.propId,
         won,
-        payout: won ? bet.potentialPayout : 0
+        payout: won ? bet.potentialPayout : 0,
+        resolvedStat
       });
 
-      console.log(`Single bet ${bet.propTitle}: ${won ? 'WON' : 'LOST'}`);
+      console.log(`Single bet ${bet.propTitle}: ${won ? 'WON' : 'LOST'} (${resolvedStat})`);
     }
   }
 
@@ -203,7 +295,8 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
     // Evaluate each bet in the combo
     const betResults = bets.map(bet => ({
       bet,
-      won: evaluateProp(bet.propId, johnnyStats, matchData)
+      won: evaluateProp(bet.propId, johnnyStats, matchData),
+      resolvedStat: getResolvedStat(bet.propId, johnnyStats, matchData)
     }));
 
     // Combo wins only if ALL bets won
@@ -216,20 +309,22 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
     const potentialPayout = mainBet.potentialPayout;
 
     // Update all bets in the combo
-    for (const { bet, won } of betResults) {
+    for (const { bet, won, resolvedStat } of betResults) {
       const betIndex = updatedBets.findIndex(b => b.id === bet.id);
       if (betIndex !== -1) {
         // Individual prop status
         updatedBets[betIndex] = {
           ...updatedBets[betIndex],
-          status: comboWon ? BetStatus.WON : BetStatus.LOST
+          status: comboWon ? BetStatus.WON : BetStatus.LOST,
+          resolvedStat
         };
 
         results.push({
           betId: bet.id,
           propId: bet.propId,
           won: comboWon,
-          payout: 0 // Only main bet shows payout
+          payout: 0, // Only main bet shows payout
+          resolvedStat
         });
       }
     }

@@ -35,6 +35,7 @@ export interface Bet {
   comboTotal?: number; // Total bets in combo
   userId?: string; // Owner of this bet
   championName?: string; // Champion for this game
+  resolvedStat?: string; // Actual stat that resolved the bet (e.g., "7 morts", "KDA: 0.4")
 }
 
 export interface MatchStats {

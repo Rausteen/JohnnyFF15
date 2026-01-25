@@ -136,55 +136,55 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
   const quickBets = [50, 100, 500];
 
   return (
-    <div className={`group relative rounded-2xl border bg-zinc-900/80 p-5 transition-all ${
+    <div className={`group relative rounded-xl sm:rounded-2xl border bg-zinc-900/80 p-3 sm:p-5 transition-all ${
       canBetOnProp()
         ? 'border-zinc-800 hover:border-primary/50 hover:bg-zinc-900'
         : 'border-zinc-800/50 opacity-60'
     }`}>
       {/* Prop header */}
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex-1">
-          <h4 className="font-bold text-white group-hover:text-primary transition-colors">
+      <div className="flex justify-between items-start mb-3 sm:mb-4 gap-2">
+        <div className="flex-1 min-w-0">
+          <h4 className="font-bold text-white group-hover:text-primary transition-colors text-sm sm:text-base leading-tight">
             {prop.title}
           </h4>
-          <p className="text-sm text-zinc-500 mt-1">
+          <p className="text-xs sm:text-sm text-zinc-500 mt-1 line-clamp-2">
             {prop.description}
           </p>
           {prop.maxGameTime && (
-            <p className="text-xs text-amber-500 mt-2">
-              ⏱️ Disponible avant {prop.maxGameTime} min
-              {gameTimeMinutes > 0 && ` (${gameTimeMinutes} min écoulées)`}
+            <p className="text-xs text-amber-500 mt-1.5 sm:mt-2">
+              ⏱️ Avant {prop.maxGameTime}min
+              {gameTimeMinutes > 0 && ` (${gameTimeMinutes}min)`}
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 ml-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Add to combo button */}
           {canBetOnProp() && user && (
             <button
               onClick={() => inCombo ? removeFromCombo(prop.id) : addToCombo(prop)}
               disabled={!inCombo && selections.length >= 5}
-              className={`p-2 rounded-lg transition-all ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 inCombo
                   ? 'bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30'
                   : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed'
               }`}
               title={inCombo ? 'Retirer du combiné' : 'Ajouter au combiné'}
             >
-              {inCombo ? <Check className="w-4 h-4" /> : <Layers className="w-4 h-4" />}
+              {inCombo ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
           )}
           {/* Odds badge */}
-          <div className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-400 font-mono font-bold text-sm">
-            <TrendingUp className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-400 font-mono font-bold text-xs sm:text-sm">
+            <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             x{prop.odds.toFixed(1)}
           </div>
         </div>
       </div>
 
       {/* Betting form */}
-      <div className="space-y-3">
+      <div className="space-y-2 sm:space-y-3">
         {/* Quick bet buttons */}
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 sm:gap-2">
           {quickBets.map((bet) => (
             <button
               key={bet}
@@ -219,14 +219,14 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
             }}
             placeholder="Mise ta fierté"
             disabled={!canBetOnProp()}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
           />
         </div>
 
         {/* Potential gain display */}
         {amount && parseInt(amount) > 0 && (
-          <div className="flex justify-between text-sm px-1">
-            <span className="text-zinc-500">Gain potentiel:</span>
+          <div className="flex justify-between text-xs sm:text-sm px-1">
+            <span className="text-zinc-500">Gain:</span>
             <span className="text-gold font-bold font-mono">
               {Math.floor(parseInt(amount) * prop.odds)} JC
             </span>
@@ -253,7 +253,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
         <button
           onClick={handleBet}
           disabled={isDisabled}
-          className="w-full py-3 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full py-2.5 sm:py-3 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 text-white rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
             <>
@@ -261,11 +261,11 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
               Validation...
             </>
           ) : !user ? (
-            'Connecte-toi pour parier'
+            'Connecte-toi'
           ) : !canBetOnProp() ? (
-            'Pari indisponible'
+            'Indisponible'
           ) : (
-            'Je prends ce risque'
+            'Parier'
           )}
         </button>
       </div>
