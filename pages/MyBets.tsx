@@ -58,14 +58,25 @@ const MyBets = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Use Supabase bets, fallback to local bets if Supabase is empty
+  // Merge Supabase bets with local bets (deduplicate by ID)
   const userBets = useMemo(() => {
-    // Prefer Supabase bets if available
-    if (supabaseBets.length > 0) {
-      return supabaseBets;
-    }
-    // Fallback to local bets filtered by user
-    return localBets.filter(b => b.userId === user.id);
+    const userLocalBets = localBets.filter(b => b.userId === user.id);
+
+    // Create a map of all bets, Supabase takes priority for duplicates
+    const betsMap = new Map<string, Bet>();
+
+    // Add local bets first
+    userLocalBets.forEach(bet => {
+      betsMap.set(bet.id, bet);
+    });
+
+    // Override with Supabase bets (more up-to-date status)
+    supabaseBets.forEach(bet => {
+      betsMap.set(bet.id, bet);
+    });
+
+    // Convert back to array and sort by timestamp (newest first)
+    return Array.from(betsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
   }, [supabaseBets, localBets, user.id]);
 
   const filteredBets = filter === 'ALL' ? userBets : userBets.filter(b => b.status === filter);

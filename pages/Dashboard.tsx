@@ -92,11 +92,25 @@ const Dashboard = () => {
   const allProps = getProps();
 
   // Use Supabase pending bets, fallback to local
+  // Merge Supabase and local pending bets (deduplicate by ID)
   const activeBets = useMemo(() => {
-    if (supabasePendingBets.length > 0) {
-      return supabasePendingBets;
-    }
-    return bets.filter(b => b.status === BetStatus.PENDING && b.userId === user?.id);
+    const localPendingBets = bets.filter(b => b.status === BetStatus.PENDING && b.userId === user?.id);
+
+    // Create a map of all bets, Supabase takes priority for duplicates
+    const betsMap = new Map<string, Bet>();
+
+    // Add local bets first
+    localPendingBets.forEach(bet => {
+      betsMap.set(bet.id, bet);
+    });
+
+    // Override with Supabase bets (more up-to-date status)
+    supabasePendingBets.forEach(bet => {
+      betsMap.set(bet.id, bet);
+    });
+
+    // Convert back to array and sort by timestamp (newest first)
+    return Array.from(betsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
   }, [supabasePendingBets, bets, user?.id]);
   const gameTimeMinutes = currentGame
     ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
