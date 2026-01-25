@@ -30,6 +30,9 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'early1': // First Blood victime
       return stats.firstBloodVictim === true;
 
+    case 'early5': // First Blood kill
+      return stats.firstBloodKill === true;
+
     case 'early2': // 0/3 avant 10 min - Can't verify exact timing from post-game data
       // Approximation: if deaths >= 3 in a game that lasted at least 10 min, likely died early
       return stats.deaths >= 3;

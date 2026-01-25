@@ -11,7 +11,15 @@ export const MOCK_PROPS: Prop[] = [
     description: "Johnny est la première victime de la game.",
     odds: 1.4, // Très probable
     category: 'EARLY',
-    maxGameTime: 5
+    maxGameTime: 1
+  },
+  {
+    id: 'early5',
+    title: "First Blood kill",
+    description: "Johnny fait le premier kill de la game.",
+    odds: 12.0, // Très improbable
+    category: 'EARLY',
+    maxGameTime: 1
   },
   {
     id: 'early2',

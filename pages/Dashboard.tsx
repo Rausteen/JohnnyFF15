@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import PropCard from '../components/PropCard';
 import ComboBetSlip from '../components/ComboBetSlip';
-import { MOCK_PROPS } from '../services/mockData';
+import { usePropsStore } from '../services/propsStore';
 import { useStore } from '../services/store';
 import { useGameStore } from '../services/gameStore';
 import { useAuthStore } from '../services/authStore';
@@ -31,6 +31,7 @@ const POPULAR_PROP_IDS = ['kda1', 'out2', 'early1', 'kda5', 'out1', 'gp1'];
 const Dashboard = () => {
   const { bets, cancelBet } = useStore();
   const { user } = useAuthStore();
+  const { getProps } = usePropsStore();
   const {
     johnny,
     isInGame,
@@ -43,6 +44,8 @@ const Dashboard = () => {
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('POPULAR');
 
+  // Get props with custom odds applied
+  const allProps = getProps();
   const activeBets = bets.filter(b => b.status === BetStatus.PENDING && b.userId === user?.id);
   const gameTimeMinutes = currentGame
     ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
@@ -53,12 +56,12 @@ const Dashboard = () => {
 
   // Filter props by category
   const filteredProps = useMemo(() => {
-    if (categoryFilter === 'ALL') return MOCK_PROPS;
+    if (categoryFilter === 'ALL') return allProps;
     if (categoryFilter === 'POPULAR') {
-      return MOCK_PROPS.filter(p => POPULAR_PROP_IDS.includes(p.id));
+      return allProps.filter(p => POPULAR_PROP_IDS.includes(p.id));
     }
-    return MOCK_PROPS.filter(p => p.category === categoryFilter);
-  }, [categoryFilter]);
+    return allProps.filter(p => p.category === categoryFilter);
+  }, [categoryFilter, allProps]);
 
   // Sort props: available first, then by odds
   const sortedProps = useMemo(() => {
@@ -74,8 +77,8 @@ const Dashboard = () => {
   }, [filteredProps, gameTimeMinutes]);
 
   // Stats for current game
-  const availableProps = MOCK_PROPS.filter(p => !p.maxGameTime || gameTimeMinutes <= p.maxGameTime);
-  const expiredProps = MOCK_PROPS.filter(p => p.maxGameTime && gameTimeMinutes > p.maxGameTime);
+  const availableProps = allProps.filter(p => !p.maxGameTime || gameTimeMinutes <= p.maxGameTime);
+  const expiredProps = allProps.filter(p => p.maxGameTime && gameTimeMinutes > p.maxGameTime);
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
@@ -245,9 +248,9 @@ const Dashboard = () => {
             {(Object.entries(CATEGORY_INFO) as [CategoryFilter, typeof CATEGORY_INFO.ALL][]).map(([key, info]) => {
               const Icon = info.icon;
               const isActive = categoryFilter === key;
-              const count = key === 'ALL' ? MOCK_PROPS.length :
-                           key === 'POPULAR' ? POPULAR_PROP_IDS.length :
-                           MOCK_PROPS.filter(p => p.category === key).length;
+              const count = key === 'ALL' ? allProps.length :
+                           key === 'POPULAR' ? allProps.filter(p => POPULAR_PROP_IDS.includes(p.id)).length :
+                           allProps.filter(p => p.category === key).length;
 
               return (
                 <button
@@ -272,19 +275,20 @@ const Dashboard = () => {
           </div>
 
           {/* Props Grid */}
-          {isInGame ? (
-            <div className="grid md:grid-cols-2 gap-3">
-              {sortedProps.map(prop => (
-                <PropCard key={prop.id} prop={prop} />
-              ))}
-            </div>
-          ) : (
-            <div className="p-12 rounded-2xl border border-dashed border-zinc-700 bg-zinc-900/50 text-center">
-              <Skull className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-              <p className="text-zinc-400 text-lg font-bold mb-2">Paris fermés</p>
-              <p className="text-sm text-zinc-500">Attendez que Johnny lance une game.</p>
+          {!isInGame && (
+            <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 mb-4 flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+              <div>
+                <p className="text-amber-400 font-bold text-sm">Paris fermés</p>
+                <p className="text-xs text-zinc-400">Johnny n'est pas en game. Tu peux consulter les paris mais pas parier.</p>
+              </div>
             </div>
           )}
+          <div className="grid md:grid-cols-2 gap-3">
+            {sortedProps.map(prop => (
+              <PropCard key={prop.id} prop={prop} />
+            ))}
+          </div>
         </section>
 
         {/* Right Column: Active Bets (1 col) */}

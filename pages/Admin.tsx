@@ -7,7 +7,10 @@ import { useMatchHistoryStore } from '../services/matchHistoryStore';
 import { Region, riotApi } from '../services/riotApi';
 import { resolveBets } from '../services/betResolutionService';
 import { useStore } from '../services/store';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square } from 'lucide-react';
+import { usePropsStore } from '../services/propsStore';
+import { MOCK_PROPS } from '../services/mockData';
+import { supabase } from '../services/supabase';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -62,6 +65,18 @@ const Admin = () => {
   const [selectedTestMatch, setSelectedTestMatch] = useState<string>('');
   const [testModeLoading, setTestModeLoading] = useState(false);
   const [testModeResult, setTestModeResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Odds management
+  const { customOdds, setOdds, resetOdds, resetAllOdds } = usePropsStore();
+  const [oddsExpanded, setOddsExpanded] = useState(false);
+  const [editingOdds, setEditingOdds] = useState<Record<string, string>>({});
+
+  // User management
+  const [allUsers, setAllUsers] = useState<{ id: string; pseudo: string; credits: number }[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [resetAccountLoading, setResetAccountLoading] = useState(false);
+  const [resetAccountResult, setResetAccountResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Check if user is admin
   const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
@@ -217,6 +232,95 @@ const Admin = () => {
     setTestModeLoading(false);
     setSelectedTestMatch('');
     setTimeout(() => setTestModeResult(null), 5000);
+  };
+
+  // Fetch all users for reset feature
+  const fetchAllUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, pseudo, credits')
+        .order('pseudo');
+
+      if (error) throw error;
+      setAllUsers(data || []);
+    } catch (err: any) {
+      console.error('Error fetching users:', err);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  // Reset a user's account
+  const handleResetAccount = async () => {
+    if (!selectedUserId) {
+      setResetAccountResult({ success: false, message: 'Sélectionne un utilisateur' });
+      return;
+    }
+
+    const selectedUser = allUsers.find(u => u.id === selectedUserId);
+    if (!confirm(`Es-tu sûr de vouloir reset le compte de ${selectedUser?.pseudo} ?\n\n- Credits → 10000\n- Daily bonus → Reset\n- Stats → Remises à zéro\n- Paris → Supprimés`)) {
+      return;
+    }
+
+    setResetAccountLoading(true);
+    setResetAccountResult(null);
+
+    try {
+      // Reset profile in Supabase
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          credits: 10000,
+          last_daily_bonus: null,
+          total_bets: 0,
+          bets_won: 0,
+          bets_lost: 0,
+          jc_won: 0,
+          jc_lost: 0
+        })
+        .eq('id', selectedUserId);
+
+      if (profileError) throw profileError;
+
+      // Remove user's bets from local store
+      const store = useStore.getState();
+      const filteredBets = store.bets.filter(b => b.userId !== selectedUserId);
+      useStore.setState({ bets: filteredBets });
+
+      setResetAccountResult({
+        success: true,
+        message: `Compte de ${selectedUser?.pseudo} reset avec succès !`
+      });
+
+      // Refresh users list
+      fetchAllUsers();
+      setSelectedUserId('');
+    } catch (err: any) {
+      console.error('Reset account error:', err);
+      setResetAccountResult({ success: false, message: `Erreur: ${err.message}` });
+    } finally {
+      setResetAccountLoading(false);
+      setTimeout(() => setResetAccountResult(null), 5000);
+    }
+  };
+
+  // Handle odds change
+  const handleOddsChange = (propId: string, value: string) => {
+    setEditingOdds(prev => ({ ...prev, [propId]: value }));
+  };
+
+  const handleOddsSave = (propId: string) => {
+    const value = parseFloat(editingOdds[propId]);
+    if (!isNaN(value) && value >= 1) {
+      setOdds(propId, value);
+      setEditingOdds(prev => {
+        const newState = { ...prev };
+        delete newState[propId];
+        return newState;
+      });
+    }
   };
 
   const handleTestApi = async () => {
@@ -637,6 +741,208 @@ const Admin = () => {
                 Aucune game dans le musée. Synchronise d'abord le musée pour avoir des games de test.
               </div>
             )}
+          </div>
+
+          {/* Odds Management */}
+          <div className="bg-gradient-to-b from-amber-950/20 to-zinc-900 p-6 rounded-2xl border border-amber-500/30">
+            <button
+              onClick={() => {
+                setOddsExpanded(!oddsExpanded);
+              }}
+              className="w-full flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-5 h-5 text-amber-400" />
+                <h3 className="font-bold text-white">Gestion des Cotes</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {Object.keys(customOdds).length > 0 && (
+                  <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-full">
+                    {Object.keys(customOdds).length} modifiées
+                  </span>
+                )}
+                {oddsExpanded ? (
+                  <ChevronUp className="w-5 h-5 text-zinc-400" />
+                ) : (
+                  <ChevronDown className="w-5 h-5 text-zinc-400" />
+                )}
+              </div>
+            </button>
+
+            {oddsExpanded && (
+              <div className="mt-4 space-y-4">
+                <p className="text-xs text-zinc-400">
+                  Modifie les cotes de chaque pari. Les changements sont appliqués immédiatement.
+                </p>
+
+                {Object.keys(customOdds).length > 0 && (
+                  <button
+                    onClick={resetAllOdds}
+                    className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Réinitialiser toutes les cotes
+                  </button>
+                )}
+
+                <div className="max-h-96 overflow-y-auto space-y-2">
+                  {MOCK_PROPS.map(prop => {
+                    const currentOdds = customOdds[prop.id] ?? prop.odds;
+                    const isModified = customOdds[prop.id] !== undefined;
+                    const isEditing = editingOdds[prop.id] !== undefined;
+
+                    return (
+                      <div
+                        key={prop.id}
+                        className={`p-3 rounded-lg border ${
+                          isModified
+                            ? 'bg-amber-500/10 border-amber-500/30'
+                            : 'bg-zinc-800/50 border-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-white truncate">
+                              {prop.title}
+                            </div>
+                            <div className="text-xs text-zinc-500">
+                              {prop.category} • Default: x{prop.odds.toFixed(1)}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isEditing ? (
+                              <>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="1"
+                                  value={editingOdds[prop.id]}
+                                  onChange={(e) => handleOddsChange(prop.id, e.target.value)}
+                                  className="w-20 p-1.5 text-sm rounded-lg bg-zinc-900 border border-zinc-600 text-white text-center font-mono focus:border-amber-500 focus:outline-none"
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleOddsSave(prop.id);
+                                    if (e.key === 'Escape') {
+                                      setEditingOdds(prev => {
+                                        const newState = { ...prev };
+                                        delete newState[prop.id];
+                                        return newState;
+                                      });
+                                    }
+                                  }}
+                                  autoFocus
+                                />
+                                <button
+                                  onClick={() => handleOddsSave(prop.id)}
+                                  className="p-1 text-green-400 hover:text-green-300"
+                                >
+                                  <CheckCircle className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleOddsChange(prop.id, currentOdds.toString())}
+                                  className={`px-3 py-1.5 rounded-lg text-sm font-mono font-bold transition ${
+                                    isModified
+                                      ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                                      : 'bg-zinc-700 text-white hover:bg-zinc-600'
+                                  }`}
+                                >
+                                  x{currentOdds.toFixed(1)}
+                                </button>
+                                {isModified && (
+                                  <button
+                                    onClick={() => resetOdds(prop.id)}
+                                    className="p-1 text-zinc-500 hover:text-red-400"
+                                    title="Réinitialiser"
+                                  >
+                                    <RefreshCw className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* User Account Reset */}
+          <div className="bg-gradient-to-b from-red-950/20 to-zinc-900 p-6 rounded-2xl border border-red-500/30">
+            <div className="flex items-center gap-3 mb-4">
+              <Users className="w-5 h-5 text-red-400" />
+              <h3 className="font-bold text-white">Reset de Compte</h3>
+            </div>
+
+            <p className="text-xs text-zinc-400 mb-4">
+              Reset un compte utilisateur: 10000 crédits, stats à zéro, daily bonus reset, paris supprimés.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  onClick={() => {
+                    if (allUsers.length === 0) fetchAllUsers();
+                  }}
+                  className="flex-1 p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:border-red-500 focus:outline-none"
+                >
+                  <option value="">-- Sélectionner un utilisateur --</option>
+                  {allUsers.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.pseudo} ({u.credits.toLocaleString()} JC)
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={fetchAllUsers}
+                  disabled={usersLoading}
+                  className="px-3 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-xl transition-all"
+                >
+                  <RefreshCw className={`w-4 h-4 ${usersLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+
+              <button
+                onClick={handleResetAccount}
+                disabled={resetAccountLoading || !selectedUserId}
+                className="w-full py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                {resetAccountLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Reset en cours...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Reset le compte
+                  </>
+                )}
+              </button>
+
+              {resetAccountResult && (
+                <div className={`p-3 rounded-xl text-sm ${
+                  resetAccountResult.success
+                    ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                    : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {resetAccountResult.success ? (
+                      <CheckCircle className="w-4 h-4" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4" />
+                    )}
+                    <span>{resetAccountResult.message}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Simulation / Cheats */}
