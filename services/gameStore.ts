@@ -3,12 +3,30 @@ import { riotApi, CurrentGameInfo, MatchDto, MatchParticipant, Region } from './
 import { supabase } from './supabase';
 import { useMatchHistoryStore } from './matchHistoryStore';
 import { resolveBets } from './betResolutionService';
+import { RealtimeChannel } from '@supabase/supabase-js';
+
+// Generate a unique browser ID for this session
+const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+// How long before game status is considered stale (in ms)
+const STALE_THRESHOLD = 25000; // 25 seconds
 
 export interface JohnnyConfig {
   gameName: string;
   tagLine: string;
   puuid: string | null;
   region: Region;
+}
+
+interface GameStatusRow {
+  id: number;
+  is_in_game: boolean;
+  game_id: string | null;
+  game_data: CurrentGameInfo | null;
+  game_start_time: number | null;
+  last_check_at: string;
+  last_checker_id: string | null;
+  updated_at: string;
 }
 
 export interface GameState {
@@ -34,6 +52,9 @@ export interface GameState {
   isPolling: boolean;
   pollInterval: number | null;
 
+  // Realtime subscription
+  realtimeChannel: RealtimeChannel | null;
+
   // Loading states
   loading: boolean;
   error: string | null;
@@ -46,6 +67,10 @@ export interface GameState {
   stopPolling: () => void;
   fetchLastMatch: () => Promise<void>;
   clearError: () => void;
+
+  // Realtime subscription
+  subscribeToGameStatus: () => void;
+  unsubscribeFromGameStatus: () => void;
 
   // Test mode actions
   startTestMode: (matchId: string) => Promise<boolean>;
@@ -70,6 +95,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   testMatchData: null,
   isPolling: false,
   pollInterval: null,
+  realtimeChannel: null,
   loading: false,
   error: null,
 
@@ -162,6 +188,71 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
+  // Subscribe to realtime game status updates
+  subscribeToGameStatus: () => {
+    const { realtimeChannel } = get();
+
+    // Already subscribed
+    if (realtimeChannel) return;
+
+    console.log('Subscribing to game status updates...');
+
+    const channel = supabase
+      .channel('game_status_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'game_status',
+          filter: 'id=eq.1'
+        },
+        (payload) => {
+          const newData = payload.new as GameStatusRow;
+          const { testMode, currentGameId } = get();
+
+          // Don't update if in test mode
+          if (testMode) return;
+
+          console.log('Received game status update from Supabase:', newData.is_in_game);
+
+          // Check if game just ended (was in game, now not)
+          const wasInGame = get().isInGame;
+          const previousGameId = get().currentGameId;
+
+          // Update local state from shared state
+          set({
+            isInGame: newData.is_in_game,
+            currentGame: newData.game_data,
+            currentGameId: newData.game_id,
+            gameStartTime: newData.game_start_time,
+            error: null
+          });
+
+          // If game just ended, handle bet resolution
+          if (wasInGame && !newData.is_in_game && previousGameId) {
+            console.log('Game ended (detected via realtime)! Triggering bet resolution...');
+            handleGameEnd(previousGameId);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
+
+    set({ realtimeChannel: channel });
+  },
+
+  unsubscribeFromGameStatus: () => {
+    const { realtimeChannel } = get();
+
+    if (realtimeChannel) {
+      console.log('Unsubscribing from game status updates...');
+      supabase.removeChannel(realtimeChannel);
+      set({ realtimeChannel: null });
+    }
+  },
+
   checkGameStatus: async () => {
     const { johnny, testMode } = get();
 
@@ -177,15 +268,56 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
 
     try {
+      // First, check Supabase for recent game status
+      const { data: statusData, error: statusError } = await supabase
+        .from('game_status')
+        .select('*')
+        .eq('id', 1)
+        .single();
+
+      if (!statusError && statusData) {
+        const lastCheckTime = new Date(statusData.last_check_at).getTime();
+        const timeSinceLastCheck = Date.now() - lastCheckTime;
+
+        // If data is fresh (another user checked recently), use it
+        if (timeSinceLastCheck < STALE_THRESHOLD) {
+          console.log(`Using cached game status (${Math.round(timeSinceLastCheck / 1000)}s old, checked by ${statusData.last_checker_id?.slice(0, 15)}...)`);
+
+          // Update local state from shared state
+          const { currentGameId: prevGameId, isInGame: wasInGame } = get();
+
+          set({
+            isInGame: statusData.is_in_game,
+            currentGame: statusData.game_data,
+            currentGameId: statusData.game_id,
+            gameStartTime: statusData.game_start_time,
+            error: null
+          });
+
+          // Check if game ended
+          if (wasInGame && !statusData.is_in_game && prevGameId) {
+            handleGameEnd(prevGameId);
+          }
+
+          return; // No API call needed!
+        }
+
+        console.log(`Game status is stale (${Math.round(timeSinceLastCheck / 1000)}s old), polling Riot API...`);
+      }
+
+      // Data is stale or doesn't exist - poll Riot API
       console.log('Checking game status for', johnny.gameName || johnny.puuid);
       const currentGame = await riotApi.getCurrentGame(johnny.puuid);
 
+      const wasInGame = get().isInGame;
+      const previousGameId = get().currentGameId;
+
       if (currentGame) {
         // Johnny is in game!
-        // Create match ID format: PLATFORM_GAMEID (e.g., EUW1_1234567890)
         const gameId = `${currentGame.platformId}_${currentGame.gameId}`;
         console.log('Johnny is IN GAME!', gameId);
 
+        // Update local state
         set({
           isInGame: true,
           currentGame,
@@ -193,76 +325,26 @@ export const useGameStore = create<GameState>((set, get) => ({
           gameStartTime: currentGame.gameStartTime,
           error: null
         });
+
+        // Update shared state in Supabase
+        await updateSharedGameStatus(true, gameId, currentGame, currentGame.gameStartTime);
+
       } else {
         console.log('Johnny is not in game');
-        // Not in game
-        const wasInGame = get().isInGame;
-        const previousGameId = get().currentGameId;
 
+        // Update local state
         set({
           isInGame: false,
           currentGame: null,
           gameStartTime: null
-          // Keep currentGameId until bets are resolved
         });
 
-        // If was in game and now isn't, fetch the last match, resolve bets and save it
+        // Update shared state in Supabase
+        await updateSharedGameStatus(false, null, null, null);
+
+        // If was in game and now isn't, handle game end
         if (wasInGame && previousGameId) {
-          console.log('Game ended! Previous game ID:', previousGameId);
-          console.log('Waiting for Riot API to process match data (90 seconds)...');
-
-          // Wait for Riot API to have the match data (can take up to 2-3 minutes)
-          setTimeout(async () => {
-            const { johnny } = get();
-            if (!johnny.puuid) return;
-
-            console.log('Fetching last match for bet resolution...');
-
-            // Try to fetch the match data, retry once if not found
-            let lastMatch = await riotApi.getLastMatch(johnny.puuid);
-
-            if (!lastMatch) {
-              console.log('Match not found yet, retrying in 30 seconds...');
-              await new Promise(resolve => setTimeout(resolve, 30000));
-              lastMatch = await riotApi.getLastMatch(johnny.puuid);
-            }
-
-            if (lastMatch) {
-              const stats = riotApi.getPlayerStatsFromMatch(lastMatch, johnny.puuid);
-              set({ lastMatch, lastMatchStats: stats });
-
-              console.log('Match found:', lastMatch.metadata.matchId);
-              console.log('Johnny stats:', stats?.kills, '/', stats?.deaths, '/', stats?.assists);
-
-              // Resolve bets based on actual match data
-              console.log('Resolving all pending bets...');
-              const results = await resolveBets(lastMatch, johnny.puuid);
-              console.log('Bet resolution complete:', results.length, 'bets resolved');
-
-              if (results.length > 0) {
-                const won = results.filter(r => r.won).length;
-                const lost = results.length - won;
-                console.log(`Results: ${won} won, ${lost} lost`);
-              }
-
-              // Now clear the game ID
-              set({ currentGameId: null });
-
-              // Save to match history (auto-sync)
-              console.log('Auto-syncing match to museum...');
-              const matchHistoryStore = useMatchHistoryStore.getState();
-              const newMatch = await matchHistoryStore.checkForNewMatch();
-              if (newMatch) {
-                console.log('New match saved to museum:', newMatch.id);
-              } else {
-                console.log('Match not saved to museum (might already exist)');
-              }
-            } else {
-              console.error('Could not fetch match data after retry');
-              // Clear game ID anyway to avoid blocking future games
-              set({ currentGameId: null });
-            }
-          }, 90000); // Wait 90 seconds for Riot API to process the match
+          handleGameEnd(previousGameId);
         }
       }
     } catch (error: any) {
@@ -285,6 +367,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     console.log(`Starting polling every ${intervalMs / 1000}s for ${johnny.gameName}#${johnny.tagLine}`);
 
+    // Subscribe to realtime updates
+    get().subscribeToGameStatus();
+
     // Initial check
     get().checkGameStatus();
 
@@ -303,6 +388,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     if (pollInterval) {
       clearInterval(pollInterval);
     }
+
+    // Unsubscribe from realtime
+    get().unsubscribeFromGameStatus();
 
     set({ isPolling: false, pollInterval: null });
   },
@@ -417,3 +505,93 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   }
 }));
+
+// Helper function to update shared game status in Supabase
+async function updateSharedGameStatus(
+  isInGame: boolean,
+  gameId: string | null,
+  gameData: CurrentGameInfo | null,
+  gameStartTime: number | null
+) {
+  try {
+    const { error } = await supabase
+      .from('game_status')
+      .upsert({
+        id: 1,
+        is_in_game: isInGame,
+        game_id: gameId,
+        game_data: gameData,
+        game_start_time: gameStartTime,
+        last_check_at: new Date().toISOString(),
+        last_checker_id: BROWSER_ID,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+    if (error) {
+      console.error('Error updating shared game status:', error);
+    } else {
+      console.log('Shared game status updated');
+    }
+  } catch (e) {
+    console.error('Failed to update shared game status:', e);
+  }
+}
+
+// Helper function to handle game end (bet resolution)
+function handleGameEnd(previousGameId: string) {
+  console.log('Game ended! Previous game ID:', previousGameId);
+  console.log('Waiting for Riot API to process match data (90 seconds)...');
+
+  // Wait for Riot API to have the match data
+  setTimeout(async () => {
+    const { johnny } = useGameStore.getState();
+    if (!johnny.puuid) return;
+
+    console.log('Fetching last match for bet resolution...');
+
+    // Try to fetch the match data, retry once if not found
+    let lastMatch = await riotApi.getLastMatch(johnny.puuid);
+
+    if (!lastMatch) {
+      console.log('Match not found yet, retrying in 30 seconds...');
+      await new Promise(resolve => setTimeout(resolve, 30000));
+      lastMatch = await riotApi.getLastMatch(johnny.puuid);
+    }
+
+    if (lastMatch) {
+      const stats = riotApi.getPlayerStatsFromMatch(lastMatch, johnny.puuid);
+      useGameStore.setState({ lastMatch, lastMatchStats: stats });
+
+      console.log('Match found:', lastMatch.metadata.matchId);
+      console.log('Johnny stats:', stats?.kills, '/', stats?.deaths, '/', stats?.assists);
+
+      // Resolve bets based on actual match data
+      console.log('Resolving all pending bets...');
+      const results = await resolveBets(lastMatch, johnny.puuid);
+      console.log('Bet resolution complete:', results.length, 'bets resolved');
+
+      if (results.length > 0) {
+        const won = results.filter(r => r.won).length;
+        const lost = results.length - won;
+        console.log(`Results: ${won} won, ${lost} lost`);
+      }
+
+      // Now clear the game ID
+      useGameStore.setState({ currentGameId: null });
+
+      // Save to match history (auto-sync)
+      console.log('Auto-syncing match to museum...');
+      const matchHistoryStore = useMatchHistoryStore.getState();
+      const newMatch = await matchHistoryStore.checkForNewMatch();
+      if (newMatch) {
+        console.log('New match saved to museum:', newMatch.id);
+      } else {
+        console.log('Match not saved to museum (might already exist)');
+      }
+    } else {
+      console.error('Could not fetch match data after retry');
+      // Clear game ID anyway to avoid blocking future games
+      useGameStore.setState({ currentGameId: null });
+    }
+  }, 90000); // Wait 90 seconds for Riot API to process the match
+}
