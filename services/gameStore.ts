@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 import { useMatchHistoryStore } from './matchHistoryStore';
 import { resolveBets } from './betResolutionService';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { notifyGameStarted, notifyGameEnded } from './discordWebhook';
 
 // Generate a unique browser ID for this session
 const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -317,6 +318,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         const gameId = `${currentGame.platformId}_${currentGame.gameId}`;
         console.log('Johnny is IN GAME!', gameId);
 
+        // Check if this is a NEW game (wasn't in game before)
+        const isNewGame = !wasInGame;
+
         // Update local state
         set({
           isInGame: true,
@@ -328,6 +332,17 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         // Update shared state in Supabase
         await updateSharedGameStatus(true, gameId, currentGame, currentGame.gameStartTime);
+
+        // Send Discord notification for NEW games only
+        if (isNewGame) {
+          console.log('New game detected! Sending Discord notification...');
+          notifyGameStarted(currentGame.gameId, currentGame.gameMode || 'Ranked Solo/Duo')
+            .then(sent => {
+              if (sent) console.log('Discord notification sent successfully');
+              else console.log('Discord notification not sent (check webhook URL)');
+            })
+            .catch(err => console.error('Discord notification error:', err));
+        }
 
       } else {
         console.log('Johnny is not in game');
@@ -564,6 +579,17 @@ function handleGameEnd(previousGameId: string) {
 
       console.log('Match found:', lastMatch.metadata.matchId);
       console.log('Johnny stats:', stats?.kills, '/', stats?.deaths, '/', stats?.assists);
+
+      // Send Discord notification for game end
+      if (stats) {
+        notifyGameEnded(
+          stats.win,
+          stats.kills,
+          stats.deaths,
+          stats.assists,
+          stats.championName
+        ).catch(err => console.error('Discord end notification error:', err));
+      }
 
       // Resolve bets based on actual match data
       console.log('Resolving all pending bets...');
