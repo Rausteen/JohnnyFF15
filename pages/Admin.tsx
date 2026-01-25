@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore, JohnnyConfig } from '../services/gameStore';
 import { useCreditsStore } from '../services/creditsStore';
@@ -84,6 +84,24 @@ const Admin = () => {
       setLoadingBets(false);
     }
   };
+
+  // Merge Supabase pending bets with local pending bets (for old bets before Supabase integration)
+  const mergedPendingBets = useMemo(() => {
+    const betsMap = new Map<string, Bet>();
+
+    // Add local pending bets first
+    localPendingBets.forEach(bet => {
+      betsMap.set(bet.id, bet);
+    });
+
+    // Override with Supabase bets (more up-to-date)
+    allPendingBets.forEach(bet => {
+      betsMap.set(bet.id, bet);
+    });
+
+    // Convert back to array and sort by timestamp (newest first)
+    return Array.from(betsMap.values()).sort((a, b) => b.timestamp - a.timestamp);
+  }, [allPendingBets, localPendingBets]);
 
   const [selectedTestMatch, setSelectedTestMatch] = useState<string>('');
   const [testModeLoading, setTestModeLoading] = useState(false);
@@ -221,7 +239,7 @@ const Admin = () => {
 
   // Manually resolve a single bet (works with Supabase bets from all users)
   const handleManualResolve = async (betId: string, won: boolean) => {
-    const bet = allPendingBets.find(b => b.id === betId);
+    const bet = mergedPendingBets.find(b => b.id === betId);
     if (!bet) return;
 
     setResolvingBetId(betId);
@@ -868,9 +886,9 @@ const Admin = () => {
                 <h3 className="font-bold text-white">Résolution Manuelle des Paris</h3>
               </div>
               <div className="flex items-center gap-2">
-                {allPendingBets.length > 0 && (
+                {mergedPendingBets.length > 0 && (
                   <span className="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-full">
-                    {allPendingBets.length} en attente
+                    {mergedPendingBets.length} en attente
                   </span>
                 )}
                 <button
@@ -910,9 +928,9 @@ const Admin = () => {
                 <Loader2 className="w-6 h-6 animate-spin mx-auto text-zinc-500" />
                 <div className="text-zinc-500 text-sm mt-2">Chargement des paris...</div>
               </div>
-            ) : allPendingBets.length > 0 ? (
+            ) : mergedPendingBets.length > 0 ? (
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {allPendingBets.map(bet => (
+                {mergedPendingBets.map(bet => (
                   <div key={bet.id} className="p-3 bg-zinc-800/50 rounded-xl border border-zinc-700">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
