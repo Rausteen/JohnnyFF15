@@ -192,21 +192,63 @@ export async function deleteBetFromSupabase(betId: string): Promise<boolean> {
 }
 
 // Delete all bets for a specific user (for account reset)
-export async function deleteUserBets(userId: string): Promise<boolean> {
+export async function deleteUserBets(userId: string): Promise<{ success: boolean; deleted: number; error?: string }> {
   try {
-    const { error } = await supabase
+    // First, count how many bets this user has
+    const { data: existingBets, error: countError } = await supabase
+      .from('bets')
+      .select('id')
+      .eq('user_id', userId);
+
+    if (countError) {
+      console.error('Error counting user bets:', countError);
+      return { success: false, deleted: 0, error: countError.message };
+    }
+
+    const betCount = existingBets?.length || 0;
+    console.log(`Found ${betCount} bets for user ${userId}`);
+
+    if (betCount === 0) {
+      return { success: true, deleted: 0 };
+    }
+
+    // Delete all bets for this user
+    const { error: deleteError } = await supabase
       .from('bets')
       .delete()
       .eq('user_id', userId);
 
-    if (error) {
-      console.error('Error deleting user bets:', error);
-      return false;
+    if (deleteError) {
+      console.error('Error deleting user bets:', deleteError);
+      return { success: false, deleted: 0, error: deleteError.message };
     }
-    return true;
-  } catch (err) {
+
+    // Verify deletion worked
+    const { data: remainingBets, error: verifyError } = await supabase
+      .from('bets')
+      .select('id')
+      .eq('user_id', userId);
+
+    if (verifyError) {
+      console.error('Error verifying bet deletion:', verifyError);
+      return { success: false, deleted: 0, error: verifyError.message };
+    }
+
+    const remaining = remainingBets?.length || 0;
+    if (remaining > 0) {
+      console.error(`RLS blocked deletion: ${remaining} bets still remain`);
+      return {
+        success: false,
+        deleted: betCount - remaining,
+        error: `Permissions insuffisantes: ${remaining} paris n'ont pas pu être supprimés. Vérifiez les politiques admin dans Supabase.`
+      };
+    }
+
+    console.log(`Successfully deleted ${betCount} bets for user ${userId}`);
+    return { success: true, deleted: betCount };
+  } catch (err: any) {
     console.error('Error deleting user bets:', err);
-    return false;
+    return { success: false, deleted: 0, error: err.message };
   }
 }
 

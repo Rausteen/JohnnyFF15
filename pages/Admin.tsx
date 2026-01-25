@@ -450,9 +450,9 @@ const Admin = () => {
       if (profileError) throw profileError;
 
       // Delete user's bets from Supabase
-      const betsDeleted = await deleteUserBets(selectedUserId);
-      if (!betsDeleted) {
-        console.warn('Failed to delete user bets from Supabase');
+      const deleteResult = await deleteUserBets(selectedUserId);
+      if (!deleteResult.success) {
+        throw new Error(deleteResult.error || 'Impossible de supprimer les paris');
       }
 
       // Remove user's bets from local store
@@ -462,7 +462,7 @@ const Admin = () => {
 
       setResetAccountResult({
         success: true,
-        message: `Compte de ${selectedUser?.pseudo} reset avec succès !`
+        message: `Compte de ${selectedUser?.pseudo} reset ! (${deleteResult.deleted} paris supprimés)`
       });
 
       // Refresh users list and pending bets
