@@ -6,7 +6,7 @@ import { useStore } from '../services/store';
 import { useGameStore } from '../services/gameStore';
 import { useAuthStore } from '../services/authStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
-import { getUserPendingBets } from '../services/betsService';
+import { getUserPendingBets, migrateLocalBetsToSupabase } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
 import {
   Clock, Skull, Wifi, WifiOff, AlertTriangle,
@@ -49,12 +49,16 @@ const Dashboard = () => {
   // Supabase pending bets
   const [supabasePendingBets, setSupabasePendingBets] = useState<Bet[]>([]);
 
-  // Load pending bets from Supabase
+  // Load pending bets from Supabase (and migrate local bets first)
   const loadPendingBets = async () => {
     if (!user) return;
     try {
-      const bets = await getUserPendingBets(user.id);
-      setSupabasePendingBets(bets);
+      // First, migrate any local bets that aren't in Supabase yet
+      await migrateLocalBetsToSupabase(bets, user.id);
+
+      // Then load pending bets from Supabase
+      const pendingBets = await getUserPendingBets(user.id);
+      setSupabasePendingBets(pendingBets);
     } catch (err) {
       console.error('Error loading pending bets:', err);
     }
