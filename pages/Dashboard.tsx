@@ -6,7 +6,8 @@ import { useStore } from '../services/store';
 import { useGameStore } from '../services/gameStore';
 import { useAuthStore } from '../services/authStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
-import { BetStatus } from '../types';
+import { getUserPendingBets } from '../services/betsService';
+import { BetStatus, Bet } from '../types';
 import {
   Clock, Skull, Wifi, WifiOff, AlertTriangle,
   Gamepad2, Users, LogIn, FlaskConical, Zap, Target, Swords,
@@ -45,6 +46,31 @@ const Dashboard = () => {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('POPULAR');
   const [currentTime, setCurrentTime] = useState(Date.now());
 
+  // Supabase pending bets
+  const [supabasePendingBets, setSupabasePendingBets] = useState<Bet[]>([]);
+
+  // Load pending bets from Supabase
+  const loadPendingBets = async () => {
+    if (!user) return;
+    try {
+      const bets = await getUserPendingBets(user.id);
+      setSupabasePendingBets(bets);
+    } catch (err) {
+      console.error('Error loading pending bets:', err);
+    }
+  };
+
+  // Load on mount and when user changes
+  useEffect(() => {
+    loadPendingBets();
+  }, [user?.id]);
+
+  // Reload bets periodically to stay in sync
+  useEffect(() => {
+    const interval = setInterval(loadPendingBets, 30000); // Every 30 seconds
+    return () => clearInterval(interval);
+  }, [user?.id]);
+
   // Update current time every second for cancel button countdown
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -64,7 +90,14 @@ const Dashboard = () => {
 
   // Get props with custom odds applied
   const allProps = getProps();
-  const activeBets = bets.filter(b => b.status === BetStatus.PENDING && b.userId === user?.id);
+
+  // Use Supabase pending bets, fallback to local
+  const activeBets = useMemo(() => {
+    if (supabasePendingBets.length > 0) {
+      return supabasePendingBets;
+    }
+    return bets.filter(b => b.status === BetStatus.PENDING && b.userId === user?.id);
+  }, [supabasePendingBets, bets, user?.id]);
   const gameTimeMinutes = currentGame
     ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
     : 0;

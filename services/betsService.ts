@@ -190,3 +190,44 @@ export async function deleteBetFromSupabase(betId: string): Promise<boolean> {
     return false;
   }
 }
+
+// Delete all bets for a specific user (for account reset)
+export async function deleteUserBets(userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('bets')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error deleting user bets:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Error deleting user bets:', err);
+    return false;
+  }
+}
+
+// Get pending bets for a specific user
+export async function getUserPendingBets(userId: string): Promise<Bet[]> {
+  try {
+    const { data, error } = await supabase
+      .from('bets')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'PENDING')
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user pending bets:', error);
+      return [];
+    }
+
+    return (data || []).map(supabaseBetToLocal);
+  } catch (err) {
+    console.error('Error fetching user pending bets:', err);
+    return [];
+  }
+}

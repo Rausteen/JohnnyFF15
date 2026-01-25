@@ -7,7 +7,7 @@ import { useMatchHistoryStore } from '../services/matchHistoryStore';
 import { Region, riotApi } from '../services/riotApi';
 import { resolveBets } from '../services/betResolutionService';
 import { useStore } from '../services/store';
-import { getAllPendingBets, updateBetStatus } from '../services/betsService';
+import { getAllPendingBets, updateBetStatus, deleteUserBets } from '../services/betsService';
 import { Bet } from '../types';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
@@ -430,6 +430,12 @@ const Admin = () => {
         .eq('id', selectedUserId);
 
       if (profileError) throw profileError;
+
+      // Delete user's bets from Supabase
+      const betsDeleted = await deleteUserBets(selectedUserId);
+      if (!betsDeleted) {
+        console.warn('Failed to delete user bets from Supabase');
+      }
 
       // Remove user's bets from local store
       const store = useStore.getState();

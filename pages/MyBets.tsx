@@ -2,10 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useStore } from '../services/store';
 import { useAuthStore } from '../services/authStore';
+import { getUserBets } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
 import {
   Filter, TrendingDown, TrendingUp, Wallet, ChevronDown, ChevronUp,
-  Swords, Clock, Trophy, Skull, ArrowUpDown, Calendar, Coins, Layers
+  Swords, Clock, Trophy, Skull, ArrowUpDown, Calendar, Coins, Layers, Loader2, RefreshCw
 } from 'lucide-react';
 
 interface GameGroup {
@@ -22,22 +23,50 @@ interface GameGroup {
 type SortOption = 'date' | 'amount' | 'result';
 
 const MyBets = () => {
-  const { bets } = useStore();
+  const { bets: localBets } = useStore();
   const { user } = useAuthStore();
   const [filter, setFilter] = useState<BetStatus | 'ALL'>('ALL');
   const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [sortDesc, setSortDesc] = useState(true);
 
+  // Supabase bets state
+  const [supabaseBets, setSupabaseBets] = useState<Bet[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load bets from Supabase
+  const loadBets = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const bets = await getUserBets(user.id);
+      setSupabaseBets(bets);
+    } catch (err) {
+      console.error('Error loading bets:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load bets on mount and when user changes
+  useEffect(() => {
+    loadBets();
+  }, [user?.id]);
+
   // Redirect non-logged-in users to login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // Filter bets by current user
+  // Use Supabase bets, fallback to local bets if Supabase is empty
   const userBets = useMemo(() => {
-    return bets.filter(b => b.userId === user.id);
-  }, [bets, user.id]);
+    // Prefer Supabase bets if available
+    if (supabaseBets.length > 0) {
+      return supabaseBets;
+    }
+    // Fallback to local bets filtered by user
+    return localBets.filter(b => b.userId === user.id);
+  }, [supabaseBets, localBets, user.id]);
 
   const filteredBets = filter === 'ALL' ? userBets : userBets.filter(b => b.status === filter);
 
@@ -180,9 +209,19 @@ const MyBets = () => {
           <h1 className="text-xl sm:text-3xl font-bold text-white">Mes Paris</h1>
           <p className="text-zinc-500 text-xs sm:text-base mt-0.5 sm:mt-1">Historique de tes prises de risque</p>
         </div>
-        <div className="text-right">
-          <div className="text-xs sm:text-sm text-zinc-500">Total paris</div>
-          <div className="text-lg sm:text-2xl font-bold text-white">{userBets.length}</div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={loadBets}
+            disabled={loading}
+            className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-lg transition-all"
+            title="Rafraîchir"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <div className="text-right">
+            <div className="text-xs sm:text-sm text-zinc-500">Total paris</div>
+            <div className="text-lg sm:text-2xl font-bold text-white">{userBets.length}</div>
+          </div>
         </div>
       </div>
 
@@ -278,7 +317,12 @@ const MyBets = () => {
 
       {/* Games List */}
       <div className="space-y-2 sm:space-y-3">
-        {gameGroups.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-10 sm:py-16 bg-zinc-900/30 rounded-xl sm:rounded-2xl border border-dashed border-zinc-800">
+            <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-zinc-500 animate-spin" />
+            <p className="text-zinc-500 font-medium text-sm sm:text-base">Chargement des paris...</p>
+          </div>
+        ) : gameGroups.length === 0 ? (
           <div className="text-center py-10 sm:py-16 bg-zinc-900/30 rounded-xl sm:rounded-2xl border border-dashed border-zinc-800">
             <Swords className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-zinc-700" />
             <p className="text-zinc-500 font-medium text-sm sm:text-base">Aucun pari trouvé</p>
