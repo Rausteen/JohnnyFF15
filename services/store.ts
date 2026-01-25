@@ -68,6 +68,10 @@ export const useStore = create<StoreState>()(
         const bet = bets.find((b) => b.id === betId);
         if (!bet || bet.status !== BetStatus.PENDING) return;
 
+        // Can only cancel within 1 minute of placing the bet
+        const oneMinuteAgo = Date.now() - 60 * 1000;
+        if (bet.timestamp < oneMinuteAgo) return;
+
         set((state) => ({
           balance: state.balance + bet.amount,
           bets: state.bets.filter((b) => b.id !== betId),

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import PropCard from '../components/PropCard';
 import ComboBetSlip from '../components/ComboBetSlip';
 import { usePropsStore } from '../services/propsStore';
@@ -43,6 +43,24 @@ const Dashboard = () => {
   } = useGameStore();
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('POPULAR');
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Update current time every second for cancel button countdown
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Check if a bet can still be cancelled (within 1 minute)
+  const canCancelBet = (betTimestamp: number) => {
+    return currentTime - betTimestamp < 60 * 1000;
+  };
+
+  // Get remaining seconds to cancel
+  const getCancelTimeLeft = (betTimestamp: number) => {
+    const timeLeft = 60 - Math.floor((currentTime - betTimestamp) / 1000);
+    return Math.max(0, timeLeft);
+  };
 
   // Get props with custom odds applied
   const allProps = getProps();
@@ -287,12 +305,18 @@ const Dashboard = () => {
                       <span className="text-zinc-500">
                         {bet.amount} → <span className="text-gold font-bold">{bet.potentialPayout} JC</span>
                       </span>
-                      <button
-                        onClick={() => cancelBet(bet.id)}
-                        className="text-red-400 hover:text-red-300 p-1"
-                      >
-                        ✕
-                      </button>
+                      {canCancelBet(bet.timestamp) ? (
+                        <button
+                          onClick={() => cancelBet(bet.id)}
+                          className="text-red-400 hover:text-red-300 p-1 flex items-center gap-1"
+                          title={`${getCancelTimeLeft(bet.timestamp)}s pour annuler`}
+                        >
+                          <span className="text-zinc-500 text-xs">{getCancelTimeLeft(bet.timestamp)}s</span>
+                          ✕
+                        </button>
+                      ) : (
+                        <span className="text-zinc-600 text-xs">🔒</span>
+                      )}
                     </div>
                   </div>
                 ))}
