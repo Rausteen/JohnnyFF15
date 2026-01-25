@@ -452,9 +452,17 @@ const PublicProfile = () => {
                           <span className="text-sm text-zinc-400">Bilan de la game</span>
                           <div className="flex items-center gap-4">
                             <span className="text-sm text-zinc-500">Misé: <span className="font-mono text-white">{totalBet} JC</span></span>
-                            {totalWon > 0 && (
-                              <span className="text-sm text-green-400">Gagné: <span className="font-mono font-bold">+{totalWon} JC</span></span>
-                            )}
+                            {(() => {
+                              const netResult = totalWon - totalBet;
+                              if (pendingCount > 0) {
+                                return <span className="text-sm text-amber-400">En attente...</span>;
+                              }
+                              return (
+                                <span className={`text-sm ${netResult >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                  Bilan: <span className="font-mono font-bold">{netResult >= 0 ? '+' : ''}{netResult} JC</span>
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
