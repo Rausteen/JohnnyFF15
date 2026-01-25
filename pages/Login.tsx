@@ -110,12 +110,13 @@ const Login = () => {
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black p-4">
-      {/* Fond */}
+      {/* Fond avec animation de zoom */}
       <div
-        className={`absolute inset-0 bg-center bg-no-repeat bg-contain transition-opacity duration-[1000ms]`}
+        className={`absolute inset-0 bg-center bg-no-repeat bg-cover transition-all duration-[1500ms] ease-out ${
+          fade ? 'opacity-100 scale-110' : 'opacity-0 scale-100'
+        }`}
         style={{
           backgroundImage: `url(${images[currentIndex]})`,
-          opacity: fade ? 1 : 0,
         }}
       ></div>
 
