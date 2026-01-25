@@ -429,15 +429,7 @@ const Dashboard = () => {
               </div>
             </div>
           )}
-          {isInGame && gameTimeMinutes >= 3 && (
-            <div className="p-3 sm:p-4 rounded-xl border border-red-500/30 bg-red-500/5 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
-              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 shrink-0" />
-              <div>
-                <p className="text-red-400 font-bold text-xs sm:text-sm">Paris fermés - Game en cours</p>
-                <p className="text-xs text-zinc-400">Les paris se ferment après 3 minutes de jeu. Résultats à la fin de la game !</p>
-              </div>
-            </div>
-          )}
+          {/* Betting window message disabled for testing */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {sortedProps.map(prop => (
               <PropCard key={prop.id} prop={prop} />

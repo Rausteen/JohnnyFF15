@@ -37,10 +37,10 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
   const canBetOnProp = () => {
     if (!isInGame) return false;
 
-    // Global betting window: only first 3 minutes of the game
-    if (gameTimeMinutes >= 3) {
-      return false;
-    }
+    // Global betting window: disabled for testing (was 3 minutes)
+    // if (gameTimeMinutes >= 3) {
+    //   return false;
+    // }
 
     // Some props are only available early game (e.g., "First Blood avant 1min")
     if (prop.maxGameTime && gameTimeMinutes > prop.maxGameTime) {
@@ -50,8 +50,8 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
     return true;
   };
 
-  // Check if betting window is closed (after 3 minutes)
-  const isBettingWindowClosed = isInGame && gameTimeMinutes >= 3;
+  // Check if betting window is closed (disabled for testing)
+  const isBettingWindowClosed = false; // was: isInGame && gameTimeMinutes >= 3;
 
   const handleBet = async () => {
     setError(null);
