@@ -465,8 +465,9 @@ const Admin = () => {
         message: `Compte de ${selectedUser?.pseudo} reset avec succès !`
       });
 
-      // Refresh users list
+      // Refresh users list and pending bets
       fetchAllUsers();
+      loadAllPendingBets();
       setSelectedUserId('');
     } catch (err: any) {
       console.error('Reset account error:', err);
