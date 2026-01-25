@@ -207,8 +207,36 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
   }
 }
 
-// Update user credits in Supabase
+// Update user credits in Supabase using RPC function (bypasses RLS)
 async function updateUserCredits(userId: string, won: boolean, amount: number, payout: number): Promise<void> {
+  try {
+    console.log(`Updating credits for user ${userId.slice(0, 8)}...: won=${won}, amount=${amount}, payout=${payout}`);
+
+    // Use the RPC function that bypasses RLS
+    const { data, error } = await supabase.rpc('update_user_credits_on_bet_resolution', {
+      p_user_id: userId,
+      p_won: won,
+      p_amount: amount,
+      p_payout: payout
+    });
+
+    if (error) {
+      console.error('Error calling update_user_credits_on_bet_resolution:', error);
+
+      // Fallback: try direct update (might work if RLS allows it)
+      console.log('Trying direct update as fallback...');
+      await updateUserCreditsDirect(userId, won, amount, payout);
+      return;
+    }
+
+    console.log(`Credits updated successfully for user ${userId.slice(0, 8)}...`);
+  } catch (err) {
+    console.error('Error updating user credits:', err);
+  }
+}
+
+// Direct update (fallback if RPC function not available)
+async function updateUserCreditsDirect(userId: string, won: boolean, amount: number, payout: number): Promise<void> {
   try {
     // Fetch current user stats
     const { data: profile, error: fetchError } = await supabase
@@ -235,6 +263,8 @@ async function updateUserCredits(userId: string, won: boolean, amount: number, p
 
       if (updateError) {
         console.error('Error updating user credits (win):', updateError);
+      } else {
+        console.log(`Direct update successful: +${payout} credits for user ${userId.slice(0, 8)}...`);
       }
     } else {
       // Update loss stats (credits already deducted when bet was placed)
@@ -248,10 +278,12 @@ async function updateUserCredits(userId: string, won: boolean, amount: number, p
 
       if (updateError) {
         console.error('Error updating user stats (loss):', updateError);
+      } else {
+        console.log(`Direct update successful: loss stats updated for user ${userId.slice(0, 8)}...`);
       }
     }
   } catch (err) {
-    console.error('Error updating user credits:', err);
+    console.error('Error in direct credits update:', err);
   }
 }
 
