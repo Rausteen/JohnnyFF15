@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useStore } from '../services/store';
 import { useAuthStore } from '../services/authStore';
-import { getUserBets } from '../services/betsService';
+import { getUserBets, migrateLocalBetsToSupabase } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
 import {
   Filter, TrendingDown, TrendingUp, Wallet, ChevronDown, ChevronUp,
@@ -34,11 +34,18 @@ const MyBets = () => {
   const [supabaseBets, setSupabaseBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load bets from Supabase
+  // Load bets from Supabase (and migrate local bets first)
   const loadBets = async () => {
     if (!user) return;
     setLoading(true);
     try {
+      // First, migrate any local bets that aren't in Supabase yet
+      const migrated = await migrateLocalBetsToSupabase(localBets, user.id);
+      if (migrated > 0) {
+        console.log(`Migrated ${migrated} local bets to Supabase`);
+      }
+
+      // Then load all bets from Supabase
       const bets = await getUserBets(user.id);
       setSupabaseBets(bets);
     } catch (err) {

@@ -231,3 +231,56 @@ export async function getUserPendingBets(userId: string): Promise<Bet[]> {
     return [];
   }
 }
+
+// Migrate local bets to Supabase (for old bets before Supabase integration)
+// This should be called when a user loads their bets
+export async function migrateLocalBetsToSupabase(localBets: Bet[], userId: string): Promise<number> {
+  if (!localBets || localBets.length === 0) return 0;
+
+  // Filter bets for this user
+  const userBets = localBets.filter(b => b.userId === userId);
+  if (userBets.length === 0) return 0;
+
+  try {
+    // Get existing bet IDs from Supabase
+    const { data: existingBets, error: fetchError } = await supabase
+      .from('bets')
+      .select('id')
+      .eq('user_id', userId);
+
+    if (fetchError) {
+      console.error('Error fetching existing bets:', fetchError);
+      return 0;
+    }
+
+    const existingIds = new Set((existingBets || []).map(b => b.id));
+
+    // Find bets that don't exist in Supabase
+    const betsToMigrate = userBets.filter(b => !existingIds.has(b.id));
+
+    if (betsToMigrate.length === 0) {
+      console.log('No bets to migrate');
+      return 0;
+    }
+
+    console.log(`Migrating ${betsToMigrate.length} local bets to Supabase...`);
+
+    // Convert to Supabase format and insert
+    const supabaseBets = betsToMigrate.map(localBetToSupabase);
+
+    const { error: insertError } = await supabase
+      .from('bets')
+      .upsert(supabaseBets, { onConflict: 'id' });
+
+    if (insertError) {
+      console.error('Error migrating bets:', insertError);
+      return 0;
+    }
+
+    console.log(`Successfully migrated ${betsToMigrate.length} bets to Supabase`);
+    return betsToMigrate.length;
+  } catch (err) {
+    console.error('Error in migrateLocalBetsToSupabase:', err);
+    return 0;
+  }
+}
