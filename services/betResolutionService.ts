@@ -34,8 +34,6 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
       return stats.firstBloodVictim ? '🩸 First Blood victime' : '✓ Pas First Blood victime';
     case 'early5': // First Blood kill
       return stats.firstBloodKill ? '🗡️ First Blood kill' : '✗ Pas First Blood';
-    case 'early2': // 3 morts ou plus
-      return `${stats.deaths} morts`;
     case 'early3': // 5 morts ou plus
       return `${stats.deaths} morts`;
     case 'early4': // 0 mort toute la game
@@ -122,9 +120,6 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
 
     case 'early5': // First Blood kill
       return stats.firstBloodKill === true;
-
-    case 'early2': // 3 morts ou plus
-      return stats.deaths >= 3;
 
     case 'early3': // 5 morts ou plus
       return stats.deaths >= 5;

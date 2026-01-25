@@ -16,14 +16,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'early5',
     title: "First Blood kill",
     description: "Johnny fait le premier kill de la game.",
-    odds: 12.0, // Très improbable
-    category: 'EARLY'
-  },
-  {
-    id: 'early2',
-    title: "3 morts ou plus",
-    description: "Johnny meurt au moins 3 fois dans la game.",
-    odds: 1.6,
+    odds: 25.0, // Très improbable
     category: 'EARLY'
   },
   {
@@ -37,7 +30,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'early4',
     title: "0 mort toute la game",
     description: "Johnny ne meurt pas une seule fois.",
-    odds: 4.5, // Rare
+    odds: 9.0, // Très rare
     category: 'EARLY'
   },
 
@@ -46,7 +39,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'kda1',
     title: "Le 0/10 Powerspike",
     description: "Johnny termine avec 10 morts ou plus.",
-    odds: 1.5, // Classique
+    odds: 1.3, // Classique
     category: 'KDA'
   },
   {
@@ -88,7 +81,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'kda7',
     title: "Double kill ou plus",
     description: "Johnny fait un double kill.",
-    odds: 8.0, // Très rare
+    odds: 15.0, // Très rare
     category: 'KDA'
   },
 
@@ -111,14 +104,14 @@ export const MOCK_PROPS: Prop[] = [
     id: 'gp3',
     title: "Vision < 5",
     description: "Vision score inférieur à 5.",
-    odds: 2.5,
+    odds: 2.0,
     category: 'GAMEPLAY'
   },
   {
     id: 'gp4',
     title: "Moins de 8k dégâts",
     description: "Moins de 8000 dégâts aux champions.",
-    odds: 2.2,
+    odds: 1.7,
     category: 'GAMEPLAY'
   },
   {
@@ -171,21 +164,21 @@ export const MOCK_PROPS: Prop[] = [
     id: 'sp1',
     title: "Le Perfect Int",
     description: "10+ morts, 0 kill, défaite.",
-    odds: 2.0,
+    odds: 5.0,
     category: 'KDA'
   },
   {
     id: 'sp2',
     title: "Le Miracle KDA",
     description: "Johnny termine avec un KDA > 3.0.",
-    odds: 15.0, // Légendaire
+    odds: 20.0, // Légendaire
     category: 'LATE'
   },
   {
     id: 'sp3',
     title: "Le Carry Mystique",
     description: "Johnny top damage de son équipe.",
-    odds: 25.0, // Mythique
+    odds: 35.0, // Mythique
     category: 'LATE'
   },
   {
@@ -199,7 +192,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'sp5',
     title: "L'Invisible",
     description: "Moins de 5k dégâts + moins de 10% KP.",
-    odds: 4.0,
+    odds: 9.0,
     category: 'GAMEPLAY'
   },
   {
