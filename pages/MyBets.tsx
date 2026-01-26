@@ -5,8 +5,9 @@ import { getUserBets } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
 import {
   Filter, TrendingDown, TrendingUp, Wallet, ChevronDown, ChevronUp,
-  Swords, Clock, Trophy, Skull, ArrowUpDown, Calendar, Coins, Layers, Loader2, RefreshCw
+  Swords, Clock, Trophy, Skull, ArrowUpDown, Calendar, Coins, Layers, Loader2, RefreshCw, Share2
 } from 'lucide-react';
+import ShareableBetCard from '../components/ShareableBetCard';
 
 interface GameGroup {
   matchId: string;
@@ -31,6 +32,7 @@ const MyBets = () => {
   // Supabase bets state
   const [supabaseBets, setSupabaseBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [shareBet, setShareBet] = useState<Bet | null>(null);
 
   // Load bets from Supabase
   const loadBets = async () => {
@@ -440,14 +442,32 @@ const MyBets = () => {
                           </div>
                         </div>
 
-                        {/* Stat qui a résolu le pari */}
-                        {bet.resolvedStat && bet.status !== BetStatus.PENDING && (
-                          <div className={`text-xs px-2 py-1.5 rounded-md ${
-                            bet.status === BetStatus.WON
-                              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                              : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                          }`}>
-                            📊 {bet.resolvedStat}
+                        {/* Stat qui a résolu le pari + Share button */}
+                        {bet.status !== BetStatus.PENDING && (
+                          <div className="flex items-center gap-2">
+                            {bet.resolvedStat && (
+                              <div className={`flex-1 text-xs px-2 py-1.5 rounded-md ${
+                                bet.status === BetStatus.WON
+                                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                              }`}>
+                                📊 {bet.resolvedStat}
+                              </div>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShareBet(bet);
+                              }}
+                              className={`px-2 py-1.5 rounded-md text-xs font-medium flex items-center gap-1 transition-colors ${
+                                bet.status === BetStatus.WON
+                                  ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                                  : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                              }`}
+                            >
+                              <Share2 className="w-3 h-3" />
+                              <span className="hidden sm:inline">Partager</span>
+                            </button>
                           </div>
                         )}
                       </div>
@@ -459,6 +479,14 @@ const MyBets = () => {
           })
         )}
       </div>
+
+      {/* Share Modal */}
+      {shareBet && (
+        <ShareableBetCard
+          bet={shareBet}
+          onClose={() => setShareBet(null)}
+        />
+      )}
     </div>
   );
 };
