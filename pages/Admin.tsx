@@ -256,8 +256,14 @@ const Admin = () => {
         return;
       }
 
+      // Only update stats for:
+      // - Single bets (no comboId)
+      // - Main bet of a combo (amount > 0)
+      // This prevents counting each leg of a combo as a separate bet in stats
+      const isMainBet = !bet.comboId || bet.amount > 0;
+
       // Update user's credits in Supabase
-      if (bet.userId) {
+      if (bet.userId && isMainBet) {
         if (won) {
           // Add winnings to user's credits
           const { error: creditError } = await supabase
