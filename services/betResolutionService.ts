@@ -58,9 +58,11 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte
       return `${csPerMin.toFixed(1)} CS/min`;
-    case 'gp2': // 0 Vision Score
+    case 'gp7': // CS > 6.5/min
+      return `${csPerMin.toFixed(1)} CS/min`;
+    case 'gp2': // 0 Vision Score (legacy)
       return `Vision: ${stats.visionScore}`;
-    case 'gp3': // Vision < 5
+    case 'gp3': // Vision < 5 (legacy)
       return `Vision: ${stats.visionScore}`;
     case 'gp4': // Moins de 8k dégâts
       return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dégâts`;
@@ -153,10 +155,13 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'gp1': // CS de la honte (<4/min)
       return csPerMin < 4;
 
-    case 'gp2': // 0 Vision Score
+    case 'gp7': // CS > 6.5/min
+      return csPerMin > 6.5;
+
+    case 'gp2': // 0 Vision Score (legacy)
       return stats.visionScore === 0;
 
-    case 'gp3': // Vision < 5
+    case 'gp3': // Vision < 5 (legacy)
       return stats.visionScore < 5;
 
     case 'gp4': // Moins de 8k dégâts

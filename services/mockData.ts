@@ -4,202 +4,176 @@ import { Prop, MatchHistoryItem } from '../types';
 // Les cotes sont ajustées pour être drôles et réalistes selon le niveau de Johnny
 
 export const MOCK_PROPS: Prop[] = [
-  // ========== PARIS EARLY GAME ==========
+  // ========== LOW RISK ==========
   {
-    id: 'early1',
-    title: "First Blood victime",
-    description: "Johnny est la première victime de la game.",
-    odds: 1.4, // Très probable
-    category: 'EARLY'
-  },
-  {
-    id: 'early5',
-    title: "First Blood kill",
-    description: "Johnny fait le premier kill de la game.",
-    odds: 25.0, // Très improbable
-    category: 'EARLY'
+    id: 'out2',
+    title: "Défaite",
+    description: "Johnny perd la game.",
+    odds: 1.7,
+    category: 'LATE'
   },
   {
     id: 'early3',
     title: "5 morts ou plus",
-    description: "Johnny meurt au moins 5 fois. Le speedrun.",
-    odds: 1.9,
+    description: "Johnny meurt au moins 5 fois.",
+    odds: 1.8,
     category: 'EARLY'
   },
   {
-    id: 'early4',
-    title: "0 mort toute la game",
-    description: "Johnny ne meurt pas une seule fois.",
-    odds: 9.0, // Très rare
-    category: 'EARLY'
+    id: 'gp1',
+    title: "CS de la honte (<4/min)",
+    description: "Moins de 4 CS par minute.",
+    odds: 1.7,
+    category: 'GAMEPLAY'
   },
 
-  // ========== PARIS KDA ==========
+  // ========== MEDIUM RISK ==========
   {
-    id: 'kda1',
-    title: "Le 0/10 Powerspike",
-    description: "Johnny termine avec 10 morts ou plus.",
-    odds: 1.3, // Classique
-    category: 'KDA'
+    id: 'gp7',
+    title: "CS > 6.5/min",
+    description: "Plus de 6.5 CS par minute. Miracle agricole.",
+    odds: 3.0,
+    category: 'GAMEPLAY'
   },
   {
-    id: 'kda2',
-    title: "Le 0/15 Légendaire",
-    description: "15 morts ou plus. Record en vue.",
+    id: 'kda1',
+    title: "10 morts ou plus",
+    description: "Johnny termine avec 10 morts ou plus.",
     odds: 2.8,
     category: 'KDA'
   },
   {
     id: 'kda3',
     title: "KDA < 0.5",
-    description: "Ratio (K+A)/D inférieur à 0.5. Vraiment nul.",
-    odds: 1.7,
+    description: "Ratio (K+A)/D inférieur à 0.5.",
+    odds: 3.0,
     category: 'KDA'
-  },
-  {
-    id: 'kda4',
-    title: "0 Kill toute la game",
-    description: "Johnny termine sans aucun kill.",
-    odds: 2.2,
-    category: 'KDA'
-  },
-  {
-    id: 'kda5',
-    title: "Johnny fait un kill",
-    description: "Au moins 1 kill. Incroyable si ça arrive.",
-    odds: 1.3,
-    category: 'KDA'
-  },
-  {
-    id: 'kda6',
-    title: "KDA positif (≥1.0)",
-    description: "Plus de participation que de morts.",
-    odds: 3.5,
-    category: 'KDA'
-  },
-  {
-    id: 'kda7',
-    title: "Double kill ou plus",
-    description: "Johnny fait un double kill.",
-    odds: 15.0, // Très rare
-    category: 'KDA'
-  },
-
-  // ========== PARIS GAMEPLAY ==========
-  {
-    id: 'gp1',
-    title: "CS de la honte (<4/min)",
-    description: "Moins de 4 CS/min. Même un support fait mieux.",
-    odds: 1.8,
-    category: 'GAMEPLAY'
-  },
-  {
-    id: 'gp2',
-    title: "0 Vision Score",
-    description: "Aucune ward de toute la game.",
-    odds: 5.0,
-    category: 'GAMEPLAY'
-  },
-  {
-    id: 'gp3',
-    title: "Vision < 5",
-    description: "Vision score inférieur à 5.",
-    odds: 2.0,
-    category: 'GAMEPLAY'
   },
   {
     id: 'gp4',
     title: "Moins de 8k dégâts",
     description: "Moins de 8000 dégâts aux champions.",
-    odds: 1.7,
-    category: 'GAMEPLAY'
-  },
-  {
-    id: 'gp5',
-    title: "Moins d'or que le support",
-    description: "Johnny a moins d'or que le support allié.",
-    odds: 3.2,
+    odds: 2.0,
     category: 'GAMEPLAY'
   },
   {
     id: 'gp6',
     title: "Participation < 15%",
     description: "Participe à moins de 15% des kills.",
-    odds: 2.0,
+    odds: 2.5,
     category: 'GAMEPLAY'
   },
+  {
+    id: 'early1',
+    title: "First Blood victime",
+    description: "Johnny donne le first blood.",
+    odds: 2.5,
+    category: 'EARLY'
+  },
 
-  // ========== PARIS RÉSULTAT ==========
+  // ========== HIGH RISK ==========
+  {
+    id: 'kda4',
+    title: "0 Kill toute la game",
+    description: "Johnny termine sans aucun kill.",
+    odds: 4.0,
+    category: 'KDA'
+  },
   {
     id: 'out1',
     title: "FF avant 20 min",
     description: "Surrender avant 20 minutes.",
-    odds: 2.5,
+    odds: 3.5,
     category: 'LATE'
   },
   {
-    id: 'out2',
-    title: "Défaite",
-    description: "Johnny perd. Le classique.",
-    odds: 1.2, // Très probable
-    category: 'LATE'
-  },
-  {
-    id: 'out3',
-    title: "VICTOIRE",
-    description: "Johnny GAGNE. Miraculeux.",
+    id: 'gp5',
+    title: "Moins d'or que le support",
+    description: "Johnny finit avec moins d'or que le support allié.",
     odds: 4.0,
-    category: 'LATE'
-  },
-  {
-    id: 'out4',
-    title: "Game > 40 min",
-    description: "La torture dure plus de 40 minutes.",
-    odds: 3.0,
-    category: 'LATE'
+    category: 'GAMEPLAY'
   },
 
-  // ========== PARIS LÉGENDAIRES ==========
+  // ========== LEGENDARY / THROW ==========
+  {
+    id: 'kda2',
+    title: "Le 0/15 Légendaire",
+    description: "15 morts ou plus.",
+    odds: 5.0,
+    category: 'KDA'
+  },
   {
     id: 'sp1',
     title: "Le Perfect Int",
     description: "10+ morts, 0 kill, défaite.",
-    odds: 5.0,
+    odds: 7.0,
     category: 'KDA'
+  },
+  {
+    id: 'sp5',
+    title: "L'Invisible",
+    description: "Moins de 5000 dégâts + moins de 10% KP.",
+    odds: 10.0,
+    category: 'GAMEPLAY'
+  },
+
+  // ========== MIRACLES ==========
+  {
+    id: 'kda6',
+    title: "KDA positif (≥1.0)",
+    description: "Plus de participation que de morts.",
+    odds: 1.6,
+    category: 'KDA'
+  },
+  {
+    id: 'out3',
+    title: "VICTOIRE",
+    description: "Johnny gagne.",
+    odds: 1.6,
+    category: 'LATE'
+  },
+  {
+    id: 'sp4',
+    title: "Victoire + KDA > 2",
+    description: "Johnny gagne ET joue très bien.",
+    odds: 6.0,
+    category: 'LATE'
+  },
+
+  // ========== LÉGENDES ABSOLUES ==========
+  {
+    id: 'kda7',
+    title: "Double kill ou plus",
+    description: "Johnny fait un double kill.",
+    odds: 12.0,
+    category: 'KDA'
+  },
+  {
+    id: 'early5',
+    title: "First Blood kill",
+    description: "Johnny fait le premier kill de la game.",
+    odds: 20.0,
+    category: 'EARLY'
   },
   {
     id: 'sp2',
     title: "Le Miracle KDA",
     description: "Johnny termine avec un KDA > 3.0.",
-    odds: 20.0, // Légendaire
+    odds: 20.0,
     category: 'LATE'
   },
   {
     id: 'sp3',
     title: "Le Carry Mystique",
     description: "Johnny top damage de son équipe.",
-    odds: 35.0, // Mythique
+    odds: 35.0,
     category: 'LATE'
-  },
-  {
-    id: 'sp4',
-    title: "Victoire + KDA > 2",
-    description: "Johnny gagne ET joue bien.",
-    odds: 12.0,
-    category: 'LATE'
-  },
-  {
-    id: 'sp5',
-    title: "L'Invisible",
-    description: "Moins de 5k dégâts + moins de 10% KP.",
-    odds: 9.0,
-    category: 'GAMEPLAY'
   },
   {
     id: 'sp6',
     title: "Le Pentakill",
     description: "Johnny fait un pentakill.",
-    odds: 100.0, // Impossible
+    odds: 100.0,
     category: 'LATE'
   }
 ];

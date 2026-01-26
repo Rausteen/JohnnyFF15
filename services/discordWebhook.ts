@@ -86,7 +86,7 @@ export async function sendDiscordNotification(message: DiscordMessage): Promise<
 
 // Send a test notification
 export async function sendTestNotification(championName: string = 'Yasuo', gameMode: string = 'Ranked Solo/Duo'): Promise<boolean> {
-  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.com';
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
 
   return sendDiscordNotification({
     content: '🧪 **TEST** - Ceci est un message de test',
@@ -134,7 +134,7 @@ export async function notifyGameStarted(gameId: number, gameMode: string, champi
   }
   lastNotifiedGameId = gameId;
 
-  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.com';
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
 
   return sendDiscordNotification({
     content: '@everyone',
@@ -176,7 +176,7 @@ export async function notifyGameStarted(gameId: number, gameMode: string, champi
 }
 
 export async function notifyBettingClosed(gameId: number): Promise<boolean> {
-  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.com';
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
 
   return sendDiscordNotification({
     embeds: [{
@@ -191,7 +191,7 @@ export async function notifyBettingClosed(gameId: number): Promise<boolean> {
 }
 
 export async function notifyGameEnded(won: boolean, kills: number, deaths: number, assists: number, championName: string): Promise<boolean> {
-  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.com';
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
 
   return sendDiscordNotification({
     embeds: [{
