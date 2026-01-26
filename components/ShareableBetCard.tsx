@@ -79,8 +79,8 @@ const ShareableBetCard: React.FC<ShareableBetCardProps> = ({ gameData, onClose }
     }
   };
 
-  // Get unique bets (for combos, only show unique props)
-  const displayBets = gameData.bets.filter(bet => !bet.comboId || bet.comboIndex === 1 || bet.amount > 0);
+  // Show all bets (including all combo legs)
+  const displayBets = gameData.bets;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
@@ -124,7 +124,7 @@ const ShareableBetCard: React.FC<ShareableBetCardProps> = ({ gameData, onClose }
                     {getStatusText()}
                   </div>
                   <div className="text-zinc-500 text-xs">
-                    {gameData.bets.length} pari{gameData.bets.length > 1 ? 's' : ''} • {gameData.championName}
+                    {gameData.bets.length} pari{gameData.bets.length > 1 ? 's' : ''} • Johnny sur {gameData.championName}
                   </div>
                 </div>
               </div>
