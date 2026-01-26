@@ -563,21 +563,44 @@ function handleGameEnd(previousGameId: string) {
     if (!johnny.puuid) return;
 
     console.log('Fetching last match for bet resolution...');
+    console.log('Expected match ID:', previousGameId);
 
-    // Try to fetch the match data, retry once if not found
+    // Try to fetch the match data with retries
     let lastMatch = await riotApi.getLastMatch(johnny.puuid);
+    let retryCount = 0;
+    const maxRetries = 4;
+    const retryDelays = [30000, 60000, 60000, 60000]; // 30s, 60s, 60s, 60s
 
+    // Keep retrying until we get the correct match or run out of retries
+    while (lastMatch && lastMatch.metadata.matchId !== previousGameId && retryCount < maxRetries) {
+      console.log(`Match found (${lastMatch.metadata.matchId}) doesn't match expected (${previousGameId})`);
+      console.log(`Retrying in ${retryDelays[retryCount] / 1000}s... (attempt ${retryCount + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, retryDelays[retryCount]));
+      lastMatch = await riotApi.getLastMatch(johnny.puuid);
+      retryCount++;
+    }
+
+    // Also handle case where no match was found initially
     if (!lastMatch) {
-      console.log('Match not found yet, retrying in 30 seconds...');
+      console.log('No match found yet, retrying in 30 seconds...');
       await new Promise(resolve => setTimeout(resolve, 30000));
       lastMatch = await riotApi.getLastMatch(johnny.puuid);
     }
 
     if (lastMatch) {
+      // CRITICAL: Verify the match ID matches before resolving bets
+      if (lastMatch.metadata.matchId !== previousGameId) {
+        console.error(`MATCH ID MISMATCH! Expected: ${previousGameId}, Got: ${lastMatch.metadata.matchId}`);
+        console.error('NOT resolving bets to prevent wrong resolution. Bets will stay pending.');
+        // Clear game ID to avoid blocking future games
+        useGameStore.setState({ currentGameId: null });
+        return;
+      }
+
       const stats = riotApi.getPlayerStatsFromMatch(lastMatch, johnny.puuid);
       useGameStore.setState({ lastMatch, lastMatchStats: stats });
 
-      console.log('Match found:', lastMatch.metadata.matchId);
+      console.log('Match found and VERIFIED:', lastMatch.metadata.matchId);
       console.log('Johnny stats:', stats?.kills, '/', stats?.deaths, '/', stats?.assists);
 
       // Send Discord notification for game end
@@ -591,9 +614,9 @@ function handleGameEnd(previousGameId: string) {
         ).catch(err => console.error('Discord end notification error:', err));
       }
 
-      // Resolve bets based on actual match data
-      console.log('Resolving all pending bets...');
-      const results = await resolveBets(lastMatch, johnny.puuid);
+      // Resolve bets based on actual match data (only for this specific match)
+      console.log('Resolving pending bets for match:', previousGameId);
+      const results = await resolveBets(lastMatch, johnny.puuid, previousGameId);
       console.log('Bet resolution complete:', results.length, 'bets resolved');
 
       if (results.length > 0) {
@@ -615,7 +638,7 @@ function handleGameEnd(previousGameId: string) {
         console.log('Match not saved to museum (might already exist)');
       }
     } else {
-      console.error('Could not fetch match data after retry');
+      console.error('Could not fetch match data after retries');
       // Clear game ID anyway to avoid blocking future games
       useGameStore.setState({ currentGameId: null });
     }

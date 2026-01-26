@@ -288,8 +288,9 @@ async function updateUserCreditsDirect(userId: string, won: boolean, amount: num
 }
 
 // Resolve all pending bets for a specific match
-// This function resolves ALL pending bets from ALL users in Supabase
-export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Promise<BetResolutionResult[]> {
+// This function resolves pending bets from ALL users in Supabase
+// If expectedMatchId is provided, only bets for that match are resolved
+export async function resolveBets(matchData: MatchDto, johnnyPuuid: string, expectedMatchId?: string): Promise<BetResolutionResult[]> {
   const results: BetResolutionResult[] = [];
   const matchId = matchData.metadata.matchId;
 
@@ -301,15 +302,27 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string): Pro
   }
 
   // Get ALL pending bets from Supabase (all users)
-  const pendingBets = await getAllPendingBets();
+  let pendingBets = await getAllPendingBets();
 
   if (pendingBets.length === 0) {
     console.log('No pending bets to resolve');
     return results;
   }
 
+  // Filter bets by matchId if expectedMatchId is provided
+  if (expectedMatchId) {
+    const totalBets = pendingBets.length;
+    pendingBets = pendingBets.filter(bet => bet.matchId === expectedMatchId);
+    console.log(`Filtered bets by matchId ${expectedMatchId}: ${pendingBets.length}/${totalBets} bets match`);
+
+    if (pendingBets.length === 0) {
+      console.log('No bets found for this specific match');
+      return results;
+    }
+  }
+
   console.log(`Match data: ${matchId}, Johnny KDA: ${johnnyStats.kills}/${johnnyStats.deaths}/${johnnyStats.assists}`);
-  console.log(`Resolving ${pendingBets.length} pending bets for all users...`);
+  console.log(`Resolving ${pendingBets.length} pending bets...`);
 
   // Separate single bets from combo bets
   const singleBets = pendingBets.filter(b => !b.comboId);
