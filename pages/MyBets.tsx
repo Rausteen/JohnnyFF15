@@ -7,7 +7,7 @@ import {
   Filter, TrendingDown, TrendingUp, Wallet, ChevronDown, ChevronUp,
   Swords, Clock, Trophy, Skull, ArrowUpDown, Calendar, Coins, Layers, Loader2, RefreshCw, Share2
 } from 'lucide-react';
-import ShareableBetCard from '../components/ShareableBetCard';
+import ShareableBetCard, { GameShareData } from '../components/ShareableBetCard';
 
 interface GameGroup {
   matchId: string;
@@ -19,6 +19,16 @@ interface GameGroup {
   status: 'pending' | 'won' | 'lost' | 'mixed';
   hasCombo: boolean;
 }
+
+// Helper to convert GameGroup to GameShareData
+const toShareData = (group: GameGroup): GameShareData => ({
+  matchId: group.matchId,
+  championName: group.championName,
+  bets: group.bets,
+  totalWagered: group.totalWagered,
+  netResult: group.netResult,
+  status: group.status,
+});
 
 type SortOption = 'date' | 'amount' | 'result';
 
@@ -32,7 +42,7 @@ const MyBets = () => {
   // Supabase bets state
   const [supabaseBets, setSupabaseBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
-  const [shareBet, setShareBet] = useState<Bet | null>(null);
+  const [shareGame, setShareGame] = useState<GameShareData | null>(null);
 
   // Load bets from Supabase
   const loadBets = async () => {
@@ -365,7 +375,7 @@ const MyBets = () => {
                     </div>
                   </div>
 
-                  {/* Result & Expand */}
+                  {/* Result & Actions */}
                   <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                     <div className="text-right">
                       <div className={`font-mono font-bold text-sm sm:text-lg ${
@@ -382,6 +392,25 @@ const MyBets = () => {
                          'Mixte'}
                       </div>
                     </div>
+                    {/* Share button for resolved games */}
+                    {group.status !== 'pending' && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShareGame(toShareData(group));
+                        }}
+                        className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center transition-colors ${
+                          group.status === 'won'
+                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            : group.status === 'lost'
+                            ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                            : 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
+                        }`}
+                        title="Partager"
+                      >
+                        <Share2 className="w-4 h-4" />
+                      </button>
+                    )}
                     <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-black/20 flex items-center justify-center">
                       {isExpanded ? (
                         <ChevronUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -442,32 +471,14 @@ const MyBets = () => {
                           </div>
                         </div>
 
-                        {/* Stat qui a résolu le pari + Share button */}
-                        {bet.status !== BetStatus.PENDING && (
-                          <div className="flex items-center gap-2">
-                            {bet.resolvedStat && (
-                              <div className={`flex-1 text-xs px-2 py-1.5 rounded-md ${
-                                bet.status === BetStatus.WON
-                                  ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                                  : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                              }`}>
-                                📊 {bet.resolvedStat}
-                              </div>
-                            )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShareBet(bet);
-                              }}
-                              className={`px-2 py-1.5 rounded-md text-xs font-medium flex items-center gap-1 transition-colors ${
-                                bet.status === BetStatus.WON
-                                  ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                                  : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                              }`}
-                            >
-                              <Share2 className="w-3 h-3" />
-                              <span className="hidden sm:inline">Partager</span>
-                            </button>
+                        {/* Stat qui a résolu le pari */}
+                        {bet.status !== BetStatus.PENDING && bet.resolvedStat && (
+                          <div className={`text-xs px-2 py-1.5 rounded-md ${
+                            bet.status === BetStatus.WON
+                              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                              : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          }`}>
+                            📊 {bet.resolvedStat}
                           </div>
                         )}
                       </div>
@@ -481,10 +492,10 @@ const MyBets = () => {
       </div>
 
       {/* Share Modal */}
-      {shareBet && (
+      {shareGame && (
         <ShareableBetCard
-          bet={shareBet}
-          onClose={() => setShareBet(null)}
+          gameData={shareGame}
+          onClose={() => setShareGame(null)}
         />
       )}
     </div>
