@@ -7,24 +7,30 @@ import { getChampionName, getQueueName } from '../services/riotApi';
 
 const Landing = () => {
   const { user } = useAuthStore();
-  const { johnny, isInGame, currentGame, isPolling, loadJohnnyConfig, startPolling } = useGameStore();
+  const { trackedPlayers, playerStates, isPolling, loadTrackedPlayers, startPolling, isAnyPlayerInGame, getPlayersInGame } = useGameStore();
 
   // Load config and start polling on mount
   useEffect(() => {
     const init = async () => {
-      await loadJohnnyConfig();
+      await loadTrackedPlayers();
     };
     init();
   }, []);
 
   useEffect(() => {
-    if (johnny.puuid && !isPolling) {
+    if (trackedPlayers.length > 0 && !isPolling) {
       startPolling(30000);
     }
-  }, [johnny.puuid, isPolling]);
+  }, [trackedPlayers.length, isPolling]);
 
-  // Find Johnny in the current game
-  const johnnyInGame = currentGame?.participants.find(p => p.puuid === johnny.puuid);
+  // Get players currently in game
+  const playersInGameStates = getPlayersInGame();
+  const firstPlayerInGame = playersInGameStates[0];
+  const currentGame = firstPlayerInGame?.currentGame;
+  const isInGame = isAnyPlayerInGame();
+
+  // Find player info in the current game
+  const playerInGame = firstPlayerInGame && currentGame?.participants.find(p => p.puuid === firstPlayerInGame.player.puuid);
   const gameTimeMinutes = currentGame ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60) : 0;
 
   return (
@@ -42,11 +48,15 @@ const Landing = () => {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-green-400 font-black text-lg">JOHNNY EST EN GAME !</span>
+                    <span className="text-green-400 font-black text-lg">
+                      {playersInGameStates.length === 1
+                        ? `${firstPlayerInGame.player.displayName} EST EN GAME !`
+                        : `${playersInGameStates.length} JOUEURS EN GAME !`}
+                    </span>
                     <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full animate-pulse">LIVE</span>
                   </div>
                   <div className="text-green-300/70 text-sm">
-                    {johnnyInGame && getChampionName(johnnyInGame.championId)} • {getQueueName(currentGame.gameQueueConfigId)} • {gameTimeMinutes} min
+                    {playerInGame && getChampionName(playerInGame.championId)} • {currentGame && getQueueName(currentGame.gameQueueConfigId)} • {gameTimeMinutes} min
                   </div>
                 </div>
               </div>
@@ -128,11 +138,11 @@ const Landing = () => {
           <div className="flex items-center justify-center lg:justify-start gap-6 text-sm text-zinc-500 font-mono pt-4">
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full animate-pulse ${isPolling ? 'bg-green-500' : 'bg-zinc-500'}`}></div>
-              {isPolling ? 'Surveillance Active' : 'Surveillance Off'}
+              {isPolling ? `Surveillance: ${trackedPlayers.length} joueur(s)` : 'Surveillance Off'}
             </div>
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full animate-pulse ${isInGame ? 'bg-green-500' : 'bg-red-500'}`}></div>
-              {isInGame ? 'Johnny EN GAME' : 'Johnny AFK'}
+              {isInGame ? `${playersInGameStates.length} EN GAME` : 'Hors game'}
             </div>
           </div>
         </div>

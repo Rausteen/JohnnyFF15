@@ -5,16 +5,34 @@ import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useGameStore } from '../services/gameStore';
+import { TrackedPlayer } from '../types';
 
-const ComboBetSlip: React.FC = () => {
+interface ComboBetSlipProps {
+  player?: TrackedPlayer; // The player we're betting on
+}
+
+const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
   const { selections, totalOdds, removeFromCombo, clearCombo } = useComboStore();
   const { placeBet } = useStore();
   const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
-  const { isInGame, currentGameId, testMode, testMatchId, testMatchData, currentGame, johnny } = useGameStore();
+  const {
+    testMode,
+    testMatchId,
+    testMatchData,
+    testPlayer,
+    playerStates,
+    isAnyPlayerInGame
+  } = useGameStore();
+
+  // Use the player prop or fall back to test player
+  const activePlayer = testMode ? testPlayer : player;
+  const playerState = activePlayer?.puuid ? playerStates.get(activePlayer.puuid) : undefined;
+  const currentGame = playerState?.currentGame;
+  const isInGame = testMode ? true : (playerState?.isInGame || false);
 
   // Get the match ID for the current bet
-  const betMatchId = testMode ? testMatchId : currentGameId;
+  const betMatchId = testMode ? testMatchId : playerState?.currentGameId;
 
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +58,7 @@ const ComboBetSlip: React.FC = () => {
       return;
     }
 
-    if (!isInGame) {
+    if (!isInGame || !activePlayer) {
       setError("Aucune game en cours");
       return;
     }
@@ -80,14 +98,14 @@ const ComboBetSlip: React.FC = () => {
 
       // Get champion name from current game or test match
       let championName = 'Inconnu';
-      if (testMode && testMatchData) {
-        const johnnyStats = testMatchData.info.participants.find(p => p.puuid === johnny.puuid);
-        championName = johnnyStats?.championName || 'Inconnu';
-      } else if (currentGame) {
-        const johnnyInGame = currentGame.participants.find(p => p.puuid === johnny.puuid);
-        if (johnnyInGame) {
+      if (testMode && testMatchData && testPlayer) {
+        const playerStats = testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid);
+        championName = playerStats?.championName || 'Inconnu';
+      } else if (currentGame && activePlayer) {
+        const playerInGame = currentGame.participants.find(p => p.puuid === activePlayer.puuid);
+        if (playerInGame) {
           const { getChampionName } = await import('../services/riotApi');
-          championName = getChampionName(johnnyInGame.championId);
+          championName = getChampionName(playerInGame.championId);
         }
       }
 
@@ -103,7 +121,9 @@ const ComboBetSlip: React.FC = () => {
           betMatchId || undefined,
           { comboId, comboIndex: index + 1, comboTotal },
           user.id,
-          championName
+          championName,
+          activePlayer?.puuid,
+          activePlayer?.displayName
         )
       );
 

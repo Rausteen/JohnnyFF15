@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGameStore, JohnnyConfig } from '../services/gameStore';
+import { useGameStore } from '../services/gameStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useMatchHistoryStore } from '../services/matchHistoryStore';
 import { Region, riotApi } from '../services/riotApi';
 import { resolveBets } from '../services/betResolutionService';
 import { getAllPendingBets, updateBetStatus, deleteUserBets } from '../services/betsService';
-import { Bet } from '../types';
+import { Bet, TrackedPlayer } from '../types';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send } from 'lucide-react';
+import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive } from '../services/playersService';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { setWebhookUrl, getStoredWebhookUrl, sendTestNotification } from '../services/discordWebhook';
 
 const REGIONS: { value: Region; label: string }[] = [
@@ -29,31 +30,44 @@ const Admin = () => {
   const { user } = useAuthStore();
   const { profile } = useCreditsStore();
   const {
-    johnny,
-    isInGame,
-    currentGame,
+    trackedPlayers,
+    playerStates,
     isPolling,
     loading,
     error,
     testMode,
     testMatchId,
-    setJohnnyConfig,
-    loadJohnnyConfig,
+    testPlayer,
+    loadTrackedPlayers,
+    addTrackedPlayer,
     startPolling,
     stopPolling,
-    checkGameStatus,
+    checkAllPlayersStatus,
     clearError,
     startTestMode,
-    endTestMode
+    endTestMode,
+    isAnyPlayerInGame,
+    getPlayersInGame
   } = useGameStore();
 
   const { addCredits } = useCreditsStore();
   const { clearAllMatches, matches, loadMatches, syncMatches, syncLastGame, syncing } = useMatchHistoryStore();
 
-  const [gameName, setGameName] = useState('');
-  const [tagLine, setTagLine] = useState('');
-  const [region, setRegion] = useState<Region>('EUW');
-  const [configSuccess, setConfigSuccess] = useState(false);
+  // New player form
+  const [newGameName, setNewGameName] = useState('');
+  const [newTagLine, setNewTagLine] = useState('');
+  const [newRegion, setNewRegion] = useState<Region>('EUW');
+  const [newDisplayName, setNewDisplayName] = useState('');
+  const [addPlayerLoading, setAddPlayerLoading] = useState(false);
+  const [addPlayerResult, setAddPlayerResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Edit player state
+  const [editingPlayer, setEditingPlayer] = useState<TrackedPlayer | null>(null);
+  const [editGameName, setEditGameName] = useState('');
+  const [editTagLine, setEditTagLine] = useState('');
+  const [editRegion, setEditRegion] = useState<Region>('EUW');
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editPlayerLoading, setEditPlayerLoading] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [apiTestLoading, setApiTestLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
@@ -90,6 +104,7 @@ const Admin = () => {
   }, [allPendingBets]);
 
   const [selectedTestMatch, setSelectedTestMatch] = useState<string>('');
+  const [selectedTestPlayer, setSelectedTestPlayer] = useState<string>('');
   const [testModeLoading, setTestModeLoading] = useState(false);
   const [testModeResult, setTestModeResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -122,7 +137,7 @@ const Admin = () => {
   const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
 
   useEffect(() => {
-    loadJohnnyConfig();
+    loadTrackedPlayers();
     loadMatches();
     loadAllPendingBets();
     // Load stored webhook URL
@@ -151,26 +166,105 @@ const Admin = () => {
     );
   }
 
-  useEffect(() => {
-    if (johnny.gameName) {
-      setGameName(johnny.gameName);
-      setTagLine(johnny.tagLine);
-      setRegion(johnny.region);
-    }
-  }, [johnny]);
-
-  const handleSaveConfig = async () => {
-    setConfigSuccess(false);
-    clearError();
-
-    if (!gameName || !tagLine) {
+  // Handler to add a new tracked player
+  const handleAddPlayer = async () => {
+    if (!newGameName || !newTagLine || !newDisplayName) {
+      setAddPlayerResult({ success: false, message: 'Remplis tous les champs' });
       return;
     }
 
-    const success = await setJohnnyConfig(gameName, tagLine, region);
+    setAddPlayerLoading(true);
+    setAddPlayerResult(null);
+
+    try {
+      // Use the store's addTrackedPlayer which handles PUUID fetching
+      const success = await addTrackedPlayer(newGameName, newTagLine, newRegion, newDisplayName);
+
+      if (success) {
+        setAddPlayerResult({ success: true, message: `${newDisplayName} ajouté avec succès !` });
+        setNewGameName('');
+        setNewTagLine('');
+        setNewDisplayName('');
+        setNewRegion('EUW');
+      } else {
+        setAddPlayerResult({ success: false, message: error || 'Erreur lors de l\'ajout' });
+      }
+    } catch (err: any) {
+      console.error('Error adding player:', err);
+      setAddPlayerResult({ success: false, message: err.message || 'Erreur inconnue' });
+    } finally {
+      setAddPlayerLoading(false);
+      setTimeout(() => setAddPlayerResult(null), 5000);
+    }
+  };
+
+  // Handler to start editing a player
+  const handleStartEdit = (player: TrackedPlayer) => {
+    setEditingPlayer(player);
+    setEditGameName(player.gameName);
+    setEditTagLine(player.tagLine);
+    setEditRegion(player.region as Region);
+    setEditDisplayName(player.displayName);
+  };
+
+  // Handler to save player edits
+  const handleSaveEdit = async () => {
+    if (!editingPlayer) return;
+
+    setEditPlayerLoading(true);
+
+    try {
+      // If gameName or tagLine changed, get new PUUID
+      let puuid = editingPlayer.puuid;
+      if (editGameName !== editingPlayer.gameName || editTagLine !== editingPlayer.tagLine) {
+        riotApi.setRegion(editRegion);
+        const account = await riotApi.getAccountByRiotId(editGameName, editTagLine);
+        if (!account) {
+          setAddPlayerResult({ success: false, message: 'Joueur non trouvé sur Riot' });
+          setEditPlayerLoading(false);
+          return;
+        }
+        puuid = account.puuid;
+      }
+
+      const success = await updateTrackedPlayer(editingPlayer.id, {
+        gameName: editGameName,
+        tagLine: editTagLine,
+        puuid,
+        region: editRegion,
+        displayName: editDisplayName
+      });
+
+      if (success) {
+        await loadTrackedPlayers();
+        setEditingPlayer(null);
+      }
+    } catch (err: any) {
+      console.error('Error updating player:', err);
+    } finally {
+      setEditPlayerLoading(false);
+    }
+  };
+
+  // Handler to toggle player active status
+  const handleToggleActive = async (player: TrackedPlayer) => {
+    const success = await togglePlayerActive(player.id, !player.isActive);
     if (success) {
-      setConfigSuccess(true);
-      setTimeout(() => setConfigSuccess(false), 3000);
+      await loadTrackedPlayers();
+    }
+  };
+
+  // Handler to delete a player
+  const handleDeletePlayer = async (player: TrackedPlayer) => {
+    if (!confirm(`Supprimer ${player.displayName} de la liste de surveillance ?`)) {
+      return;
+    }
+
+    const success = await deleteTrackedPlayer(player.id);
+    if (success) {
+      await loadTrackedPlayers();
+    } else {
+      console.error('Failed to delete player');
     }
   };
 
@@ -325,8 +419,8 @@ const Admin = () => {
   };
 
   const handleResolveBets = async () => {
-    if (!johnny.puuid) {
-      setResolveResult({ success: false, message: 'PUUID non configuré' });
+    if (trackedPlayers.length === 0) {
+      setResolveResult({ success: false, message: 'Aucun joueur configuré' });
       return;
     }
 
@@ -339,25 +433,38 @@ const Admin = () => {
     setResolveResult(null);
 
     try {
-      // Get the last match
-      const lastMatch = await riotApi.getLastMatch(johnny.puuid);
+      let totalWon = 0;
+      let totalLost = 0;
+      let totalResolved = 0;
 
-      if (!lastMatch) {
-        setResolveResult({ success: false, message: 'Impossible de récupérer la dernière game' });
-        setResolveLoading(false);
-        return;
+      // Resolve bets for each player
+      for (const player of trackedPlayers) {
+        if (!player.puuid) continue;
+
+        // Get the last match for this player
+        const lastMatch = await riotApi.getLastMatch(player.puuid);
+
+        if (!lastMatch) continue;
+
+        console.log(`Resolving bets for ${player.displayName} with match:`, lastMatch.metadata.matchId);
+        const results = await resolveBets(lastMatch, player.puuid, player.displayName);
+
+        totalWon += results.filter(r => r.won).length;
+        totalLost += results.filter(r => !r.won).length;
+        totalResolved += results.length;
       }
 
-      console.log('Resolving bets with match:', lastMatch.metadata.matchId);
-      const results = await resolveBets(lastMatch, johnny.puuid);
+      if (totalResolved === 0) {
+        setResolveResult({ success: false, message: 'Aucun pari résolu (pas de match récent ou pas de paris correspondants)' });
+      } else {
+        setResolveResult({
+          success: true,
+          message: `${totalResolved} paris résolus: ${totalWon} gagnés, ${totalLost} perdus`
+        });
+      }
 
-      const won = results.filter(r => r.won).length;
-      const lost = results.filter(r => !r.won).length;
-
-      setResolveResult({
-        success: true,
-        message: `${results.length} paris résolus: ${won} gagnés, ${lost} perdus`
-      });
+      // Refresh pending bets list
+      await loadAllPendingBets();
     } catch (err: any) {
       console.error('Resolve bets error:', err);
       setResolveResult({ success: false, message: `Erreur: ${err.message}` });
@@ -373,15 +480,22 @@ const Admin = () => {
       return;
     }
 
+    // Find the player to test with
+    const testPlayerForMode = trackedPlayers.find(p => p.id === selectedTestPlayer) || trackedPlayers[0];
+    if (!testPlayerForMode) {
+      setTestModeResult({ success: false, message: 'Aucun joueur configuré' });
+      return;
+    }
+
     setTestModeLoading(true);
     setTestModeResult(null);
 
-    const success = await startTestMode(selectedTestMatch);
+    const success = await startTestMode(selectedTestMatch, testPlayerForMode);
 
     if (success) {
-      setTestModeResult({ success: true, message: 'Mode test activé ! Va sur le Dashboard pour parier.' });
+      setTestModeResult({ success: true, message: `Mode test activé pour ${testPlayerForMode.displayName} ! Va sur le Dashboard pour parier.` });
     } else {
-      setTestModeResult({ success: false, message: 'Erreur lors du démarrage du mode test' });
+      setTestModeResult({ success: false, message: error || 'Erreur lors du démarrage du mode test' });
     }
 
     setTestModeLoading(false);
@@ -589,27 +703,34 @@ const Admin = () => {
     setApiTestResult(null);
 
     try {
-      if (!johnny.puuid) {
-        setApiTestResult({ success: false, message: 'PUUID non configuré. Sauvegarde Johnny d\'abord.' });
+      if (trackedPlayers.length === 0) {
+        setApiTestResult({ success: false, message: 'Aucun joueur configuré. Ajoute un joueur d\'abord.' });
+        return;
+      }
+
+      // Test with the first active player
+      const testPlayer = trackedPlayers.find(p => p.isActive && p.puuid) || trackedPlayers[0];
+      if (!testPlayer?.puuid) {
+        setApiTestResult({ success: false, message: 'Aucun joueur avec PUUID valide.' });
         return;
       }
 
       // Test 1: Check if we can access spectator API
-      console.log('Testing Riot API with PUUID:', johnny.puuid);
-      const currentGame = await riotApi.getCurrentGame(johnny.puuid);
+      console.log('Testing Riot API with PUUID:', testPlayer.puuid);
+      const currentGame = await riotApi.getCurrentGame(testPlayer.puuid);
 
       if (currentGame) {
         setApiTestResult({
           success: true,
-          message: `API OK! Johnny est EN GAME (Game ID: ${currentGame.gameId})`
+          message: `API OK! ${testPlayer.displayName} est EN GAME (Game ID: ${currentGame.gameId})`
         });
       } else {
         // Try to get match history to verify API is working
-        const matchHistory = await riotApi.getMatchHistory(johnny.puuid, 1);
+        const matchHistory = await riotApi.getMatchHistory(testPlayer.puuid, 1);
         if (matchHistory && matchHistory.length > 0) {
           setApiTestResult({
             success: true,
-            message: `API OK! Johnny n'est pas en game actuellement. Dernière game: ${matchHistory[0]}`
+            message: `API OK! ${testPlayer.displayName} n'est pas en game actuellement. Dernière game: ${matchHistory[0]}`
           });
         } else {
           setApiTestResult({
@@ -629,9 +750,10 @@ const Admin = () => {
     }
   };
 
-  const gameTimeMinutes = currentGame
-    ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
-    : 0;
+  // Get game info for players in game
+  const playersInGameStates = getPlayersInGame();
+  const playersInGame = playersInGameStates.map(s => s.player);
+  const anyPlayerInGame = isAnyPlayerInGame();
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
@@ -647,90 +769,216 @@ const Admin = () => {
         </div>
 
         <div className="space-y-6">
-          {/* Johnny Configuration */}
+          {/* Tracked Players Management */}
           <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
-            <div className="flex items-center gap-3 mb-4">
-              <User className="w-5 h-5 text-primary" />
-              <h3 className="font-bold text-white">Configuration de Johnny</h3>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Users className="w-5 h-5 text-primary" />
+                <h3 className="font-bold text-white">Joueurs Suivis</h3>
+              </div>
+              <span className="text-xs text-zinc-500">{trackedPlayers.length} joueur(s)</span>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-2">Game Name</label>
-                  <input
-                    type="text"
-                    value={gameName}
-                    onChange={(e) => setGameName(e.target.value)}
-                    placeholder="JohnnyFF15"
-                    className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-primary focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-zinc-400 mb-2">Tag Line</label>
-                  <input
-                    type="text"
-                    value={tagLine}
-                    onChange={(e) => setTagLine(e.target.value)}
-                    placeholder="EUW"
-                    className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-primary focus:outline-none"
-                  />
-                </div>
+            {/* Existing players list */}
+            {trackedPlayers.length > 0 ? (
+              <div className="space-y-2 mb-4 max-h-64 overflow-y-auto">
+                {trackedPlayers.map((player) => {
+                  const playerState = player.puuid ? playerStates.get(player.puuid) : undefined;
+                  const isPlayerInGame = playerState?.isInGame || false;
+                  const isEditing = editingPlayer?.id === player.id;
+
+                  if (isEditing) {
+                    return (
+                      <div key={player.id} className="p-3 bg-zinc-800/50 rounded-xl border border-primary/30 space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={editDisplayName}
+                            onChange={(e) => setEditDisplayName(e.target.value)}
+                            placeholder="Pseudo affiché"
+                            className="p-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm focus:border-primary focus:outline-none"
+                          />
+                          <select
+                            value={editRegion}
+                            onChange={(e) => setEditRegion(e.target.value as Region)}
+                            className="p-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm focus:border-primary focus:outline-none"
+                          >
+                            {REGIONS.map((r) => (
+                              <option key={r.value} value={r.value}>{r.value}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={editGameName}
+                            onChange={(e) => setEditGameName(e.target.value)}
+                            placeholder="Game Name"
+                            className="p-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm focus:border-primary focus:outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={editTagLine}
+                            onChange={(e) => setEditTagLine(e.target.value)}
+                            placeholder="Tag"
+                            className="p-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm focus:border-primary focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleSaveEdit}
+                            disabled={editPlayerLoading}
+                            className="flex-1 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-bold flex items-center justify-center gap-1"
+                          >
+                            {editPlayerLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                            Sauver
+                          </button>
+                          <button
+                            onClick={() => setEditingPlayer(null)}
+                            className="flex-1 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                            Annuler
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={player.id} className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
+                      isPlayerInGame
+                        ? 'bg-green-500/10 border-green-500/30'
+                        : player.isActive
+                        ? 'bg-zinc-800/50 border-zinc-700'
+                        : 'bg-zinc-900/50 border-zinc-800 opacity-60'
+                    }`}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-2 h-2 rounded-full ${
+                          isPlayerInGame ? 'bg-green-400 animate-pulse' : player.isActive ? 'bg-zinc-500' : 'bg-zinc-700'
+                        }`} />
+                        <div className="min-w-0">
+                          <div className="font-medium text-white truncate">{player.displayName}</div>
+                          <div className="text-xs text-zinc-500 truncate">{player.gameName}#{player.tagLine} • {player.region}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleToggleActive(player)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            player.isActive
+                              ? 'text-green-400 hover:bg-green-500/20'
+                              : 'text-zinc-500 hover:bg-zinc-700'
+                          }`}
+                          title={player.isActive ? 'Désactiver' : 'Activer'}
+                        >
+                          {player.isActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => handleStartEdit(player)}
+                          className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                          title="Modifier"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeletePlayer(player)}
+                          className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-4 text-zinc-500 text-sm mb-4">
+                Aucun joueur configuré
+              </div>
+            )}
+
+            {/* Add new player form */}
+            <div className="border-t border-zinc-800 pt-4">
+              <div className="flex items-center gap-2 mb-3 text-sm text-zinc-400">
+                <UserPlus className="w-4 h-4" />
+                Ajouter un joueur
               </div>
 
-              <div>
-                <label className="block text-sm text-zinc-400 mb-2">
-                  <Globe className="w-4 h-4 inline mr-1" />
-                  Région
-                </label>
-                <select
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value as Region)}
-                  className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:border-primary focus:outline-none"
-                >
-                  {REGIONS.map((r) => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {error && (
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                  <AlertCircle className="w-4 h-4" />
-                  {error}
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={newDisplayName}
+                    onChange={(e) => setNewDisplayName(e.target.value)}
+                    placeholder="Pseudo affiché (ex: Johnny)"
+                    className="p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-primary focus:outline-none text-sm"
+                  />
+                  <select
+                    value={newRegion}
+                    onChange={(e) => setNewRegion(e.target.value as Region)}
+                    className="p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:border-primary focus:outline-none text-sm"
+                  >
+                    {REGIONS.map((r) => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
 
-              {configSuccess && (
-                <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-sm">
-                  <CheckCircle className="w-4 h-4" />
-                  Johnny configuré ! PUUID récupéré.
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={newGameName}
+                    onChange={(e) => setNewGameName(e.target.value)}
+                    placeholder="Game Name Riot"
+                    className="p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-primary focus:outline-none text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={newTagLine}
+                    onChange={(e) => setNewTagLine(e.target.value)}
+                    placeholder="Tag (ex: EUW)"
+                    className="p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-primary focus:outline-none text-sm"
+                  />
                 </div>
-              )}
 
-              <button
-                onClick={handleSaveConfig}
-                disabled={loading || !gameName || !tagLine}
-                className="w-full py-3 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 disabled:opacity-50 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Recherche du joueur...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Sauvegarder
-                  </>
+                {error && (
+                  <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                    <AlertCircle className="w-4 h-4" />
+                    {error}
+                  </div>
                 )}
-              </button>
 
-              {johnny.puuid && (
-                <div className="text-xs text-zinc-500 font-mono truncate">
-                  PUUID: {johnny.puuid}
-                </div>
-              )}
+                {addPlayerResult && (
+                  <div className={`flex items-center gap-2 p-3 rounded-xl text-sm ${
+                    addPlayerResult.success
+                      ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                      : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                  }`}>
+                    {addPlayerResult.success ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                    {addPlayerResult.message}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleAddPlayer}
+                  disabled={addPlayerLoading || !newGameName || !newTagLine || !newDisplayName}
+                  className="w-full py-3 bg-gradient-to-r from-primary to-primary-glow hover:opacity-90 disabled:opacity-50 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  {addPlayerLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Recherche du joueur...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Ajouter le joueur
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -742,14 +990,14 @@ const Admin = () => {
                 <h3 className="font-bold text-white">Surveillance des Games</h3>
               </div>
               <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${
-                isInGame
+                anyPlayerInGame
                   ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                   : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
               }`}>
-                {isInGame ? (
+                {anyPlayerInGame ? (
                   <>
                     <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                    EN GAME
+                    {playersInGame.length} EN GAME
                   </>
                 ) : (
                   <>
@@ -760,18 +1008,27 @@ const Admin = () => {
               </div>
             </div>
 
-            {isInGame && currentGame && (
-              <div className="mb-4 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <div className="text-zinc-400">Mode</div>
-                    <div className="text-white font-bold">{currentGame.gameMode}</div>
-                  </div>
-                  <div>
-                    <div className="text-zinc-400">Durée</div>
-                    <div className="text-white font-bold">{gameTimeMinutes} min</div>
-                  </div>
-                </div>
+            {anyPlayerInGame && playersInGame.length > 0 && (
+              <div className="mb-4 space-y-2">
+                {playersInGame.map(player => {
+                  const playerState = player.puuid ? playerStates.get(player.puuid) : undefined;
+                  const currentGame = playerState?.currentGame;
+                  const gameTimeMinutes = currentGame
+                    ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
+                    : 0;
+
+                  return (
+                    <div key={player.id} className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-bold text-white">{player.displayName}</span>
+                        <span className="text-xs text-green-400 font-mono">{gameTimeMinutes} min</span>
+                      </div>
+                      <div className="text-xs text-zinc-400">
+                        {currentGame?.gameMode || 'Inconnu'}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -787,7 +1044,7 @@ const Admin = () => {
               ) : (
                 <button
                   onClick={() => startPolling(30000)}
-                  disabled={!johnny.puuid}
+                  disabled={trackedPlayers.length === 0}
                   className="flex-1 py-3 bg-accent/20 hover:bg-accent/30 border border-accent/30 text-accent disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
                 >
                   <Wifi className="w-4 h-4" />
@@ -796,8 +1053,8 @@ const Admin = () => {
               )}
 
               <button
-                onClick={checkGameStatus}
-                disabled={!johnny.puuid || loading}
+                onClick={checkAllPlayersStatus}
+                disabled={trackedPlayers.length === 0 || loading}
                 className="py-3 px-4 bg-zinc-800 hover:bg-zinc-700 text-white disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
               >
                 <RotateCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -806,7 +1063,7 @@ const Admin = () => {
 
             {isPolling && (
               <div className="mt-3 text-xs text-zinc-500 text-center">
-                Vérification toutes les 30 secondes...
+                Surveillance de {trackedPlayers.filter(p => p.isActive).length} joueur(s) toutes les 30 secondes...
               </div>
             )}
 
@@ -814,7 +1071,7 @@ const Admin = () => {
             <div className="mt-4 pt-4 border-t border-zinc-800">
               <button
                 onClick={handleTestApi}
-                disabled={apiTestLoading || !johnny.puuid}
+                disabled={apiTestLoading || trackedPlayers.length === 0}
                 className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
               >
                 {apiTestLoading ? (
@@ -863,7 +1120,7 @@ const Admin = () => {
               {/* Force sync last game - primary action */}
               <button
                 onClick={handleForceSyncLastGame}
-                disabled={forceSyncLoading || syncing || !johnny.puuid}
+                disabled={forceSyncLoading || syncing || trackedPlayers.length === 0}
                 className="w-full py-3 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
               >
                 {forceSyncLoading ? (
@@ -898,7 +1155,7 @@ const Admin = () => {
 
               <button
                 onClick={handleSyncMuseum}
-                disabled={syncing || forceSyncLoading || !johnny.puuid}
+                disabled={syncing || forceSyncLoading || trackedPlayers.length === 0}
                 className="w-full py-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
               >
                 {syncing ? (
@@ -1098,6 +1355,25 @@ const Admin = () => {
 
             {!testMode ? (
               <>
+                {/* Select a player for test */}
+                {trackedPlayers.length > 1 && (
+                  <div className="mb-4">
+                    <label className="block text-sm text-zinc-400 mb-2">Joueur pour le test</label>
+                    <select
+                      value={selectedTestPlayer}
+                      onChange={(e) => setSelectedTestPlayer(e.target.value)}
+                      className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:border-purple-500 focus:outline-none"
+                    >
+                      <option value="">-- Premier joueur par défaut --</option>
+                      {trackedPlayers.map((player) => (
+                        <option key={player.id} value={player.id}>
+                          {player.displayName} ({player.gameName}#{player.tagLine})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 {/* Select a match from history */}
                 <div className="mb-4">
                   <label className="block text-sm text-zinc-400 mb-2">Sélectionne une game</label>
@@ -1117,7 +1393,7 @@ const Admin = () => {
 
                 <button
                   onClick={handleStartTestMode}
-                  disabled={testModeLoading || !selectedTestMatch || matches.length === 0}
+                  disabled={testModeLoading || !selectedTestMatch || matches.length === 0 || trackedPlayers.length === 0}
                   className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
                 >
                   {testModeLoading ? (

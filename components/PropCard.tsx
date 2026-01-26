@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TrendingUp, AlertCircle, CheckCircle, Loader2, Plus, Check, Layers } from 'lucide-react';
-import { Prop } from '../types';
+import { Prop, TrackedPlayer } from '../types';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
@@ -9,19 +9,33 @@ import { useComboStore } from '../services/comboStore';
 
 interface PropCardProps {
   prop: Prop;
+  player?: TrackedPlayer; // The player we're betting on
 }
 
-const PropCard: React.FC<PropCardProps> = ({ prop }) => {
+const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
   const { placeBet } = useStore();
   const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
-  const { isInGame, currentGame, currentGameId, testMode, testMatchId, testMatchData, johnny } = useGameStore();
+  const {
+    isAnyPlayerInGame,
+    testMode,
+    testMatchId,
+    testMatchData,
+    testPlayer,
+    playerStates
+  } = useGameStore();
   const { addToCombo, removeFromCombo, isInCombo, selections } = useComboStore();
 
   const inCombo = isInCombo(prop.id);
 
+  // Use the player prop or fall back to test player
+  const activePlayer = testMode ? testPlayer : player;
+  const playerState = activePlayer?.puuid ? playerStates.get(activePlayer.puuid) : undefined;
+  const currentGame = playerState?.currentGame;
+  const isInGame = testMode ? true : (playerState?.isInGame || false);
+
   // Get the match ID for the current bet (live game ID or test mode ID)
-  const betMatchId = testMode ? testMatchId : currentGameId;
+  const betMatchId = testMode ? testMatchId : playerState?.currentGameId;
 
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +49,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
 
   // Check if betting is allowed based on prop type and game time
   const canBetOnProp = () => {
-    if (!isInGame) return false;
+    if (!isInGame || !activePlayer) return false;
 
     // Global betting window: only allow bets in the first 3 minutes
     if (gameTimeMinutes >= 3) {
@@ -63,7 +77,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
       return;
     }
 
-    if (!isInGame) {
+    if (!isInGame || !activePlayer) {
       setError("Aucune game en cours");
       return;
     }
@@ -103,20 +117,31 @@ const PropCard: React.FC<PropCardProps> = ({ prop }) => {
 
       // Get champion name from current game or test match
       let championName = 'Inconnu';
-      if (testMode && testMatchData) {
-        const johnnyStats = testMatchData.info.participants.find(p => p.puuid === johnny.puuid);
-        championName = johnnyStats?.championName || 'Inconnu';
-      } else if (currentGame) {
-        const johnnyInGame = currentGame.participants.find(p => p.puuid === johnny.puuid);
-        if (johnnyInGame) {
+      if (testMode && testMatchData && testPlayer) {
+        const playerStats = testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid);
+        championName = playerStats?.championName || 'Inconnu';
+      } else if (currentGame && activePlayer) {
+        const playerInGame = currentGame.participants.find(p => p.puuid === activePlayer.puuid);
+        if (playerInGame) {
           // Get champion name from ID
           const { getChampionName } = await import('../services/riotApi');
-          championName = getChampionName(johnnyInGame.championId);
+          championName = getChampionName(playerInGame.championId);
         }
       }
 
-      // Place bet in Supabase with match ID, user ID and champion
-      const bet = await placeBet(prop.id, prop.title, prop.odds, val, betMatchId || undefined, undefined, user.id, championName);
+      // Place bet in Supabase with match ID, user ID, champion, and player info
+      const bet = await placeBet(
+        prop.id,
+        prop.title,
+        prop.odds,
+        val,
+        betMatchId || undefined,
+        undefined,
+        user.id,
+        championName,
+        activePlayer?.puuid,
+        activePlayer?.displayName
+      );
 
       if (!bet) {
         setError("Erreur lors de l'enregistrement du pari");

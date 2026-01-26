@@ -18,6 +18,8 @@ export interface SupabaseBet {
   combo_total: number | null;
   champion_name: string | null;
   resolved_stat: string | null;
+  player_puuid: string | null;
+  player_name: string | null;
   created_at: string;
 }
 
@@ -38,7 +40,9 @@ export function supabaseBetToLocal(sb: SupabaseBet): Bet {
     comboTotal: sb.combo_total || undefined,
     userId: sb.user_id,
     championName: sb.champion_name || undefined,
-    resolvedStat: sb.resolved_stat || undefined
+    resolvedStat: sb.resolved_stat || undefined,
+    playerPuuid: sb.player_puuid || undefined,
+    playerName: sb.player_name || undefined
   };
 }
 
@@ -59,7 +63,9 @@ export function localBetToSupabase(bet: Bet): Omit<SupabaseBet, 'created_at'> {
     combo_index: bet.comboIndex || null,
     combo_total: bet.comboTotal || null,
     champion_name: bet.championName || null,
-    resolved_stat: bet.resolvedStat || null
+    resolved_stat: bet.resolvedStat || null,
+    player_puuid: bet.playerPuuid || null,
+    player_name: bet.playerName || null
   };
 }
 

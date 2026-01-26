@@ -85,14 +85,14 @@ export async function sendDiscordNotification(message: DiscordMessage): Promise<
 }
 
 // Send a test notification
-export async function sendTestNotification(championName: string = 'Yasuo', gameMode: string = 'Ranked Solo/Duo'): Promise<boolean> {
+export async function sendTestNotification(championName: string = 'Yasuo', gameMode: string = 'Ranked Solo/Duo', playerName: string = 'Johnny'): Promise<boolean> {
   const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
 
   return sendDiscordNotification({
     content: '🧪 **TEST** - Ceci est un message de test',
     embeds: [{
-      title: '🎰 JOHNNY EST EN GAME ! (TEST)',
-      description: `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de Johnny !**\n\n⚠️ *Ceci est un test, Johnny n'est pas vraiment en game*`,
+      title: `🎰 ${playerName.toUpperCase()} EST EN GAME ! (TEST)`,
+      description: `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de ${playerName} !**\n\n⚠️ *Ceci est un test, ${playerName} n'est pas vraiment en game*`,
       color: COLORS.PURPLE,
       fields: [
         {
@@ -127,7 +127,7 @@ export async function sendTestNotification(championName: string = 'Yasuo', gameM
   });
 }
 
-export async function notifyGameStarted(gameId: number, gameMode: string, championName?: string): Promise<boolean> {
+export async function notifyGameStarted(gameId: number, gameMode: string, playerName: string = 'Johnny', championName?: string): Promise<boolean> {
   // Avoid duplicate notifications for the same game
   if (lastNotifiedGameId === gameId) {
     return false;
@@ -139,8 +139,8 @@ export async function notifyGameStarted(gameId: number, gameMode: string, champi
   return sendDiscordNotification({
     content: '@everyone',
     embeds: [{
-      title: '🎰 JOHNNY EST EN GAME !',
-      description: `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de Johnny !**`,
+      title: `🎰 ${playerName.toUpperCase()} EST EN GAME !`,
+      description: `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de ${playerName} !**`,
       color: COLORS.GREEN,
       fields: [
         {
@@ -190,13 +190,13 @@ export async function notifyBettingClosed(gameId: number): Promise<boolean> {
   });
 }
 
-export async function notifyGameEnded(won: boolean, kills: number, deaths: number, assists: number, championName: string): Promise<boolean> {
+export async function notifyGameEnded(won: boolean, kills: number, deaths: number, assists: number, championName: string, playerName: string = 'Johnny'): Promise<boolean> {
   const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
 
   return sendDiscordNotification({
     embeds: [{
       title: won ? '✅ VICTOIRE (comment ?!)' : '💀 DÉFAITE (comme prévu)',
-      description: `Johnny a terminé sa game en **${championName}**`,
+      description: `${playerName} a terminé sa game en **${championName}**`,
       color: won ? COLORS.GREEN : COLORS.RED,
       fields: [
         {

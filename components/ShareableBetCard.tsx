@@ -10,6 +10,7 @@ export interface GameShareData {
   totalWagered: number;
   netResult: number;
   status: 'pending' | 'won' | 'lost' | 'mixed';
+  playerName?: string; // The player this bet is on
 }
 
 interface ShareableBetCardProps {
@@ -120,7 +121,7 @@ const ShareableBetCard: React.FC<ShareableBetCardProps> = ({ gameData, onClose }
               color: '#71717a',
               marginTop: '2px',
             }}>
-              Johnny sur {gameData.championName}
+              {gameData.playerName || 'Johnny'} sur {gameData.championName}
             </div>
           </div>
 

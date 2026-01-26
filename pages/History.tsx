@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Calendar, Skull, Loader2, Eye, Swords, Target, Clock, Sparkles } from 'lucide-react';
 import { useMatchHistoryStore, formatDuration, formatDate, generateFunFact, JohnnyMatch } from '../services/matchHistoryStore';
 import { useGameStore } from '../services/gameStore';
@@ -6,7 +6,8 @@ import { getQueueName } from '../services/riotApi';
 
 const History = () => {
   const { matches, loading, error, loadMatches, loadConfig } = useMatchHistoryStore();
-  const { isPolling, isInGame } = useGameStore();
+  const { isPolling, isAnyPlayerInGame } = useGameStore();
+  const isInGame = isAnyPlayerInGame();
 
   // Load matches on mount
   useEffect(() => {
@@ -85,7 +86,7 @@ const History = () => {
 };
 
 // Match Card Component
-const MatchCard = ({ match }: { match: JohnnyMatch }) => {
+const MatchCard: React.FC<{ match: JohnnyMatch }> = ({ match }) => {
   const kda = `${match.kills}/${match.deaths}/${match.assists}`;
   const kdaRatio = ((match.kills + match.assists) / Math.max(1, match.deaths)).toFixed(2);
   const csPerMin = (match.cs / (match.game_duration / 60)).toFixed(1);

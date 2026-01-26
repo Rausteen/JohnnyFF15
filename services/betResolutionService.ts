@@ -295,14 +295,14 @@ async function updateUserCreditsDirect(userId: string, won: boolean, amount: num
 // Resolve all pending bets for a specific match
 // This function resolves pending bets from ALL users in Supabase
 // If expectedMatchId is provided, only bets for that match are resolved
-export async function resolveBets(matchData: MatchDto, johnnyPuuid: string, expectedMatchId?: string): Promise<BetResolutionResult[]> {
+export async function resolveBets(matchData: MatchDto, playerPuuid: string, playerName?: string, expectedMatchId?: string): Promise<BetResolutionResult[]> {
   const results: BetResolutionResult[] = [];
   const matchId = matchData.metadata.matchId;
 
-  // Get Johnny's stats from the match
-  const johnnyStats = matchData.info.participants.find(p => p.puuid === johnnyPuuid);
-  if (!johnnyStats) {
-    console.error('Could not find Johnny in match participants');
+  // Get the player's stats from the match
+  const playerStats = matchData.info.participants.find(p => p.puuid === playerPuuid);
+  if (!playerStats) {
+    console.error(`Could not find player ${playerName || playerPuuid} in match participants`);
     return results;
   }
 
@@ -326,7 +326,15 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string, expe
     }
   }
 
-  console.log(`Match data: ${matchId}, Johnny KDA: ${johnnyStats.kills}/${johnnyStats.deaths}/${johnnyStats.assists}`);
+  // Filter bets by player if playerPuuid is set on bets
+  // This ensures we only resolve bets for the specific player who finished their game
+  const betsForThisPlayer = pendingBets.filter(bet => !bet.playerPuuid || bet.playerPuuid === playerPuuid);
+  if (betsForThisPlayer.length < pendingBets.length) {
+    console.log(`Filtered bets by player: ${betsForThisPlayer.length}/${pendingBets.length} bets are for ${playerName || 'this player'}`);
+    pendingBets = betsForThisPlayer;
+  }
+
+  console.log(`Match data: ${matchId}, ${playerName || 'Player'} KDA: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
   console.log(`Resolving ${pendingBets.length} pending bets...`);
 
   // Separate single bets from combo bets
@@ -343,8 +351,8 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string, expe
 
   // Process single bets
   for (const bet of singleBets) {
-    const won = evaluateProp(bet.propId, johnnyStats, matchData);
-    const resolvedStat = getResolvedStat(bet.propId, johnnyStats, matchData);
+    const won = evaluateProp(bet.propId, playerStats, matchData);
+    const resolvedStat = getResolvedStat(bet.propId, playerStats, matchData);
 
     // Update bet status in Supabase
     const success = await updateBetStatus(bet.id, won ? BetStatus.WON : BetStatus.LOST, resolvedStat);
@@ -374,8 +382,8 @@ export async function resolveBets(matchData: MatchDto, johnnyPuuid: string, expe
     // Evaluate each bet in the combo
     const betResults = bets.map(bet => ({
       bet,
-      won: evaluateProp(bet.propId, johnnyStats, matchData),
-      resolvedStat: getResolvedStat(bet.propId, johnnyStats, matchData)
+      won: evaluateProp(bet.propId, playerStats, matchData),
+      resolvedStat: getResolvedStat(bet.propId, playerStats, matchData)
     }));
 
     // Combo wins only if ALL bets won

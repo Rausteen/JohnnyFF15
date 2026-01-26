@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { User, Calendar, Sparkles, Trophy, TrendingUp, TrendingDown, Target, ArrowLeft, Loader2, Crown, ChevronDown, ChevronUp, Layers, Swords, RefreshCw } from 'lucide-react';
 import { supabase } from '../services/supabase';

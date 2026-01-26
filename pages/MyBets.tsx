@@ -12,6 +12,7 @@ import ShareableBetCard, { GameShareData } from '../components/ShareableBetCard'
 interface GameGroup {
   matchId: string;
   championName: string;
+  playerName?: string;
   bets: Bet[];
   timestamp: number;
   totalWagered: number;
@@ -28,6 +29,7 @@ const toShareData = (group: GameGroup): GameShareData => ({
   totalWagered: group.totalWagered,
   netResult: group.netResult,
   status: group.status,
+  playerName: group.playerName,
 });
 
 type SortOption = 'date' | 'amount' | 'result';
@@ -85,6 +87,7 @@ const MyBets = () => {
         groups.set(key, {
           matchId: key,
           championName: bet.championName || 'Inconnu',
+          playerName: bet.playerName,
           bets: [],
           timestamp: bet.timestamp,
           totalWagered: 0,

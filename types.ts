@@ -4,6 +4,18 @@ export enum MatchStatus {
   FINISHED = 'FINISHED'
 }
 
+// Tracked player (someone we can bet on)
+export interface TrackedPlayer {
+  id: string;
+  gameName: string;
+  tagLine: string;
+  puuid: string | null;
+  region: string;
+  displayName: string; // e.g., "Johnny", "Rausteen"
+  isActive: boolean;
+  createdAt?: string;
+}
+
 export enum BetStatus {
   PENDING = 'PENDING',
   WON = 'WON',
@@ -36,6 +48,8 @@ export interface Bet {
   userId?: string; // Owner of this bet
   championName?: string; // Champion for this game
   resolvedStat?: string; // Actual stat that resolved the bet (e.g., "7 morts", "KDA: 0.4")
+  playerPuuid?: string; // Which tracked player this bet is on
+  playerName?: string; // Display name of the player (e.g., "Johnny", "Rausteen")
 }
 
 export interface MatchStats {

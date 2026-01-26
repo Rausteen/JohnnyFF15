@@ -13,7 +13,7 @@ interface StoreState {
   addFunds: (amount: number) => void;
 
   // Bet actions (Supabase only - no local storage)
-  placeBet: (propId: string, propTitle: string, odds: number, amount: number, matchId?: string, comboInfo?: { comboId: string; comboIndex: number; comboTotal: number }, userId?: string, championName?: string) => Promise<Bet | null>;
+  placeBet: (propId: string, propTitle: string, odds: number, amount: number, matchId?: string, comboInfo?: { comboId: string; comboIndex: number; comboTotal: number }, userId?: string, championName?: string, playerPuuid?: string, playerName?: string) => Promise<Bet | null>;
   cancelBet: (betId: string, betAmount: number, betTimestamp: number) => Promise<boolean>;
 
   // Admin Actions
@@ -36,7 +36,7 @@ export const useStore = create<StoreState>()(
       addFunds: (amount) => set((state) => ({ balance: state.balance + amount })),
 
       // Place bet - saves directly to Supabase (no local storage)
-      placeBet: async (propId, propTitle, odds, amount, matchId, comboInfo, userId, championName) => {
+      placeBet: async (propId, propTitle, odds, amount, matchId, comboInfo, userId, championName, playerPuuid, playerName) => {
         const { gameState } = get();
 
         const newBet: Bet = {
@@ -51,6 +51,8 @@ export const useStore = create<StoreState>()(
           timestamp: Date.now(),
           userId,
           championName,
+          playerPuuid,
+          playerName,
           ...(comboInfo && {
             comboId: comboInfo.comboId,
             comboIndex: comboInfo.comboIndex,

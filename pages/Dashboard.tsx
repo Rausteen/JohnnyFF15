@@ -3,16 +3,16 @@ import PropCard from '../components/PropCard';
 import ComboBetSlip from '../components/ComboBetSlip';
 import { usePropsStore } from '../services/propsStore';
 import { useStore } from '../services/store';
-import { useGameStore } from '../services/gameStore';
+import { useGameStore, PlayerGameState } from '../services/gameStore';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
 import { getUserPendingBets, getAllPendingBetsWithPseudos, BetWithPseudo } from '../services/betsService';
-import { Bet } from '../types';
+import { Bet, TrackedPlayer } from '../types';
 import {
   Clock, Skull, Wifi, WifiOff, AlertTriangle,
   Gamepad2, Users, LogIn, FlaskConical, Zap, Target, Swords,
-  Star, Timer, Award, Layers, Eye
+  Star, Timer, Award, Layers, Eye, ChevronDown, User
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -28,7 +28,7 @@ const CATEGORY_INFO = {
 };
 
 // Popular props (most bet on)
-const POPULAR_PROP_IDS = ['kda1', 'out2', 'early1', 'kda5', 'out1', 'gp1'];
+const POPULAR_PROP_IDS = ['kda1', 'out2', 'early1', 'kda3', 'out1', 'gp1'];
 
 const Dashboard = () => {
   const { cancelBet } = useStore();
@@ -36,23 +36,46 @@ const Dashboard = () => {
   const { getProps } = usePropsStore();
   const { addCredits } = useCreditsStore();
   const {
-    johnny,
-    isInGame,
-    currentGame,
+    trackedPlayers,
+    selectedPlayer,
+    selectPlayer,
+    playerStates,
+    getPlayersInGame,
+    isAnyPlayerInGame,
     isPolling,
-    lastMatchStats,
     testMode,
-    testMatchData
+    testMatchData,
+    testPlayer
   } = useGameStore();
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('POPULAR');
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [showPlayerSelector, setShowPlayerSelector] = useState(false);
 
   // Supabase pending bets
   const [supabasePendingBets, setSupabasePendingBets] = useState<Bet[]>([]);
 
   // Public pending bets (all users with pseudos)
   const [publicPendingBets, setPublicPendingBets] = useState<BetWithPseudo[]>([]);
+
+  // Get players currently in game
+  const playersInGame = getPlayersInGame();
+  const isInGame = isAnyPlayerInGame();
+
+  // Get the active player state (selected or first in-game player)
+  const activePlayerState: PlayerGameState | undefined = useMemo(() => {
+    if (testMode && testPlayer?.puuid) {
+      return playerStates.get(testPlayer.puuid);
+    }
+    if (selectedPlayer?.puuid) {
+      const state = playerStates.get(selectedPlayer.puuid);
+      if (state?.isInGame) return state;
+    }
+    return playersInGame[0];
+  }, [selectedPlayer, playerStates, playersInGame, testMode, testPlayer]);
+
+  const currentGame = activePlayerState?.currentGame;
+  const activePlayer = activePlayerState?.player;
 
   // Load pending bets from Supabase
   const loadPendingBets = async () => {
@@ -86,7 +109,7 @@ const Dashboard = () => {
     const interval = setInterval(() => {
       loadPendingBets();
       loadPublicPendingBets();
-    }, 30000); // Every 30 seconds
+    }, 30000);
     return () => clearInterval(interval);
   }, [user?.id]);
 
@@ -135,7 +158,6 @@ const Dashboard = () => {
     const groups: BetGroup[] = [];
     const comboMap = new Map<string, Bet[]>();
 
-    // Separate single bets and combo bets
     supabasePendingBets.forEach(bet => {
       if (bet.comboId) {
         const existing = comboMap.get(bet.comboId) || [];
@@ -153,11 +175,8 @@ const Dashboard = () => {
       }
     });
 
-    // Add combo groups
     comboMap.forEach((bets, comboId) => {
-      // Sort combo bets by index
       bets.sort((a, b) => (a.comboIndex || 0) - (b.comboIndex || 0));
-      // Get amount and payout from first bet (which has the stake)
       const mainBet = bets.find(b => b.amount > 0) || bets[0];
       groups.push({
         type: 'combo',
@@ -170,15 +189,15 @@ const Dashboard = () => {
       });
     });
 
-    // Sort by timestamp (newest first)
     return groups.sort((a, b) => b.timestamp - a.timestamp);
   }, [supabasePendingBets]);
+
   const gameTimeMinutes = currentGame
     ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
     : 0;
 
-  // Find Johnny in the current game participants
-  const johnnyInGame = currentGame?.participants.find(p => p.puuid === johnny.puuid);
+  // Find player in the current game participants
+  const playerInGame = currentGame?.participants.find(p => p.puuid === activePlayer?.puuid);
 
   // Filter props by category
   const filteredProps = useMemo(() => {
@@ -196,9 +215,60 @@ const Dashboard = () => {
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-6">
+      {/* Player Selector (when multiple players are in game) */}
+      {playersInGame.length > 1 && !testMode && (
+        <div className="relative">
+          <button
+            onClick={() => setShowPlayerSelector(!showPlayerSelector)}
+            className="w-full sm:w-auto flex items-center justify-between gap-3 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl hover:border-zinc-600 transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                <User className="w-4 h-4 text-green-400" />
+              </div>
+              <div className="text-left">
+                <div className="text-white font-bold text-sm">{activePlayer?.displayName || 'Sélectionner'}</div>
+                <div className="text-xs text-green-400">{playersInGame.length} joueurs en game</div>
+              </div>
+            </div>
+            <ChevronDown className={`w-5 h-5 text-zinc-400 transition-transform ${showPlayerSelector ? 'rotate-180' : ''}`} />
+          </button>
+
+          {showPlayerSelector && (
+            <div className="absolute top-full left-0 right-0 sm:right-auto mt-2 bg-zinc-900 border border-zinc-700 rounded-xl overflow-hidden z-50 shadow-xl min-w-[250px]">
+              {playersInGame.map(state => (
+                <button
+                  key={state.player.id}
+                  onClick={() => {
+                    selectPlayer(state.player);
+                    setShowPlayerSelector(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800 transition ${
+                    activePlayer?.id === state.player.id ? 'bg-green-500/10' : ''
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <span className="text-green-400 font-bold text-sm">{state.player.displayName.charAt(0)}</span>
+                  </div>
+                  <div className="text-left flex-1">
+                    <div className="text-white font-medium text-sm">{state.player.displayName}</div>
+                    <div className="text-xs text-zinc-400">
+                      {state.currentGame ? getChampionName(
+                        state.currentGame.participants.find(p => p.puuid === state.player.puuid)?.championId || 0
+                      ) : ''}
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">LIVE</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Game Status Banner */}
       <section className="relative overflow-hidden rounded-2xl border border-white/10">
-        {isInGame && testMode && testMatchData ? (
+        {isInGame && testMode && testMatchData && testPlayer ? (
           // TEST MODE BANNER
           <div className="bg-gradient-to-r from-purple-900/30 via-purple-800/20 to-fuchsia-900/30 p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -211,7 +281,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <h2 className="text-lg sm:text-xl font-black text-white">MODE TEST</h2>
+                    <h2 className="text-lg sm:text-xl font-black text-white">MODE TEST - {testPlayer.displayName}</h2>
                     <span className="px-2 py-0.5 bg-purple-500 text-white text-xs font-bold rounded-full">TEST</span>
                   </div>
                   <p className="text-purple-300 text-xs sm:text-sm">Parie sur cette ancienne game</p>
@@ -219,19 +289,19 @@ const Dashboard = () => {
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto">
-                {testMatchData.info.participants.find(p => p.puuid === johnny.puuid) && (
+                {testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid) && (
                   <>
                     <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-white/10 rounded-xl shrink-0">
                       <div className="text-xs sm:text-sm font-bold text-white">
-                        {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.championName}
+                        {testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid)?.championName}
                       </div>
                       <div className="text-xs text-purple-300">Champion</div>
                     </div>
                     <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-white/10 rounded-xl shrink-0">
                       <div className="text-xs sm:text-sm font-bold text-white font-mono">
-                        {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.kills}/
-                        {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.deaths}/
-                        {testMatchData.info.participants.find(p => p.puuid === johnny.puuid)?.assists}
+                        {testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid)?.kills}/
+                        {testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid)?.deaths}/
+                        {testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid)?.assists}
                       </div>
                       <div className="text-xs text-purple-300">KDA</div>
                     </div>
@@ -240,7 +310,7 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
-        ) : isInGame ? (
+        ) : isInGame && activePlayer ? (
           // LIVE GAME BANNER
           <div className="bg-gradient-to-r from-green-900/30 via-green-800/20 to-emerald-900/30 p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -254,11 +324,11 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h2 className="text-lg sm:text-xl font-black text-white">JOHNNY EN GAME</h2>
+                    <h2 className="text-lg sm:text-xl font-black text-white">{activePlayer.displayName.toUpperCase()} EN GAME</h2>
                     <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full animate-pulse">LIVE</span>
                   </div>
                   <p className="text-green-300 text-xs sm:text-sm">
-                    {johnny.gameName} • {currentGame ? getQueueName(currentGame.gameQueueConfigId) : ''}
+                    {activePlayer.gameName} • {currentGame ? getQueueName(currentGame.gameQueueConfigId) : ''}
                   </p>
                 </div>
               </div>
@@ -268,9 +338,9 @@ const Dashboard = () => {
                   <div className="text-lg sm:text-xl font-mono font-bold text-white">{gameTimeMinutes}'</div>
                   <div className="text-xs text-green-300">Temps</div>
                 </div>
-                {johnnyInGame && (
+                {playerInGame && (
                   <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-white/10 rounded-xl shrink-0">
-                    <div className="text-xs sm:text-sm font-bold text-white">{getChampionName(johnnyInGame.championId)}</div>
+                    <div className="text-xs sm:text-sm font-bold text-white">{getChampionName(playerInGame.championId)}</div>
                     <div className="text-xs text-green-300">Champion</div>
                   </div>
                 )}
@@ -290,12 +360,14 @@ const Dashboard = () => {
                   <Skull className="w-6 h-6 sm:w-7 sm:h-7 text-zinc-500" />
                 </div>
                 <div>
-                  <h2 className="text-lg sm:text-xl font-black text-white mb-1">Johnny AFK</h2>
+                  <h2 className="text-lg sm:text-xl font-black text-white mb-1">
+                    {trackedPlayers.length > 0 ? 'Personne en game' : 'Aucun joueur configuré'}
+                  </h2>
                   <p className="text-zinc-400 text-xs sm:text-sm">
-                    {johnny.puuid ? (
-                      <>En attente... {isPolling && <span className="text-accent">(surveillance)</span>}</>
+                    {trackedPlayers.length > 0 ? (
+                      <>En attente... {isPolling && <span className="text-accent">(surveillance de {trackedPlayers.length} joueur{trackedPlayers.length > 1 ? 's' : ''})</span>}</>
                     ) : (
-                      <span className="text-amber-400">Configure Johnny dans Admin</span>
+                      <span className="text-amber-400">Configure des joueurs dans Admin</span>
                     )}
                   </p>
                 </div>
@@ -314,16 +386,19 @@ const Dashboard = () => {
               )}
             </div>
 
-            {lastMatchStats && (
+            {/* Show last match stats for selected player */}
+            {selectedPlayer?.puuid && playerStates.get(selectedPlayer.puuid)?.lastMatchStats && (
               <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
-                <span className="text-zinc-500">Dernière:</span>
-                <span className={`font-bold ${lastMatchStats.win ? 'text-green-400' : 'text-red-400'}`}>
-                  {lastMatchStats.win ? 'Victoire' : 'Défaite'}
+                <span className="text-zinc-500">Dernière ({selectedPlayer.displayName}):</span>
+                <span className={`font-bold ${playerStates.get(selectedPlayer.puuid)?.lastMatchStats?.win ? 'text-green-400' : 'text-red-400'}`}>
+                  {playerStates.get(selectedPlayer.puuid)?.lastMatchStats?.win ? 'Victoire' : 'Défaite'}
                 </span>
                 <span className="text-white font-mono">
-                  {lastMatchStats.kills}/{lastMatchStats.deaths}/{lastMatchStats.assists}
+                  {playerStates.get(selectedPlayer.puuid)?.lastMatchStats?.kills}/
+                  {playerStates.get(selectedPlayer.puuid)?.lastMatchStats?.deaths}/
+                  {playerStates.get(selectedPlayer.puuid)?.lastMatchStats?.assists}
                 </span>
-                <span className="text-zinc-400">{lastMatchStats.championName}</span>
+                <span className="text-zinc-400">{playerStates.get(selectedPlayer.puuid)?.lastMatchStats?.championName}</span>
               </div>
             )}
           </div>
@@ -375,7 +450,7 @@ const Dashboard = () => {
                 {groupedBets.map(group => (
                   <div key={group.comboId || group.bets[0].id} className="p-3 hover:bg-zinc-800/50 transition-colors">
                     {group.type === 'combo' ? (
-                      // Combo bet display - grouped nicely
+                      // Combo bet display
                       <>
                         <div className="flex justify-between items-start gap-2 mb-2">
                           <div className="flex items-center gap-1.5">
@@ -402,7 +477,6 @@ const Dashboard = () => {
                           {canCancelBet(group.timestamp) ? (
                             <button
                               onClick={async () => {
-                                // Cancel all bets in the combo
                                 let allCancelled = true;
                                 for (const bet of group.bets) {
                                   const success = await cancelBet(bet.id, bet.amount, bet.timestamp);
@@ -517,7 +591,7 @@ const Dashboard = () => {
               <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
               <div>
                 <p className="text-amber-400 font-bold text-xs sm:text-sm">Paris fermés</p>
-                <p className="text-xs text-zinc-400">Johnny n'est pas en game. Tu peux consulter les paris mais pas parier.</p>
+                <p className="text-xs text-zinc-400">Personne n'est en game. Tu peux consulter les paris mais pas parier.</p>
               </div>
             </div>
           )}
@@ -533,7 +607,7 @@ const Dashboard = () => {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {sortedProps.map(prop => (
-              <PropCard key={prop.id} prop={prop} />
+              <PropCard key={prop.id} prop={prop} player={activePlayer} />
             ))}
           </div>
         </section>
@@ -551,7 +625,6 @@ const Dashboard = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Group bets by user */}
             {(() => {
               const betsByUser = new Map<string, typeof publicPendingBets>();
               publicPendingBets.forEach(bet => {
@@ -568,7 +641,6 @@ const Dashboard = () => {
 
                 return (
                   <div key={pseudo} className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                    {/* User header */}
                     <div className="p-3 bg-gradient-to-r from-primary/10 to-transparent border-b border-zinc-800 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
@@ -579,7 +651,6 @@ const Dashboard = () => {
                       <span className="text-xs text-zinc-400">{userBets.length} paris</span>
                     </div>
 
-                    {/* User's bets */}
                     <div className="divide-y divide-zinc-800/50 max-h-48 overflow-y-auto">
                       {userBets.slice(0, 5).map(bet => (
                         <div key={bet.id} className="p-2.5 hover:bg-zinc-800/30 transition-colors">
@@ -606,7 +677,6 @@ const Dashboard = () => {
                       )}
                     </div>
 
-                    {/* User total */}
                     <div className="p-2.5 bg-zinc-800/50 border-t border-zinc-800 flex items-center justify-between text-xs">
                       <span className="text-zinc-400">Total misé: <span className="text-white font-mono">{totalMise} JC</span></span>
                       <span className="text-gold font-bold">→ {totalPotentiel} JC</span>
@@ -620,7 +690,7 @@ const Dashboard = () => {
       )}
 
       {/* Combo Bet Slip (floating) */}
-      <ComboBetSlip />
+      <ComboBetSlip player={activePlayer} />
     </div>
   );
 };

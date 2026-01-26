@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Medal, Sparkles, TrendingUp, TrendingDown, Target, Loader2, Crown, Award } from 'lucide-react';
 import { supabase } from '../services/supabase';
@@ -194,7 +194,7 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
 };
 
 // Leaderboard Row for ranks 4+
-const LeaderboardRow = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank: number; isCurrentUser: boolean }) => {
+const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentUser: boolean }> = ({ user, rank, isCurrentUser }) => {
   const winRate = user.total_bets > 0 ? Math.round((user.bets_won / user.total_bets) * 100) : 0;
   const netGain = user.jc_won - user.jc_lost;
 

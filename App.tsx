@@ -17,7 +17,7 @@ import { useGameStore } from './services/gameStore';
 const App = () => {
   const initialize = useAuthStore((state) => state.initialize);
   const { loadConfig, loadMatches, syncMatches, matches } = useMatchHistoryStore();
-  const { loadJohnnyConfig, startPolling, johnny, isPolling } = useGameStore();
+  const { loadTrackedPlayers, startPolling, trackedPlayers, isPolling } = useGameStore();
 
   useEffect(() => {
     initialize();
@@ -40,21 +40,21 @@ const App = () => {
     initMatchHistory();
   }, [loadConfig, loadMatches, syncMatches]);
 
-  // Initialize surveillance on app load (always active)
+  // Initialize tracked players on app load
   useEffect(() => {
-    const initSurveillance = async () => {
-      await loadJohnnyConfig();
+    const initPlayers = async () => {
+      await loadTrackedPlayers();
     };
-    initSurveillance();
-  }, [loadJohnnyConfig]);
+    initPlayers();
+  }, [loadTrackedPlayers]);
 
-  // Auto-start polling when Johnny is configured
+  // Auto-start polling when players are loaded
   useEffect(() => {
-    if (johnny.puuid && !isPolling) {
-      console.log('Auto-starting surveillance for', johnny.gameName);
+    if (trackedPlayers.length > 0 && !isPolling) {
+      console.log(`Auto-starting surveillance for ${trackedPlayers.length} player(s)`);
       startPolling(30000);
     }
-  }, [johnny.puuid, isPolling, startPolling]);
+  }, [trackedPlayers.length, isPolling, startPolling]);
 
   return (
     <HashRouter>

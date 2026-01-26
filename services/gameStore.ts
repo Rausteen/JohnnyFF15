@@ -5,6 +5,8 @@ import { useMatchHistoryStore } from './matchHistoryStore';
 import { resolveBets } from './betResolutionService';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { notifyGameStarted, notifyGameEnded } from './discordWebhook';
+import { TrackedPlayer } from '../types';
+import { getActiveTrackedPlayers, updateTrackedPlayer } from './playersService';
 
 // Generate a unique browser ID for this session
 const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -12,15 +14,9 @@ const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2,
 // How long before game status is considered stale (in ms)
 const STALE_THRESHOLD = 25000; // 25 seconds
 
-export interface JohnnyConfig {
-  gameName: string;
-  tagLine: string;
-  puuid: string | null;
-  region: Region;
-}
-
-interface GameStatusRow {
-  id: number;
+// Player game status from Supabase
+interface PlayerGameStatusRow {
+  player_id: string;
   is_in_game: boolean;
   game_id: string | null;
   game_data: CurrentGameInfo | null;
@@ -30,77 +26,123 @@ interface GameStatusRow {
   updated_at: string;
 }
 
-export interface GameState {
-  // Johnny's config
-  johnny: JohnnyConfig;
-
-  // Current game status
+// Per-player game state
+export interface PlayerGameState {
+  player: TrackedPlayer;
   isInGame: boolean;
   currentGame: CurrentGameInfo | null;
-  currentGameId: string | null; // Riot game ID for bet tracking
+  currentGameId: string | null;
   gameStartTime: number | null;
-
-  // Last match data
   lastMatch: MatchDto | null;
   lastMatchStats: MatchParticipant | null;
+}
+
+export interface GameState {
+  // All tracked players
+  trackedPlayers: TrackedPlayer[];
+
+  // Currently selected player (for betting UI)
+  selectedPlayer: TrackedPlayer | null;
+
+  // Per-player game states
+  playerStates: Map<string, PlayerGameState>; // keyed by puuid
 
   // Test mode (for betting on historical games)
   testMode: boolean;
   testMatchId: string | null;
   testMatchData: MatchDto | null;
+  testPlayer: TrackedPlayer | null;
 
   // Polling
   isPolling: boolean;
   pollInterval: number | null;
 
-  // Realtime subscription
-  realtimeChannel: RealtimeChannel | null;
+  // Realtime subscriptions (one per player)
+  realtimeChannels: Map<string, RealtimeChannel>;
 
   // Loading states
   loading: boolean;
   error: string | null;
 
   // Actions
-  setJohnnyConfig: (gameName: string, tagLine: string, region: Region) => Promise<boolean>;
-  loadJohnnyConfig: () => Promise<void>;
-  checkGameStatus: () => Promise<void>;
+  loadTrackedPlayers: () => Promise<void>;
+  selectPlayer: (player: TrackedPlayer | null) => void;
+  addTrackedPlayer: (gameName: string, tagLine: string, region: Region, displayName: string) => Promise<boolean>;
+
+  checkGameStatus: (player?: TrackedPlayer) => Promise<void>;
+  checkAllPlayersStatus: () => Promise<void>;
   startPolling: (intervalMs?: number) => void;
   stopPolling: () => void;
-  fetchLastMatch: () => Promise<void>;
+  fetchLastMatch: (player: TrackedPlayer) => Promise<void>;
   clearError: () => void;
 
   // Realtime subscription
-  subscribeToGameStatus: () => void;
-  unsubscribeFromGameStatus: () => void;
+  subscribeToAllPlayers: () => void;
+  unsubscribeFromAllPlayers: () => void;
 
   // Test mode actions
-  startTestMode: (matchId: string) => Promise<boolean>;
+  startTestMode: (matchId: string, player: TrackedPlayer) => Promise<boolean>;
   endTestMode: () => Promise<{ won: number; lost: number }>;
+
+  // Getters
+  getPlayerState: (puuid: string) => PlayerGameState | undefined;
+  getPlayersInGame: () => PlayerGameState[];
+  isAnyPlayerInGame: () => boolean;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
-  johnny: {
-    gameName: '',
-    tagLine: '',
-    puuid: null,
-    region: 'EUW'
-  },
-  isInGame: false,
-  currentGame: null,
-  currentGameId: null,
-  gameStartTime: null,
-  lastMatch: null,
-  lastMatchStats: null,
+  trackedPlayers: [],
+  selectedPlayer: null,
+  playerStates: new Map(),
   testMode: false,
   testMatchId: null,
   testMatchData: null,
+  testPlayer: null,
   isPolling: false,
   pollInterval: null,
-  realtimeChannel: null,
+  realtimeChannels: new Map(),
   loading: false,
   error: null,
 
-  setJohnnyConfig: async (gameName, tagLine, region) => {
+  loadTrackedPlayers: async () => {
+    set({ loading: true });
+    try {
+      const players = await getActiveTrackedPlayers();
+
+      // Initialize player states
+      const playerStates = new Map<string, PlayerGameState>();
+      for (const player of players) {
+        if (player.puuid) {
+          playerStates.set(player.puuid, {
+            player,
+            isInGame: false,
+            currentGame: null,
+            currentGameId: null,
+            gameStartTime: null,
+            lastMatch: null,
+            lastMatchStats: null
+          });
+        }
+      }
+
+      // Auto-select first player if none selected
+      const currentSelected = get().selectedPlayer;
+      const selectedPlayer = currentSelected && players.find(p => p.id === currentSelected.id)
+        ? currentSelected
+        : players[0] || null;
+
+      set({ trackedPlayers: players, playerStates, selectedPlayer, loading: false });
+    } catch (error: any) {
+      console.error('Error loading tracked players:', error);
+      set({ error: error.message, loading: false });
+    }
+  },
+
+  selectPlayer: (player) => {
+    set({ selectedPlayer: player });
+  },
+
+  addTrackedPlayer: async (gameName, tagLine, region, displayName) => {
     set({ loading: true, error: null });
 
     try {
@@ -114,36 +156,29 @@ export const useGameStore = create<GameState>((set, get) => ({
         return false;
       }
 
-      const config = {
-        gameName: account.gameName,
-        tagLine: account.tagLine,
-        puuid: account.puuid,
-        region
-      };
-
       // Save to Supabase
-      const riotId = `${account.gameName}#${account.tagLine}`;
-      const { error: upsertError } = await supabase
-        .from('johnny_config')
-        .upsert({
-          id: 1,
-          riot_id: riotId,
+      const { data, error: insertError } = await supabase
+        .from('tracked_players')
+        .insert({
+          game_name: account.gameName,
+          tag_line: account.tagLine,
           puuid: account.puuid,
           region: region,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
+          display_name: displayName,
+          is_active: true
+        })
+        .select()
+        .single();
 
-      if (upsertError) {
-        console.error('Error saving config to Supabase:', upsertError);
-        // Fallback to localStorage
-        localStorage.setItem('johnny_config', JSON.stringify(config));
+      if (insertError) {
+        console.error('Error adding player to Supabase:', insertError);
+        set({ error: 'Erreur lors de l\'ajout du joueur', loading: false });
+        return false;
       }
 
-      set({
-        johnny: config,
-        loading: false
-      });
-
+      // Reload players list
+      await get().loadTrackedPlayers();
+      set({ loading: false });
       return true;
     } catch (error: any) {
       set({ error: error.message || 'Erreur de configuration', loading: false });
@@ -151,246 +186,228 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  loadJohnnyConfig: async () => {
-    // Try to load from Supabase first
-    try {
-      const { data, error } = await supabase
-        .from('johnny_config')
-        .select('*')
-        .eq('id', 1)
-        .single();
+  subscribeToAllPlayers: () => {
+    const { trackedPlayers, realtimeChannels } = get();
 
-      if (!error && data && data.puuid) {
-        const [gameName, tagLine] = data.riot_id.split('#');
-        const config: JohnnyConfig = {
-          gameName: gameName || '',
-          tagLine: tagLine || '',
-          puuid: data.puuid,
-          region: (data.region as Region) || 'EUW'
-        };
-        riotApi.setRegion(config.region);
-        set({ johnny: config });
-        return;
-      }
-    } catch (e) {
-      console.warn('Failed to load config from Supabase, trying localStorage');
-    }
+    // Subscribe to each player's game status
+    for (const player of trackedPlayers) {
+      if (!player.puuid || realtimeChannels.has(player.puuid)) continue;
 
-    // Fallback to localStorage
-    const saved = localStorage.getItem('johnny_config');
-    if (saved) {
-      try {
-        const config = JSON.parse(saved) as JohnnyConfig;
-        riotApi.setRegion(config.region);
-        set({ johnny: config });
-      } catch (e) {
-        console.error('Failed to load johnny config:', e);
-      }
-    }
-  },
+      console.log(`Subscribing to game status for ${player.displayName}...`);
 
-  // Subscribe to realtime game status updates
-  subscribeToGameStatus: () => {
-    const { realtimeChannel } = get();
+      const channel = supabase
+        .channel(`player_status_${player.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'player_game_status',
+            filter: `player_id=eq.${player.id}`
+          },
+          (payload) => {
+            const newData = payload.new as PlayerGameStatusRow;
+            const { testMode, playerStates } = get();
 
-    // Already subscribed
-    if (realtimeChannel) return;
+            if (testMode) return;
 
-    console.log('Subscribing to game status updates...');
+            console.log(`Received game status update for ${player.displayName}:`, newData?.is_in_game);
 
-    const channel = supabase
-      .channel('game_status_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'game_status',
-          filter: 'id=eq.1'
-        },
-        (payload) => {
-          const newData = payload.new as GameStatusRow;
-          const { testMode, currentGameId } = get();
+            if (newData && player.puuid) {
+              const currentState = playerStates.get(player.puuid);
+              const wasInGame = currentState?.isInGame || false;
+              const previousGameId = currentState?.currentGameId;
 
-          // Don't update if in test mode
-          if (testMode) return;
+              // Update player state
+              const newPlayerStates = new Map(playerStates);
+              newPlayerStates.set(player.puuid, {
+                player,
+                isInGame: newData.is_in_game,
+                currentGame: newData.game_data,
+                currentGameId: newData.game_id,
+                gameStartTime: newData.game_start_time,
+                lastMatch: currentState?.lastMatch || null,
+                lastMatchStats: currentState?.lastMatchStats || null
+              });
+              set({ playerStates: newPlayerStates });
 
-          console.log('Received game status update from Supabase:', newData.is_in_game);
-
-          // Check if game just ended (was in game, now not)
-          const wasInGame = get().isInGame;
-          const previousGameId = get().currentGameId;
-
-          // Update local state from shared state
-          set({
-            isInGame: newData.is_in_game,
-            currentGame: newData.game_data,
-            currentGameId: newData.game_id,
-            gameStartTime: newData.game_start_time,
-            error: null
-          });
-
-          // If game just ended, handle bet resolution
-          if (wasInGame && !newData.is_in_game && previousGameId) {
-            console.log('Game ended (detected via realtime)! Triggering bet resolution...');
-            handleGameEnd(previousGameId);
+              // Handle game end
+              if (wasInGame && !newData.is_in_game && previousGameId) {
+                console.log(`Game ended for ${player.displayName}! Triggering bet resolution...`);
+                handleGameEnd(player, previousGameId);
+              }
+            }
           }
-        }
-      )
-      .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
-      });
+        )
+        .subscribe((status) => {
+          console.log(`Realtime subscription for ${player.displayName}:`, status);
+        });
 
-    set({ realtimeChannel: channel });
-  },
-
-  unsubscribeFromGameStatus: () => {
-    const { realtimeChannel } = get();
-
-    if (realtimeChannel) {
-      console.log('Unsubscribing from game status updates...');
-      supabase.removeChannel(realtimeChannel);
-      set({ realtimeChannel: null });
+      const newChannels = new Map(get().realtimeChannels);
+      newChannels.set(player.puuid, channel);
+      set({ realtimeChannels: newChannels });
     }
   },
 
-  checkGameStatus: async () => {
-    const { johnny, testMode } = get();
+  unsubscribeFromAllPlayers: () => {
+    const { realtimeChannels } = get();
 
-    // Don't check if in test mode
+    for (const [puuid, channel] of realtimeChannels) {
+      console.log('Unsubscribing from player:', puuid);
+      supabase.removeChannel(channel);
+    }
+
+    set({ realtimeChannels: new Map() });
+  },
+
+  checkGameStatus: async (player?: TrackedPlayer) => {
+    const { testMode, selectedPlayer, playerStates } = get();
+    const targetPlayer = player || selectedPlayer;
+
     if (testMode) {
       console.log('Test mode active, skipping game status check');
       return;
     }
 
-    if (!johnny.puuid) {
-      console.warn('checkGameStatus: Johnny PUUID not configured');
+    if (!targetPlayer?.puuid) {
+      console.warn('checkGameStatus: No player or PUUID');
       return;
     }
 
     try {
-      // First, check Supabase for recent game status
-      const { data: statusData, error: statusError } = await supabase
-        .from('game_status')
+      // Check Supabase for recent game status
+      const { data: statusData } = await supabase
+        .from('player_game_status')
         .select('*')
-        .eq('id', 1)
+        .eq('player_id', targetPlayer.id)
         .single();
 
-      if (!statusError && statusData) {
+      if (statusData) {
         const lastCheckTime = new Date(statusData.last_check_at).getTime();
         const timeSinceLastCheck = Date.now() - lastCheckTime;
 
-        // If data is fresh (another user checked recently), use it
         if (timeSinceLastCheck < STALE_THRESHOLD) {
-          console.log(`Using cached game status (${Math.round(timeSinceLastCheck / 1000)}s old, checked by ${statusData.last_checker_id?.slice(0, 15)}...)`);
+          console.log(`Using cached status for ${targetPlayer.displayName} (${Math.round(timeSinceLastCheck / 1000)}s old)`);
 
-          // Update local state from shared state
-          const { currentGameId: prevGameId, isInGame: wasInGame } = get();
+          const currentState = playerStates.get(targetPlayer.puuid);
+          const wasInGame = currentState?.isInGame || false;
+          const previousGameId = currentState?.currentGameId;
 
-          set({
+          const newPlayerStates = new Map(playerStates);
+          newPlayerStates.set(targetPlayer.puuid, {
+            player: targetPlayer,
             isInGame: statusData.is_in_game,
             currentGame: statusData.game_data,
             currentGameId: statusData.game_id,
             gameStartTime: statusData.game_start_time,
-            error: null
+            lastMatch: currentState?.lastMatch || null,
+            lastMatchStats: currentState?.lastMatchStats || null
           });
+          set({ playerStates: newPlayerStates });
 
-          // Check if game ended
-          if (wasInGame && !statusData.is_in_game && prevGameId) {
-            handleGameEnd(prevGameId);
+          if (wasInGame && !statusData.is_in_game && previousGameId) {
+            handleGameEnd(targetPlayer, previousGameId);
           }
-
-          return; // No API call needed!
+          return;
         }
-
-        console.log(`Game status is stale (${Math.round(timeSinceLastCheck / 1000)}s old), polling Riot API...`);
       }
 
-      // Data is stale or doesn't exist - poll Riot API
-      console.log('Checking game status for', johnny.gameName || johnny.puuid);
-      const currentGame = await riotApi.getCurrentGame(johnny.puuid);
+      // Poll Riot API
+      console.log(`Checking game status for ${targetPlayer.displayName} (${targetPlayer.gameName}#${targetPlayer.tagLine})`);
+      riotApi.setRegion(targetPlayer.region as Region);
+      const currentGame = await riotApi.getCurrentGame(targetPlayer.puuid);
 
-      const wasInGame = get().isInGame;
-      const previousGameId = get().currentGameId;
+      const currentState = playerStates.get(targetPlayer.puuid);
+      const wasInGame = currentState?.isInGame || false;
+      const previousGameId = currentState?.currentGameId;
 
       if (currentGame) {
-        // Johnny is in game!
         const gameId = `${currentGame.platformId}_${currentGame.gameId}`;
-        console.log('Johnny is IN GAME!', gameId);
+        console.log(`${targetPlayer.displayName} is IN GAME!`, gameId);
 
-        // Check if this is a NEW game (wasn't in game before)
         const isNewGame = !wasInGame;
 
-        // Update local state
-        set({
+        const newPlayerStates = new Map(playerStates);
+        newPlayerStates.set(targetPlayer.puuid, {
+          player: targetPlayer,
           isInGame: true,
           currentGame,
           currentGameId: gameId,
           gameStartTime: currentGame.gameStartTime,
-          error: null
+          lastMatch: currentState?.lastMatch || null,
+          lastMatchStats: currentState?.lastMatchStats || null
         });
+        set({ playerStates: newPlayerStates });
 
-        // Update shared state in Supabase
-        await updateSharedGameStatus(true, gameId, currentGame, currentGame.gameStartTime);
+        await updatePlayerGameStatus(targetPlayer, true, gameId, currentGame, currentGame.gameStartTime);
 
-        // Send Discord notification for NEW games only
         if (isNewGame) {
-          console.log('New game detected! Sending Discord notification...');
-          notifyGameStarted(currentGame.gameId, currentGame.gameMode || 'Ranked Solo/Duo')
+          console.log(`New game detected for ${targetPlayer.displayName}! Sending Discord notification...`);
+          notifyGameStarted(currentGame.gameId, currentGame.gameMode || 'Ranked Solo/Duo', targetPlayer.displayName)
             .then(sent => {
               if (sent) console.log('Discord notification sent successfully');
-              else console.log('Discord notification not sent (check webhook URL)');
             })
             .catch(err => console.error('Discord notification error:', err));
         }
-
       } else {
-        console.log('Johnny is not in game');
+        console.log(`${targetPlayer.displayName} is not in game`);
 
-        // Update local state
-        set({
+        const newPlayerStates = new Map(playerStates);
+        newPlayerStates.set(targetPlayer.puuid, {
+          player: targetPlayer,
           isInGame: false,
           currentGame: null,
-          gameStartTime: null
+          currentGameId: null,
+          gameStartTime: null,
+          lastMatch: currentState?.lastMatch || null,
+          lastMatchStats: currentState?.lastMatchStats || null
         });
+        set({ playerStates: newPlayerStates });
 
-        // Update shared state in Supabase
-        await updateSharedGameStatus(false, null, null, null);
+        await updatePlayerGameStatus(targetPlayer, false, null, null, null);
 
-        // If was in game and now isn't, handle game end
         if (wasInGame && previousGameId) {
-          handleGameEnd(previousGameId);
+          handleGameEnd(targetPlayer, previousGameId);
         }
       }
     } catch (error: any) {
-      console.error('Error checking game status:', error);
+      console.error(`Error checking game status for ${targetPlayer.displayName}:`, error);
     }
   },
 
+  checkAllPlayersStatus: async () => {
+    const { trackedPlayers, testMode } = get();
+
+    if (testMode) return;
+
+    // Check all players in parallel
+    await Promise.all(
+      trackedPlayers
+        .filter(p => p.puuid && p.isActive)
+        .map(player => get().checkGameStatus(player))
+    );
+  },
+
   startPolling: (intervalMs = 30000) => {
-    const { isPolling, johnny } = get();
+    const { isPolling, trackedPlayers } = get();
 
     if (isPolling) {
       console.log('Polling already active');
       return;
     }
 
-    if (!johnny.puuid) {
-      console.warn('Cannot start polling: PUUID not set');
+    if (trackedPlayers.length === 0) {
+      console.warn('Cannot start polling: No tracked players');
       return;
     }
 
-    console.log(`Starting polling every ${intervalMs / 1000}s for ${johnny.gameName}#${johnny.tagLine}`);
+    console.log(`Starting polling every ${intervalMs / 1000}s for ${trackedPlayers.length} players`);
 
-    // Subscribe to realtime updates
-    get().subscribeToGameStatus();
+    get().subscribeToAllPlayers();
+    get().checkAllPlayersStatus();
 
-    // Initial check
-    get().checkGameStatus();
-
-    // Start polling
     const interval = window.setInterval(() => {
-      get().checkGameStatus();
+      get().checkAllPlayersStatus();
     }, intervalMs);
 
     set({ isPolling: true, pollInterval: interval as unknown as number });
@@ -404,25 +421,32 @@ export const useGameStore = create<GameState>((set, get) => ({
       clearInterval(pollInterval);
     }
 
-    // Unsubscribe from realtime
-    get().unsubscribeFromGameStatus();
-
+    get().unsubscribeFromAllPlayers();
     set({ isPolling: false, pollInterval: null });
   },
 
-  fetchLastMatch: async () => {
-    const { johnny } = get();
-
-    if (!johnny.puuid) return;
+  fetchLastMatch: async (player: TrackedPlayer) => {
+    if (!player.puuid) return;
 
     set({ loading: true });
 
     try {
-      const lastMatch = await riotApi.getLastMatch(johnny.puuid);
+      riotApi.setRegion(player.region as Region);
+      const lastMatch = await riotApi.getLastMatch(player.puuid);
 
       if (lastMatch) {
-        const stats = riotApi.getPlayerStatsFromMatch(lastMatch, johnny.puuid);
-        set({ lastMatch, lastMatchStats: stats, loading: false });
+        const stats = riotApi.getPlayerStatsFromMatch(lastMatch, player.puuid);
+
+        const { playerStates } = get();
+        const currentState = playerStates.get(player.puuid);
+
+        const newPlayerStates = new Map(playerStates);
+        newPlayerStates.set(player.puuid, {
+          ...currentState!,
+          lastMatch,
+          lastMatchStats: stats
+        });
+        set({ playerStates: newPlayerStates, loading: false });
       } else {
         set({ loading: false });
       }
@@ -434,19 +458,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  // Start test mode - simulate a live game using a historical match
-  startTestMode: async (matchId: string) => {
-    const { johnny } = get();
-
-    if (!johnny.puuid) {
-      set({ error: 'Johnny non configuré' });
+  startTestMode: async (matchId: string, player: TrackedPlayer) => {
+    if (!player.puuid) {
+      set({ error: 'Joueur non configuré' });
       return false;
     }
 
     set({ loading: true, error: null });
 
     try {
-      // Fetch the match data from Riot API
+      riotApi.setRegion(player.region as Region);
       const matchData = await riotApi.getMatch(matchId);
 
       if (!matchData) {
@@ -454,15 +475,25 @@ export const useGameStore = create<GameState>((set, get) => ({
         return false;
       }
 
-      console.log('Starting test mode with match:', matchId);
+      console.log(`Starting test mode with match ${matchId} for ${player.displayName}`);
 
-      // Set test mode active - this makes isInGame true for betting
+      // Update player state to be "in game"
+      const { playerStates } = get();
+      const currentState = playerStates.get(player.puuid);
+
+      const newPlayerStates = new Map(playerStates);
+      newPlayerStates.set(player.puuid, {
+        ...currentState!,
+        isInGame: true,
+        gameStartTime: matchData.info.gameStartTimestamp
+      });
+
       set({
         testMode: true,
         testMatchId: matchId,
         testMatchData: matchData,
-        isInGame: true, // This enables betting
-        gameStartTime: matchData.info.gameStartTimestamp,
+        testPlayer: player,
+        playerStates: newPlayerStates,
         loading: false
       });
 
@@ -474,55 +505,81 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  // End test mode - resolve all pending bets based on the test match
   endTestMode: async () => {
-    const { testMatchData, johnny } = get();
+    const { testMatchData, testPlayer, playerStates } = get();
 
-    if (!testMatchData || !johnny.puuid) {
-      set({ testMode: false, testMatchId: null, testMatchData: null, isInGame: false });
+    if (!testMatchData || !testPlayer?.puuid) {
+      set({ testMode: false, testMatchId: null, testMatchData: null, testPlayer: null });
       return { won: 0, lost: 0 };
     }
 
     console.log('Ending test mode, resolving bets...');
 
     try {
-      // Resolve bets using the test match data
-      const results = await resolveBets(testMatchData, johnny.puuid);
+      const results = await resolveBets(testMatchData, testPlayer.puuid, testPlayer.displayName);
 
       const won = results.filter(r => r.won).length;
       const lost = results.filter(r => !r.won).length;
 
       console.log(`Test mode ended: ${won} won, ${lost} lost`);
 
-      // Reset test mode state
+      // Reset player state
+      const currentState = playerStates.get(testPlayer.puuid);
+      const newPlayerStates = new Map(playerStates);
+      newPlayerStates.set(testPlayer.puuid, {
+        ...currentState!,
+        isInGame: false,
+        gameStartTime: null
+      });
+
       set({
         testMode: false,
         testMatchId: null,
         testMatchData: null,
-        isInGame: false,
-        gameStartTime: null
+        testPlayer: null,
+        playerStates: newPlayerStates
       });
 
       return { won, lost };
     } catch (error: any) {
       console.error('Error ending test mode:', error);
 
-      // Reset anyway
       set({
         testMode: false,
         testMatchId: null,
         testMatchData: null,
-        isInGame: false,
-        gameStartTime: null
+        testPlayer: null
       });
 
       return { won: 0, lost: 0 };
     }
+  },
+
+  getPlayerState: (puuid: string) => {
+    return get().playerStates.get(puuid);
+  },
+
+  getPlayersInGame: () => {
+    const { playerStates, testMode, testPlayer } = get();
+
+    if (testMode && testPlayer?.puuid) {
+      const state = playerStates.get(testPlayer.puuid);
+      return state ? [state] : [];
+    }
+
+    return Array.from(playerStates.values()).filter(s => s.isInGame);
+  },
+
+  isAnyPlayerInGame: () => {
+    const { testMode } = get();
+    if (testMode) return true;
+    return get().getPlayersInGame().length > 0;
   }
 }));
 
-// Helper function to update shared game status in Supabase
-async function updateSharedGameStatus(
+// Helper function to update player game status in Supabase
+async function updatePlayerGameStatus(
+  player: TrackedPlayer,
   isInGame: boolean,
   gameId: string | null,
   gameData: CurrentGameInfo | null,
@@ -530,9 +587,9 @@ async function updateSharedGameStatus(
 ) {
   try {
     const { error } = await supabase
-      .from('game_status')
+      .from('player_game_status')
       .upsert({
-        id: 1,
+        player_id: player.id,
         is_in_game: isInGame,
         game_id: gameId,
         game_data: gameData,
@@ -540,83 +597,85 @@ async function updateSharedGameStatus(
         last_check_at: new Date().toISOString(),
         last_checker_id: BROWSER_ID,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
+      }, { onConflict: 'player_id' });
 
     if (error) {
-      console.error('Error updating shared game status:', error);
-    } else {
-      console.log('Shared game status updated');
+      console.error('Error updating player game status:', error);
     }
   } catch (e) {
-    console.error('Failed to update shared game status:', e);
+    console.error('Failed to update player game status:', e);
   }
 }
 
 // Helper function to handle game end (bet resolution)
-function handleGameEnd(previousGameId: string) {
-  console.log('Game ended! Previous game ID:', previousGameId);
+function handleGameEnd(player: TrackedPlayer, previousGameId: string) {
+  console.log(`Game ended for ${player.displayName}! Previous game ID:`, previousGameId);
   console.log('Waiting for Riot API to process match data (90 seconds)...');
 
-  // Wait for Riot API to have the match data
   setTimeout(async () => {
-    const { johnny } = useGameStore.getState();
-    if (!johnny.puuid) return;
+    if (!player.puuid) return;
 
-    console.log('Fetching last match for bet resolution...');
-    console.log('Expected match ID:', previousGameId);
+    console.log(`Fetching last match for ${player.displayName} bet resolution...`);
 
-    // Try to fetch the match data with retries
-    let lastMatch = await riotApi.getLastMatch(johnny.puuid);
+    riotApi.setRegion(player.region as Region);
+    let lastMatch = await riotApi.getLastMatch(player.puuid);
     let retryCount = 0;
     const maxRetries = 4;
-    const retryDelays = [30000, 60000, 60000, 60000]; // 30s, 60s, 60s, 60s
+    const retryDelays = [30000, 60000, 60000, 60000];
 
-    // Keep retrying until we get the correct match or run out of retries
     while (lastMatch && lastMatch.metadata.matchId !== previousGameId && retryCount < maxRetries) {
       console.log(`Match found (${lastMatch.metadata.matchId}) doesn't match expected (${previousGameId})`);
-      console.log(`Retrying in ${retryDelays[retryCount] / 1000}s... (attempt ${retryCount + 1}/${maxRetries})`);
+      console.log(`Retrying in ${retryDelays[retryCount] / 1000}s...`);
       await new Promise(resolve => setTimeout(resolve, retryDelays[retryCount]));
-      lastMatch = await riotApi.getLastMatch(johnny.puuid);
+      lastMatch = await riotApi.getLastMatch(player.puuid);
       retryCount++;
     }
 
-    // Also handle case where no match was found initially
     if (!lastMatch) {
       console.log('No match found yet, retrying in 30 seconds...');
       await new Promise(resolve => setTimeout(resolve, 30000));
-      lastMatch = await riotApi.getLastMatch(johnny.puuid);
+      lastMatch = await riotApi.getLastMatch(player.puuid);
     }
 
     if (lastMatch) {
-      // CRITICAL: Verify the match ID matches before resolving bets
       if (lastMatch.metadata.matchId !== previousGameId) {
-        console.error(`MATCH ID MISMATCH! Expected: ${previousGameId}, Got: ${lastMatch.metadata.matchId}`);
-        console.error('NOT resolving bets to prevent wrong resolution. Bets will stay pending.');
-        // Clear game ID to avoid blocking future games
-        useGameStore.setState({ currentGameId: null });
+        console.error(`MATCH ID MISMATCH for ${player.displayName}! Expected: ${previousGameId}, Got: ${lastMatch.metadata.matchId}`);
+        console.error('NOT resolving bets to prevent wrong resolution.');
         return;
       }
 
-      const stats = riotApi.getPlayerStatsFromMatch(lastMatch, johnny.puuid);
-      useGameStore.setState({ lastMatch, lastMatchStats: stats });
+      const stats = riotApi.getPlayerStatsFromMatch(lastMatch, player.puuid);
 
-      console.log('Match found and VERIFIED:', lastMatch.metadata.matchId);
-      console.log('Johnny stats:', stats?.kills, '/', stats?.deaths, '/', stats?.assists);
+      // Update player state
+      const { playerStates } = useGameStore.getState();
+      const currentState = playerStates.get(player.puuid);
+      if (currentState) {
+        const newPlayerStates = new Map(playerStates);
+        newPlayerStates.set(player.puuid, {
+          ...currentState,
+          lastMatch,
+          lastMatchStats: stats,
+          currentGameId: null
+        });
+        useGameStore.setState({ playerStates: newPlayerStates });
+      }
 
-      // Send Discord notification for game end
+      console.log(`Match verified for ${player.displayName}:`, lastMatch.metadata.matchId);
+      console.log(`${player.displayName} stats:`, stats?.kills, '/', stats?.deaths, '/', stats?.assists);
+
       if (stats) {
         notifyGameEnded(
           stats.win,
           stats.kills,
           stats.deaths,
           stats.assists,
-          stats.championName
+          stats.championName,
+          player.displayName
         ).catch(err => console.error('Discord end notification error:', err));
       }
 
-      // Resolve bets based on actual match data (only for this specific match)
-      console.log('Resolving pending bets for match:', previousGameId);
-      const results = await resolveBets(lastMatch, johnny.puuid, previousGameId);
+      console.log(`Resolving pending bets for ${player.displayName}, match:`, previousGameId);
+      const results = await resolveBets(lastMatch, player.puuid, player.displayName, previousGameId);
       console.log('Bet resolution complete:', results.length, 'bets resolved');
 
       if (results.length > 0) {
@@ -625,22 +684,12 @@ function handleGameEnd(previousGameId: string) {
         console.log(`Results: ${won} won, ${lost} lost`);
       }
 
-      // Now clear the game ID
-      useGameStore.setState({ currentGameId: null });
-
-      // Save to match history (auto-sync)
+      // Save to match history
       console.log('Auto-syncing match to museum...');
       const matchHistoryStore = useMatchHistoryStore.getState();
-      const newMatch = await matchHistoryStore.checkForNewMatch();
-      if (newMatch) {
-        console.log('New match saved to museum:', newMatch.id);
-      } else {
-        console.log('Match not saved to museum (might already exist)');
-      }
+      await matchHistoryStore.checkForNewMatch();
     } else {
-      console.error('Could not fetch match data after retries');
-      // Clear game ID anyway to avoid blocking future games
-      useGameStore.setState({ currentGameId: null });
+      console.error(`Could not fetch match data for ${player.displayName} after retries`);
     }
-  }, 90000); // Wait 90 seconds for Riot API to process the match
+  }, 90000);
 }
