@@ -1,6 +1,27 @@
 // Discord Webhook Service for game notifications
 
-const DISCORD_WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK_URL || '';
+const WEBHOOK_STORAGE_KEY = 'johnny_discord_webhook_url';
+
+// Get webhook URL from localStorage or env
+function getWebhookUrl(): string {
+  const storedUrl = localStorage.getItem(WEBHOOK_STORAGE_KEY);
+  if (storedUrl) return storedUrl;
+  return import.meta.env.VITE_DISCORD_WEBHOOK_URL || '';
+}
+
+// Set webhook URL in localStorage
+export function setWebhookUrl(url: string): void {
+  if (url) {
+    localStorage.setItem(WEBHOOK_STORAGE_KEY, url);
+  } else {
+    localStorage.removeItem(WEBHOOK_STORAGE_KEY);
+  }
+}
+
+// Get current webhook URL (for display)
+export function getStoredWebhookUrl(): string {
+  return localStorage.getItem(WEBHOOK_STORAGE_KEY) || '';
+}
 
 interface DiscordEmbed {
   title?: string;
@@ -24,19 +45,22 @@ const COLORS = {
   GREEN: 0x22c55e,  // Game started - bets open
   RED: 0xef4444,    // Game ended
   GOLD: 0xf59e0b,   // Warning
+  PURPLE: 0xa855f7, // Test
 };
 
 // Track last notification to avoid duplicates
 let lastNotifiedGameId: number | null = null;
 
 export async function sendDiscordNotification(message: DiscordMessage): Promise<boolean> {
-  if (!DISCORD_WEBHOOK_URL) {
+  const webhookUrl = getWebhookUrl();
+
+  if (!webhookUrl) {
     console.warn('Discord webhook URL not configured');
     return false;
   }
 
   try {
-    const response = await fetch(DISCORD_WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,6 +82,49 @@ export async function sendDiscordNotification(message: DiscordMessage): Promise<
     console.error('Discord webhook error:', error);
     return false;
   }
+}
+
+// Send a test notification
+export async function sendTestNotification(championName: string = 'Yasuo', gameMode: string = 'Ranked Solo/Duo'): Promise<boolean> {
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.com';
+
+  return sendDiscordNotification({
+    content: '🧪 **TEST** - Ceci est un message de test',
+    embeds: [{
+      title: '🎰 JOHNNY EST EN GAME ! (TEST)',
+      description: `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de Johnny !**\n\n⚠️ *Ceci est un test, Johnny n'est pas vraiment en game*`,
+      color: COLORS.PURPLE,
+      fields: [
+        {
+          name: '🎮 Mode de jeu',
+          value: gameMode,
+          inline: true,
+        },
+        {
+          name: '🏆 Champion',
+          value: championName,
+          inline: true,
+        },
+        {
+          name: '⏱️ Temps restant',
+          value: '3 minutes pour parier',
+          inline: true,
+        },
+        {
+          name: '🔗 Parier maintenant',
+          value: `[Ouvrir JohnnyFF15](${siteUrl})`,
+          inline: false,
+        },
+      ],
+      thumbnail: {
+        url: 'https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/4644.png',
+      },
+      footer: {
+        text: 'JohnnyFF15 - Message de test',
+      },
+      timestamp: new Date().toISOString(),
+    }],
+  });
 }
 
 export async function notifyGameStarted(gameId: number, gameMode: string, championName?: string): Promise<boolean> {

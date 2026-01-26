@@ -11,7 +11,8 @@ import { Bet } from '../types';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins } from 'lucide-react';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send } from 'lucide-react';
+import { setWebhookUrl, getStoredWebhookUrl, sendTestNotification } from '../services/discordWebhook';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -110,6 +111,13 @@ const Admin = () => {
   const [addCreditsLoading, setAddCreditsLoading] = useState(false);
   const [addCreditsResult, setAddCreditsResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // Discord webhook
+  const [webhookUrl, setWebhookUrlState] = useState<string>('');
+  const [testChampion, setTestChampion] = useState<string>('Yasuo');
+  const [testGameMode, setTestGameMode] = useState<string>('Ranked Solo/Duo');
+  const [webhookTestLoading, setWebhookTestLoading] = useState(false);
+  const [webhookResult, setWebhookResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Check if user is admin
   const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
 
@@ -117,6 +125,8 @@ const Admin = () => {
     loadJohnnyConfig();
     loadMatches();
     loadAllPendingBets();
+    // Load stored webhook URL
+    setWebhookUrlState(getStoredWebhookUrl());
   }, []);
 
   // Redirect non-admin users
@@ -517,6 +527,38 @@ const Admin = () => {
       setAddCreditsLoading(false);
       setTimeout(() => setAddCreditsResult(null), 5000);
     }
+  };
+
+  // Save webhook URL
+  const handleSaveWebhook = () => {
+    setWebhookUrl(webhookUrl);
+    setWebhookResult({ success: true, message: 'Webhook URL sauvegardé !' });
+    setTimeout(() => setWebhookResult(null), 3000);
+  };
+
+  // Test webhook
+  const handleTestWebhook = async () => {
+    if (!webhookUrl) {
+      setWebhookResult({ success: false, message: 'Configure d\'abord l\'URL du webhook' });
+      return;
+    }
+
+    setWebhookTestLoading(true);
+    setWebhookResult(null);
+
+    // Save first to ensure we use the current URL
+    setWebhookUrl(webhookUrl);
+
+    const success = await sendTestNotification(testChampion, testGameMode);
+
+    if (success) {
+      setWebhookResult({ success: true, message: 'Message de test envoyé ! Vérifie ton serveur Discord.' });
+    } else {
+      setWebhookResult({ success: false, message: 'Erreur lors de l\'envoi. Vérifie l\'URL du webhook.' });
+    }
+
+    setWebhookTestLoading(false);
+    setTimeout(() => setWebhookResult(null), 5000);
   };
 
   // Handle odds change
@@ -1422,6 +1464,113 @@ const Admin = () => {
                       <AlertCircle className="w-4 h-4" />
                     )}
                     <span>{addCreditsResult.message}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Discord Webhook */}
+          <div className="bg-gradient-to-b from-indigo-950/20 to-zinc-900 p-6 rounded-2xl border border-indigo-500/30">
+            <div className="flex items-center gap-3 mb-4">
+              <Bell className="w-5 h-5 text-indigo-400" />
+              <h3 className="font-bold text-white">Discord Webhook</h3>
+            </div>
+
+            <p className="text-xs text-zinc-400 mb-4">
+              Configure le webhook Discord pour envoyer des notifications quand Johnny entre en game.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-zinc-400 mb-2">URL du Webhook</label>
+                <input
+                  type="url"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrlState(e.target.value)}
+                  placeholder="https://discord.com/api/webhooks/..."
+                  className="w-full p-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder:text-zinc-500 focus:border-indigo-500 focus:outline-none font-mono text-sm"
+                />
+              </div>
+
+              <button
+                onClick={handleSaveWebhook}
+                disabled={!webhookUrl}
+                className="w-full py-3 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Sauvegarder le Webhook
+              </button>
+
+              <div className="pt-4 border-t border-zinc-800">
+                <div className="text-sm text-zinc-400 mb-3">Tester le webhook</div>
+
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="block text-xs text-zinc-500 mb-1">Champion</label>
+                    <select
+                      value={testChampion}
+                      onChange={(e) => setTestChampion(e.target.value)}
+                      className="w-full p-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="Yasuo">Yasuo</option>
+                      <option value="Yone">Yone</option>
+                      <option value="Riven">Riven</option>
+                      <option value="Vayne">Vayne</option>
+                      <option value="Lee Sin">Lee Sin</option>
+                      <option value="Zed">Zed</option>
+                      <option value="Akali">Akali</option>
+                      <option value="Irelia">Irelia</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-500 mb-1">Mode de jeu</label>
+                    <select
+                      value={testGameMode}
+                      onChange={(e) => setTestGameMode(e.target.value)}
+                      className="w-full p-2 rounded-lg bg-zinc-800 border border-zinc-700 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="Ranked Solo/Duo">Ranked Solo/Duo</option>
+                      <option value="Ranked Flex">Ranked Flex</option>
+                      <option value="Normal Draft">Normal Draft</option>
+                      <option value="ARAM">ARAM</option>
+                      <option value="Clash">Clash</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleTestWebhook}
+                  disabled={webhookTestLoading || !webhookUrl}
+                  className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  {webhookTestLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Envoi en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Envoyer un message de test
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {webhookResult && (
+                <div className={`p-3 rounded-xl text-sm ${
+                  webhookResult.success
+                    ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                    : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {webhookResult.success ? (
+                      <CheckCircle className="w-4 h-4" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4" />
+                    )}
+                    <span>{webhookResult.message}</span>
                   </div>
                 </div>
               )}
