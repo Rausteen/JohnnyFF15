@@ -109,10 +109,9 @@ const ShareableBetCard: React.FC<ShareableBetCardProps> = ({ gameData, onClose }
             <div style={{
               fontSize: '28px',
               fontWeight: 900,
-              background: `linear-gradient(135deg, #f59e0b, #fbbf24)`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              color: '#fbbf24',
               letterSpacing: '-0.5px',
+              textShadow: '0 0 20px #f59e0b40',
             }}>
               JohnnyFF15
             </div>
