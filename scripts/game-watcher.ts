@@ -199,7 +199,7 @@ async function sendDiscordNotification(
   }
 
   fields.push(
-    { name: '⏱️ Temps restant', value: '3 minutes pour parier', inline: true },
+    { name: '⏱️ Temps restant', value: '4 minutes pour parier', inline: true },
     { name: '🔗 Parier maintenant', value: '[Ouvrir JohnnyFF15](https://johnnyff15.fr/#/dashboard)', inline: false }
   );
 
@@ -216,8 +216,8 @@ async function sendDiscordNotification(
         ? `🎰 ${playersUpper} SONT EN GAME ENSEMBLE !`
         : `🎰 ${playersUpper} EST EN GAME !`,
       description: isMultiple
-        ? `Les paris sont ouverts pendant **3 minutes** !\n\n**${playersList} jouent ensemble ! Viens parier sur leurs feeds !**`
-        : `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de ${playersList} !**`,
+        ? `Les paris sont ouverts pendant **4 minutes** !\n\n**${playersList} jouent ensemble ! Viens parier sur leurs feeds !**`
+        : `Les paris sont ouverts pendant **4 minutes** !\n\n**Viens parier sur le feed de ${playersList} !**`,
       color: 0x22c55e,
       fields,
       thumbnail: { url: thumbnailUrl },

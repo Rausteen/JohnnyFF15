@@ -102,7 +102,7 @@ export async function sendTestNotification(championName: string = 'Yasuo', gameM
     content: '🧪 **TEST** - Ceci est un message de test',
     embeds: [{
       title: `🎰 ${playerName.toUpperCase()} EST EN GAME ! (TEST)`,
-      description: `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de ${playerName} !**\n\n⚠️ *Ceci est un test, ${playerName} n'est pas vraiment en game*`,
+      description: `Les paris sont ouverts pendant **4 minutes** !\n\n**Viens parier sur le feed de ${playerName} !**\n\n⚠️ *Ceci est un test, ${playerName} n'est pas vraiment en game*`,
       color: COLORS.PURPLE,
       fields: [
         {
@@ -117,7 +117,7 @@ export async function sendTestNotification(championName: string = 'Yasuo', gameM
         },
         {
           name: '⏱️ Temps restant',
-          value: '3 minutes pour parier',
+          value: '4 minutes pour parier',
           inline: true,
         },
         {
@@ -185,7 +185,7 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
   fields.push(
     {
       name: '⏱️ Temps restant',
-      value: '3 minutes pour parier',
+      value: '4 minutes pour parier',
       inline: true,
     },
     {
@@ -207,8 +207,8 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
         ? `🎰 ${playersUpper} SONT EN GAME ENSEMBLE !`
         : `🎰 ${playersUpper} EST EN GAME !`,
       description: isMultiplePlayers
-        ? `Les paris sont ouverts pendant **3 minutes** !\n\n**${playersList} jouent ensemble ! Viens parier sur leurs feeds !**`
-        : `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de ${playersList} !**`,
+        ? `Les paris sont ouverts pendant **4 minutes** !\n\n**${playersList} jouent ensemble ! Viens parier sur leurs feeds !**`
+        : `Les paris sont ouverts pendant **4 minutes** !\n\n**Viens parier sur le feed de ${playersList} !**`,
       color: COLORS.GREEN,
       fields,
       thumbnail: {

@@ -51,16 +51,16 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
   const canBetOnProp = () => {
     if (!isInGame || !activePlayer) return false;
 
-    // Global betting window: only allow bets in the first X minutes (999 for testing)
-    if (gameTimeMinutes >= 999) {
+    // Global betting window: only allow bets in the first 4 minutes
+    if (gameTimeMinutes >= 4) {
       return false;
     }
 
     return true;
   };
 
-  // Check if betting window is closed (999 for testing)
-  const isBettingWindowClosed = isInGame && gameTimeMinutes >= 999;
+  // Check if betting window is closed (4 minutes)
+  const isBettingWindowClosed = isInGame && gameTimeMinutes >= 4;
 
   const handleBet = async () => {
     setError(null);

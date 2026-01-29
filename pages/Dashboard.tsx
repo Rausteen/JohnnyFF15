@@ -633,7 +633,7 @@ const Dashboard = () => {
               <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 shrink-0" />
               <div>
                 <p className="text-red-400 font-bold text-xs sm:text-sm">Fenêtre de paris fermée</p>
-                <p className="text-xs text-zinc-400">Les paris sont fermés après 3 minutes de jeu. Attends la prochaine game !</p>
+                <p className="text-xs text-zinc-400">Les paris sont fermés après 4 minutes de jeu. Attends la prochaine game !</p>
               </div>
             </div>
           )}
