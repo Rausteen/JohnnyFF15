@@ -11,8 +11,8 @@ import { Bet, TrackedPlayer } from '../types';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
-import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers } from '../services/playersService';
-import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers, linkUserToPlayer, unlinkUserFromPlayer } from '../services/playersService';
+import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight, Link2, Unlink } from 'lucide-react';
 import { sendTestNotification } from '../services/discordWebhook';
 import { syncLastGame as syncLastGameCommand, checkPlayersStatus } from '../services/adminCommands';
 
@@ -138,6 +138,10 @@ const Admin = () => {
   // Inactive players (for reactivation)
   const [inactivePlayers, setInactivePlayers] = useState<TrackedPlayer[]>([]);
   const [reactivatingPlayerId, setReactivatingPlayerId] = useState<string | null>(null);
+
+  // User linking to player (anti self-betting)
+  const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
+  const [linkUserLoading, setLinkUserLoading] = useState(false);
 
   // Load inactive players
   const loadInactivePlayers = async () => {
@@ -310,6 +314,33 @@ const Admin = () => {
       alert(result.message);
     } else {
       alert(`Erreur: ${result.message}`);
+    }
+  };
+
+  // Handler to link a user to a player (anti self-betting)
+  const handleLinkUser = async (playerId: string, userId: string) => {
+    setLinkUserLoading(true);
+    try {
+      const success = await linkUserToPlayer(playerId, userId);
+      if (success) {
+        await loadTrackedPlayers();
+        setLinkingPlayerId(null);
+      }
+    } finally {
+      setLinkUserLoading(false);
+    }
+  };
+
+  // Handler to unlink a user from a player
+  const handleUnlinkUser = async (playerId: string) => {
+    setLinkUserLoading(true);
+    try {
+      const success = await unlinkUserFromPlayer(playerId);
+      if (success) {
+        await loadTrackedPlayers();
+      }
+    } finally {
+      setLinkUserLoading(false);
     }
   };
 
@@ -944,7 +975,14 @@ const Admin = () => {
                           isPlayerInGame ? 'bg-green-400 animate-pulse' : player.isActive ? 'bg-zinc-500' : 'bg-zinc-700'
                         }`} />
                         <div className="min-w-0">
-                          <div className="font-medium text-white truncate">{player.displayName}</div>
+                          <div className="font-medium text-white truncate flex items-center gap-2">
+                            {player.displayName}
+                            {player.userId && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded-full" title="Lié à un compte - ne peut pas parier sur lui-même">
+                                {allUsers.find(u => u.id === player.userId)?.pseudo || 'Lié'}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-xs text-zinc-500 truncate">{player.gameName}#{player.tagLine} • {player.region}</div>
                         </div>
                       </div>
@@ -960,6 +998,45 @@ const Admin = () => {
                         >
                           {player.isActive ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
                         </button>
+                        {/* Link/Unlink user button */}
+                        <div className="relative">
+                          {player.userId ? (
+                            <button
+                              onClick={() => handleUnlinkUser(player.id)}
+                              disabled={linkUserLoading}
+                              className="p-1.5 text-amber-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                              title={`Lié à: ${allUsers.find(u => u.id === player.userId)?.pseudo || 'Utilisateur'} - Cliquer pour délier`}
+                            >
+                              <Unlink className="w-4 h-4" />
+                            </button>
+                          ) : linkingPlayerId === player.id ? (
+                            <select
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleLinkUser(player.id, e.target.value);
+                                } else {
+                                  setLinkingPlayerId(null);
+                                }
+                              }}
+                              className="absolute right-0 top-0 w-32 p-1 text-xs bg-zinc-800 border border-zinc-600 rounded text-white"
+                              autoFocus
+                              onBlur={() => setLinkingPlayerId(null)}
+                            >
+                              <option value="">Annuler</option>
+                              {allUsers.map(u => (
+                                <option key={u.id} value={u.id}>{u.pseudo}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <button
+                              onClick={() => setLinkingPlayerId(player.id)}
+                              className="p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
+                              title="Lier à un compte (anti self-bet)"
+                            >
+                              <Link2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                         <button
                           onClick={() => handleStartEdit(player)}
                           className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
