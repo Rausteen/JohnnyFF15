@@ -134,9 +134,9 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
 
   const adjustScore = (team: 'ally' | 'enemy', delta: number) => {
     if (team === 'ally') {
-      setTeamDragons(prev => Math.max(0, Math.min(8, prev + delta)));
+      setTeamDragons(prev => Math.max(0, Math.min(5, prev + delta)));
     } else {
-      setEnemyDragons(prev => Math.max(0, Math.min(8, prev + delta)));
+      setEnemyDragons(prev => Math.max(0, Math.min(5, prev + delta)));
     }
     setError(null);
   };
