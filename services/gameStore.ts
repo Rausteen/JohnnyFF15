@@ -261,7 +261,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   checkGameStatus: async (player?: TrackedPlayer) => {
-    const { testMode, selectedPlayer, playerStates } = get();
+    const { testMode, selectedPlayer } = get();
     const targetPlayer = player || selectedPlayer;
 
     if (testMode) {
@@ -273,6 +273,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       console.warn('checkGameStatus: No player or PUUID');
       return;
     }
+
+    const puuid = targetPlayer.puuid;
 
     try {
       // Check Supabase for recent game status
@@ -289,21 +291,27 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (timeSinceLastCheck < STALE_THRESHOLD) {
           console.log(`Using cached status for ${targetPlayer.displayName} (${Math.round(timeSinceLastCheck / 1000)}s old)`);
 
-          const currentState = playerStates.get(targetPlayer.puuid);
-          const wasInGame = currentState?.isInGame || false;
-          const previousGameId = currentState?.currentGameId;
+          // Use functional set to avoid race conditions with parallel updates
+          let wasInGame = false;
+          let previousGameId: string | null = null;
 
-          const newPlayerStates = new Map(playerStates);
-          newPlayerStates.set(targetPlayer.puuid, {
-            player: targetPlayer,
-            isInGame: statusData.is_in_game,
-            currentGame: statusData.game_data,
-            currentGameId: statusData.game_id,
-            gameStartTime: statusData.game_start_time,
-            lastMatch: currentState?.lastMatch || null,
-            lastMatchStats: currentState?.lastMatchStats || null
+          set(state => {
+            const currentState = state.playerStates.get(puuid);
+            wasInGame = currentState?.isInGame || false;
+            previousGameId = currentState?.currentGameId || null;
+
+            const newPlayerStates = new Map(state.playerStates);
+            newPlayerStates.set(puuid, {
+              player: targetPlayer,
+              isInGame: statusData.is_in_game,
+              currentGame: statusData.game_data,
+              currentGameId: statusData.game_id,
+              gameStartTime: statusData.game_start_time,
+              lastMatch: currentState?.lastMatch || null,
+              lastMatchStats: currentState?.lastMatchStats || null
+            });
+            return { playerStates: newPlayerStates };
           });
-          set({ playerStates: newPlayerStates });
 
           if (wasInGame && !statusData.is_in_game && previousGameId) {
             handleGameEnd(targetPlayer, previousGameId);
@@ -315,29 +323,31 @@ export const useGameStore = create<GameState>((set, get) => ({
       // Poll Riot API
       console.log(`Checking game status for ${targetPlayer.displayName} (${targetPlayer.gameName}#${targetPlayer.tagLine})`);
       riotApi.setRegion(targetPlayer.region as Region);
-      const currentGame = await riotApi.getCurrentGame(targetPlayer.puuid);
-
-      const currentState = playerStates.get(targetPlayer.puuid);
-      const wasInGame = currentState?.isInGame || false;
-      const previousGameId = currentState?.currentGameId;
+      const currentGame = await riotApi.getCurrentGame(puuid);
 
       if (currentGame) {
         const gameId = `${currentGame.platformId}_${currentGame.gameId}`;
         console.log(`${targetPlayer.displayName} is IN GAME!`, gameId);
 
-        const isNewGame = !wasInGame;
+        let isNewGame = false;
 
-        const newPlayerStates = new Map(playerStates);
-        newPlayerStates.set(targetPlayer.puuid, {
-          player: targetPlayer,
-          isInGame: true,
-          currentGame,
-          currentGameId: gameId,
-          gameStartTime: currentGame.gameStartTime,
-          lastMatch: currentState?.lastMatch || null,
-          lastMatchStats: currentState?.lastMatchStats || null
+        // Use functional set to avoid race conditions
+        set(state => {
+          const currentState = state.playerStates.get(puuid);
+          isNewGame = !currentState?.isInGame;
+
+          const newPlayerStates = new Map(state.playerStates);
+          newPlayerStates.set(puuid, {
+            player: targetPlayer,
+            isInGame: true,
+            currentGame,
+            currentGameId: gameId,
+            gameStartTime: currentGame.gameStartTime,
+            lastMatch: currentState?.lastMatch || null,
+            lastMatchStats: currentState?.lastMatchStats || null
+          });
+          return { playerStates: newPlayerStates };
         });
-        set({ playerStates: newPlayerStates });
 
         await updatePlayerGameStatus(targetPlayer, true, gameId, currentGame, currentGame.gameStartTime);
 
@@ -352,17 +362,27 @@ export const useGameStore = create<GameState>((set, get) => ({
       } else {
         console.log(`${targetPlayer.displayName} is not in game`);
 
-        const newPlayerStates = new Map(playerStates);
-        newPlayerStates.set(targetPlayer.puuid, {
-          player: targetPlayer,
-          isInGame: false,
-          currentGame: null,
-          currentGameId: null,
-          gameStartTime: null,
-          lastMatch: currentState?.lastMatch || null,
-          lastMatchStats: currentState?.lastMatchStats || null
+        let wasInGame = false;
+        let previousGameId: string | null = null;
+
+        // Use functional set to avoid race conditions
+        set(state => {
+          const currentState = state.playerStates.get(puuid);
+          wasInGame = currentState?.isInGame || false;
+          previousGameId = currentState?.currentGameId || null;
+
+          const newPlayerStates = new Map(state.playerStates);
+          newPlayerStates.set(puuid, {
+            player: targetPlayer,
+            isInGame: false,
+            currentGame: null,
+            currentGameId: null,
+            gameStartTime: null,
+            lastMatch: currentState?.lastMatch || null,
+            lastMatchStats: currentState?.lastMatchStats || null
+          });
+          return { playerStates: newPlayerStates };
         });
-        set({ playerStates: newPlayerStates });
 
         await updatePlayerGameStatus(targetPlayer, false, null, null, null);
 
