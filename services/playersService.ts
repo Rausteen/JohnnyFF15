@@ -109,7 +109,7 @@ export async function getTrackedPlayerByPuuid(puuid: string): Promise<TrackedPla
   }
 }
 
-// Add a new tracked player
+// Add a new tracked player (or reactivate if already exists)
 export async function addTrackedPlayer(player: {
   gameName: string;
   tagLine: string;
@@ -118,6 +118,53 @@ export async function addTrackedPlayer(player: {
   displayName: string;
 }): Promise<TrackedPlayer | null> {
   try {
+    // Check if player already exists (by PUUID or game_name + tag_line)
+    let existingPlayer = null;
+
+    if (player.puuid) {
+      const { data } = await supabase
+        .from('tracked_players')
+        .select('*')
+        .eq('puuid', player.puuid)
+        .single();
+      existingPlayer = data;
+    }
+
+    if (!existingPlayer) {
+      const { data } = await supabase
+        .from('tracked_players')
+        .select('*')
+        .eq('game_name', player.gameName)
+        .eq('tag_line', player.tagLine)
+        .single();
+      existingPlayer = data;
+    }
+
+    // If player exists, reactivate and update
+    if (existingPlayer) {
+      const { data, error } = await supabase
+        .from('tracked_players')
+        .update({
+          game_name: player.gameName,
+          tag_line: player.tagLine,
+          puuid: player.puuid || existingPlayer.puuid,
+          region: player.region,
+          display_name: player.displayName,
+          is_active: true
+        })
+        .eq('id', existingPlayer.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error reactivating player:', error);
+        return null;
+      }
+      console.log('Player reactivated:', player.displayName);
+      return supabasePlayerToLocal(data);
+    }
+
+    // Otherwise, create new player
     const { data, error } = await supabase
       .from('tracked_players')
       .insert([{
