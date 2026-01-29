@@ -695,7 +695,7 @@ const Admin = () => {
           jc_lost: 0,
           reset_at: new Date().toISOString()
         })
-        .neq('id', ''); // Update all rows
+        .not('id', 'is', null); // Update all rows
 
       if (profileError) throw profileError;
 
@@ -703,7 +703,7 @@ const Admin = () => {
       const { error: betsError } = await supabase
         .from('bets')
         .delete()
-        .neq('id', ''); // Delete all rows
+        .not('id', 'is', null); // Delete all rows
 
       if (betsError) throw betsError;
 
