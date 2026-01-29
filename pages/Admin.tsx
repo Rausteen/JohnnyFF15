@@ -119,6 +119,8 @@ const Admin = () => {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [resetAccountLoading, setResetAccountLoading] = useState(false);
   const [resetAccountResult, setResetAccountResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [resetAllAccountsLoading, setResetAllAccountsLoading] = useState(false);
+  const [resetAllAccountsResult, setResetAllAccountsResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Add credits to user
   const [addCreditsUserId, setAddCreditsUserId] = useState<string>('');
@@ -589,6 +591,63 @@ const Admin = () => {
     } finally {
       setResetAccountLoading(false);
       setTimeout(() => setResetAccountResult(null), 5000);
+    }
+  };
+
+  // Reset ALL user accounts
+  const handleResetAllAccounts = async () => {
+    if (!confirm('⚠️ ATTENTION ⚠️\n\nEs-tu VRAIMENT sûr de vouloir reset TOUS les comptes du site ?\n\nCela va:\n- Remettre TOUS les crédits à 10000\n- Reset TOUS les daily bonus\n- Remettre TOUTES les stats à zéro\n- Supprimer TOUS les paris\n\nCette action est IRRÉVERSIBLE !')) {
+      return;
+    }
+
+    // Double confirmation
+    if (!confirm('DERNIÈRE CONFIRMATION\n\nTous les comptes vont être reset.\nContinuer ?')) {
+      return;
+    }
+
+    setResetAllAccountsLoading(true);
+    setResetAllAccountsResult(null);
+
+    try {
+      // Reset all profiles in Supabase
+      const { error: profileError, count } = await supabase
+        .from('profiles')
+        .update({
+          credits: 10000,
+          last_daily_bonus: null,
+          total_bets: 0,
+          bets_won: 0,
+          bets_lost: 0,
+          jc_won: 0,
+          jc_lost: 0,
+          reset_at: new Date().toISOString()
+        })
+        .neq('id', ''); // Update all rows
+
+      if (profileError) throw profileError;
+
+      // Delete all bets from Supabase
+      const { error: betsError } = await supabase
+        .from('bets')
+        .delete()
+        .neq('id', ''); // Delete all rows
+
+      if (betsError) throw betsError;
+
+      setResetAllAccountsResult({
+        success: true,
+        message: `Tous les comptes ont été reset ! (${allUsers.length} utilisateurs)`
+      });
+
+      // Refresh users list and pending bets
+      fetchAllUsers();
+      loadAllPendingBets();
+    } catch (err: any) {
+      console.error('Reset all accounts error:', err);
+      setResetAllAccountsResult({ success: false, message: `Erreur: ${err.message}` });
+    } finally {
+      setResetAllAccountsLoading(false);
+      setTimeout(() => setResetAllAccountsResult(null), 5000);
     }
   };
 
@@ -1662,6 +1721,47 @@ const Admin = () => {
                   </div>
                 </div>
               )}
+
+              {/* Reset ALL Accounts */}
+              <div className="pt-4 border-t border-zinc-800">
+                <p className="text-xs text-red-400 mb-3">
+                  ⚠️ Zone dangereuse - Reset TOUS les comptes du site en même temps
+                </p>
+                <button
+                  onClick={handleResetAllAccounts}
+                  disabled={resetAllAccountsLoading}
+                  className="w-full py-3 bg-red-600/30 hover:bg-red-600/50 border border-red-600/50 text-red-300 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  {resetAllAccountsLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Reset en cours...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      Reset TOUS les comptes
+                    </>
+                  )}
+                </button>
+
+                {resetAllAccountsResult && (
+                  <div className={`mt-3 p-3 rounded-xl text-sm ${
+                    resetAllAccountsResult.success
+                      ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                      : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {resetAllAccountsResult.success ? (
+                        <CheckCircle className="w-4 h-4" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4" />
+                      )}
+                      <span>{resetAllAccountsResult.message}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { supabase } from './supabase';
-import { riotApi, MatchDto, getChampionName, getQueueName } from './riotApi';
+import { riotApi, MatchDto, getChampionName, getQueueName, Region } from './riotApi';
 import { resolveBets } from './betResolutionService';
 import { useGameStore } from './gameStore';
+import { getActiveTrackedPlayers } from './playersService';
 
 // Type for a saved match in Supabase
 export interface JohnnyMatch {
@@ -101,20 +102,23 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     }
   },
 
-  // Load matches from Supabase (filtered by Johnny's PUUID)
+  // Load matches from Supabase (all tracked players)
   loadMatches: async () => {
-    const { config } = get();
     set({ loading: true, error: null });
     try {
+      // Get all tracked player PUUIDs
+      const trackedPlayers = await getActiveTrackedPlayers();
+      const puuids = trackedPlayers.map(p => p.puuid).filter(Boolean);
+
       let query = supabase
         .from('johnny_matches')
         .select('*')
         .order('game_creation', { ascending: false })
-        .limit(50);
+        .limit(100);
 
-      // Filter by PUUID if configured (to avoid showing other players' games)
-      if (config?.puuid) {
-        query = query.eq('puuid', config.puuid);
+      // Filter by tracked player PUUIDs if any
+      if (puuids.length > 0) {
+        query = query.in('puuid', puuids);
       }
 
       const { data, error } = await query;
@@ -127,72 +131,78 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     }
   },
 
-  // Sync matches from Riot API to Supabase
+  // Sync matches from Riot API to Supabase (for all tracked players)
   syncMatches: async () => {
-    const { config, matches } = get();
-
-    if (!config?.puuid) {
-      console.warn('No PUUID configured, cannot sync matches');
-      return { newMatches: 0 };
-    }
-
     set({ syncing: true, error: null });
 
     try {
-      // Get existing match IDs to avoid duplicates
-      const existingIds = new Set(matches.map(m => m.id));
+      // Get all tracked players
+      const trackedPlayers = await getActiveTrackedPlayers();
 
-      // Fetch last 20 matches from Riot API
-      const matchIds = await riotApi.getMatchHistory(config.puuid, 20);
-      if (!matchIds) {
-        throw new Error('Failed to fetch match history from Riot API');
-      }
-
-      // Filter out matches we already have
-      const newMatchIds = matchIds.filter(id => !existingIds.has(id));
-
-      if (newMatchIds.length === 0) {
-        set({ syncing: false, lastSync: new Date() });
+      if (trackedPlayers.length === 0) {
+        console.warn('No tracked players found, cannot sync matches');
+        set({ syncing: false });
         return { newMatches: 0 };
       }
 
-      // Fetch details for each new match
-      const newMatches: JohnnyMatch[] = [];
-      for (const matchId of newMatchIds) {
-        const match = await riotApi.getMatch(matchId);
-        if (!match) continue;
+      // Get existing match IDs to avoid duplicates
+      const { matches } = get();
+      const existingIds = new Set(matches.map(m => m.id));
 
-        const johnnyMatch = convertMatchToJohnnyMatch(match, config.puuid);
-        if (johnnyMatch) {
-          newMatches.push(johnnyMatch);
+      let totalNewMatches = 0;
+      const allNewMatches: JohnnyMatch[] = [];
+
+      // Sync 10 games per player
+      for (const player of trackedPlayers) {
+        if (!player.puuid) continue;
+
+        console.log(`Syncing matches for ${player.displayName}...`);
+
+        // Set the correct region for this player
+        riotApi.setRegion(player.region as Region);
+
+        // Fetch last 10 matches from Riot API for this player
+        const matchIds = await riotApi.getMatchHistory(player.puuid, 10);
+        if (!matchIds) {
+          console.warn(`Failed to fetch match history for ${player.displayName}`);
+          continue;
         }
 
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Filter out matches we already have
+        const newMatchIds = matchIds.filter(id => !existingIds.has(id));
+
+        // Fetch details for each new match
+        for (const matchId of newMatchIds) {
+          const match = await riotApi.getMatch(matchId);
+          if (!match) continue;
+
+          const johnnyMatch = convertMatchToJohnnyMatch(match, player.puuid, player.displayName);
+          if (johnnyMatch) {
+            allNewMatches.push(johnnyMatch);
+            existingIds.add(matchId); // Avoid duplicates if same match for multiple players
+          }
+
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        totalNewMatches += newMatchIds.length;
       }
 
-      // Save new matches to Supabase
-      if (newMatches.length > 0) {
+      // Save all new matches to Supabase
+      if (allNewMatches.length > 0) {
         const { error: insertError } = await supabase
           .from('johnny_matches')
-          .upsert(newMatches, { onConflict: 'id' });
+          .upsert(allNewMatches, { onConflict: 'id' });
 
         if (insertError) throw insertError;
-
-        // Update last_match_id in config
-        if (matchIds.length > 0) {
-          await supabase
-            .from('johnny_config')
-            .update({ last_match_id: matchIds[0] })
-            .eq('id', 1);
-        }
 
         // Reload matches from Supabase
         await get().loadMatches();
       }
 
       set({ syncing: false, lastSync: new Date() });
-      return { newMatches: newMatches.length };
+      return { newMatches: allNewMatches.length };
     } catch (error: any) {
       console.error('Error syncing matches:', error);
       set({ error: error.message, syncing: false });
@@ -200,86 +210,99 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     }
   },
 
-  // Force sync only the last game (for admin when auto-sync fails)
+  // Force sync only the last game for each player (for admin when auto-sync fails)
   syncLastGame: async () => {
-    let { config, matches } = get();
-
-    // Load config if not loaded
-    if (!config?.puuid) {
-      await get().loadConfig();
-      config = get().config;
-    }
-
-    if (!config?.puuid) {
-      return { success: false, error: 'PUUID non configuré' };
-    }
-
     set({ syncing: true, error: null });
 
     try {
-      // Get just the last match ID
-      const matchIds = await riotApi.getMatchHistory(config.puuid, 1);
-      if (!matchIds || matchIds.length === 0) {
+      // Get all tracked players
+      const trackedPlayers = await getActiveTrackedPlayers();
+
+      if (trackedPlayers.length === 0) {
         set({ syncing: false });
-        return { success: false, error: 'Aucune game trouvée via l\'API Riot' };
+        return { success: false, error: 'Aucun joueur configuré' };
       }
 
-      const latestMatchId = matchIds[0];
-
-      // Check if already in museum
+      const { matches } = get();
       const existingIds = new Set(matches.map(m => m.id));
-      if (existingIds.has(latestMatchId)) {
+      const newMatches: JohnnyMatch[] = [];
+      let lastMatch: JohnnyMatch | undefined;
+
+      for (const player of trackedPlayers) {
+        if (!player.puuid) continue;
+
+        // Set the correct region for this player
+        riotApi.setRegion(player.region as Region);
+
+        // Get just the last match ID
+        const matchIds = await riotApi.getMatchHistory(player.puuid, 1);
+        if (!matchIds || matchIds.length === 0) {
+          console.warn(`No matches found for ${player.displayName}`);
+          continue;
+        }
+
+        const latestMatchId = matchIds[0];
+
+        // Check if already in museum
+        if (existingIds.has(latestMatchId)) {
+          console.log(`Match ${latestMatchId} already in museum for ${player.displayName}`);
+          continue;
+        }
+
+        // Fetch the match details
+        const match = await riotApi.getMatch(latestMatchId);
+        if (!match) {
+          console.warn(`Could not fetch match details for ${player.displayName}`);
+          continue;
+        }
+
+        const johnnyMatch = convertMatchToJohnnyMatch(match, player.puuid, player.displayName);
+        if (!johnnyMatch) {
+          console.warn(`Player ${player.displayName} not found in match ${latestMatchId}`);
+          continue;
+        }
+
+        newMatches.push(johnnyMatch);
+        existingIds.add(latestMatchId);
+        lastMatch = johnnyMatch;
+
+        // Auto-resolve pending bets for this match
+        try {
+          console.log(`Auto-resolving pending bets for ${player.displayName}'s match:`, johnnyMatch.id);
+          const results = await resolveBets(match, player.puuid, player.displayName);
+          if (results.length > 0) {
+            const won = results.filter(r => r.won).length;
+            const lost = results.length - won;
+            console.log(`Auto-resolved ${results.length} bets: ${won} won, ${lost} lost`);
+          }
+        } catch (resolveError) {
+          console.error('Error auto-resolving bets:', resolveError);
+        }
+
+        // Small delay between players
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      if (newMatches.length === 0) {
         set({ syncing: false, lastSync: new Date() });
-        return { success: false, error: 'Cette game est déjà dans le musée' };
-      }
-
-      // Fetch the match details
-      const match = await riotApi.getMatch(latestMatchId);
-      if (!match) {
-        set({ syncing: false });
-        return { success: false, error: 'Impossible de récupérer les détails de la game' };
-      }
-
-      const johnnyMatch = convertMatchToJohnnyMatch(match, config.puuid);
-      if (!johnnyMatch) {
-        set({ syncing: false });
-        return { success: false, error: 'Johnny n\'est pas trouvé dans cette game' };
+        return { success: false, error: 'Aucune nouvelle game trouvée' };
       }
 
       // Save to Supabase
       const { error: insertError } = await supabase
         .from('johnny_matches')
-        .upsert([johnnyMatch], { onConflict: 'id' });
+        .upsert(newMatches, { onConflict: 'id' });
 
       if (insertError) throw insertError;
 
       // Update local state
       set({
-        matches: [johnnyMatch, ...matches],
+        matches: [...newMatches, ...matches],
         syncing: false,
         lastSync: new Date()
       });
 
-      // Update last_match_id in config
-      await supabase
-        .from('johnny_config')
-        .update({ last_match_id: latestMatchId })
-        .eq('id', 1);
-
-      // Auto-resolve pending bets for this match
-      try {
-        console.log('Auto-resolving pending bets for match:', johnnyMatch.id);
-        const results = await resolveBets(match, config.puuid);
-        if (results.length > 0) {
-          const won = results.filter(r => r.won).length;
-          const lost = results.length - won;
-          console.log(`Auto-resolved ${results.length} bets: ${won} won, ${lost} lost`);
-        }
-      } catch (resolveError) {
-        console.error('Error auto-resolving bets:', resolveError);
-      }
-
-      return { success: true, match: johnnyMatch };
+      return { success: true, match: lastMatch };
     } catch (error: any) {
       console.error('Error syncing last game:', error);
       set({ error: error.message, syncing: false });
@@ -287,23 +310,34 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     }
   },
 
-  // Check if there's a new match (call this after game ends)
-  checkForNewMatch: async () => {
-    let { config, matches } = get();
+  // Check if there's a new match for a specific player (call this after game ends)
+  checkForNewMatch: async (playerPuuid?: string, playerName?: string, playerRegion?: string) => {
+    const { matches } = get();
 
-    // Load config if not loaded
-    if (!config?.puuid) {
-      await get().loadConfig();
-      config = get().config;
-    }
+    // If no player specified, check all tracked players
+    if (!playerPuuid) {
+      const trackedPlayers = await getActiveTrackedPlayers();
+      if (trackedPlayers.length === 0) {
+        console.warn('checkForNewMatch: No tracked players configured');
+        return null;
+      }
 
-    if (!config?.puuid) {
-      console.warn('checkForNewMatch: No PUUID configured');
-      return null;
+      let foundMatch: JohnnyMatch | null = null;
+      for (const player of trackedPlayers) {
+        if (!player.puuid) continue;
+        const match = await get().checkForNewMatch(player.puuid, player.displayName, player.region);
+        if (match) foundMatch = match;
+      }
+      return foundMatch;
     }
 
     try {
-      const matchIds = await riotApi.getMatchHistory(config.puuid, 1);
+      // Set region if provided
+      if (playerRegion) {
+        riotApi.setRegion(playerRegion as Region);
+      }
+
+      const matchIds = await riotApi.getMatchHistory(playerPuuid, 1);
       if (!matchIds || matchIds.length === 0) return null;
 
       const latestMatchId = matchIds[0];
@@ -316,7 +350,7 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
       const match = await riotApi.getMatch(latestMatchId);
       if (!match) return null;
 
-      const johnnyMatch = convertMatchToJohnnyMatch(match, config.puuid);
+      const johnnyMatch = convertMatchToJohnnyMatch(match, playerPuuid, playerName);
       if (!johnnyMatch) return null;
 
       // Save to Supabase
@@ -329,16 +363,10 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
       // Update local state
       set({ matches: [johnnyMatch, ...matches] });
 
-      // Update last_match_id
-      await supabase
-        .from('johnny_config')
-        .update({ last_match_id: latestMatchId })
-        .eq('id', 1);
-
       // Auto-resolve pending bets for this match
       try {
-        console.log('Auto-resolving pending bets for new match:', johnnyMatch.id);
-        const results = await resolveBets(match, config.puuid);
+        console.log(`Auto-resolving pending bets for ${playerName || 'player'}'s new match:`, johnnyMatch.id);
+        const results = await resolveBets(match, playerPuuid, playerName);
         if (results.length > 0) {
           const won = results.filter(r => r.won).length;
           const lost = results.length - won;
@@ -387,10 +415,10 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
 }));
 
 // Helper: Convert Riot API match to our format
-function convertMatchToJohnnyMatch(match: MatchDto, puuid: string): JohnnyMatch | null {
+function convertMatchToJohnnyMatch(match: MatchDto, puuid: string, playerName?: string): JohnnyMatch | null {
   const johnnyStats = match.info.participants.find(p => p.puuid === puuid);
   if (!johnnyStats) {
-    console.warn(`Johnny (PUUID: ${puuid}) not found in match ${match.metadata.matchId}`);
+    console.warn(`Player (PUUID: ${puuid}) not found in match ${match.metadata.matchId}`);
     return null;
   }
 
@@ -400,7 +428,8 @@ function convertMatchToJohnnyMatch(match: MatchDto, puuid: string): JohnnyMatch 
 
   return {
     id: match.metadata.matchId,
-    puuid: puuid, // Store Johnny's PUUID to filter later
+    puuid: puuid, // Store player's PUUID to filter later
+    player_name: playerName, // Store player name for display
     game_creation: match.info.gameCreation,
     game_duration: match.info.gameDuration,
     game_mode: match.info.gameMode,

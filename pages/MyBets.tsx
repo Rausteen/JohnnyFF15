@@ -37,6 +37,7 @@ type SortOption = 'date' | 'amount' | 'result';
 const MyBets = () => {
   const { user } = useAuthStore();
   const [filter, setFilter] = useState<BetStatus | 'ALL'>('ALL');
+  const [playerFilter, setPlayerFilter] = useState<string>('ALL');
   const [expandedGames, setExpandedGames] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<SortOption>('date');
   const [sortDesc, setSortDesc] = useState(true);
@@ -75,7 +76,27 @@ const MyBets = () => {
     return [...supabaseBets].sort((a, b) => b.timestamp - a.timestamp);
   }, [supabaseBets]);
 
-  const filteredBets = filter === 'ALL' ? userBets : userBets.filter(b => b.status === filter);
+  // Get unique player names from bets
+  const uniquePlayers = useMemo(() => {
+    const players = new Set<string>();
+    userBets.forEach(bet => {
+      if (bet.playerName) {
+        players.add(bet.playerName);
+      }
+    });
+    return Array.from(players).sort();
+  }, [userBets]);
+
+  const filteredBets = useMemo(() => {
+    let bets = userBets;
+    if (filter !== 'ALL') {
+      bets = bets.filter(b => b.status === filter);
+    }
+    if (playerFilter !== 'ALL') {
+      bets = bets.filter(b => b.playerName === playerFilter);
+    }
+    return bets;
+  }, [userBets, filter, playerFilter]);
 
   // Group bets by matchId with computed stats
   const gameGroups = useMemo(() => {
@@ -274,6 +295,35 @@ const MyBets = () => {
 
       {/* Filters & Sort */}
       <div className="flex flex-col gap-3 sm:gap-4 mb-4 sm:mb-6">
+        {/* Player filter */}
+        {uniquePlayers.length > 1 && (
+          <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mx-3 px-3 sm:mx-0 sm:px-0">
+            <button
+              onClick={() => setPlayerFilter('ALL')}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-all whitespace-nowrap ${
+                playerFilter === 'ALL'
+                  ? 'bg-accent text-white'
+                  : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 border border-zinc-800'
+              }`}
+            >
+              Tous les joueurs
+            </button>
+            {uniquePlayers.map((player) => (
+              <button
+                key={player}
+                onClick={() => setPlayerFilter(player)}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium flex items-center gap-1.5 transition-all whitespace-nowrap ${
+                  playerFilter === player
+                    ? 'bg-primary text-white'
+                    : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 border border-zinc-800'
+                }`}
+              >
+                {player}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Status filters */}
         <div className="flex gap-1.5 sm:gap-2 overflow-x-auto pb-1 -mx-3 px-3 sm:mx-0 sm:px-0">
           {[

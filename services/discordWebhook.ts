@@ -127,7 +127,7 @@ export async function sendTestNotification(championName: string = 'Yasuo', gameM
   });
 }
 
-export async function notifyGameStarted(gameId: number, gameMode: string, playerNames: string | string[] = 'Johnny', championName?: string): Promise<boolean> {
+export async function notifyGameStarted(gameId: number, gameMode: string, playerNames: string | string[] = 'Johnny', championNames?: string | string[]): Promise<boolean> {
   // Avoid duplicate notifications for the same game
   if (lastNotifiedGameId === gameId) {
     return false;
@@ -138,9 +138,52 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
 
   // Handle single player or multiple players
   const players = Array.isArray(playerNames) ? playerNames : [playerNames];
+  const champions = Array.isArray(championNames) ? championNames : (championNames ? [championNames] : []);
   const playersList = players.join(' et ');
   const playersUpper = players.map(p => p.toUpperCase()).join(' & ');
   const isMultiplePlayers = players.length > 1;
+
+  // Build player + champion display
+  const playersWithChamps = players.map((p, i) => {
+    const champ = champions[i];
+    return champ ? `${p} (${champ})` : p;
+  }).join(', ');
+
+  // Build fields array
+  const fields = [
+    {
+      name: '🎮 Mode de jeu',
+      value: gameMode || 'Ranked Solo/Duo',
+      inline: true,
+    },
+    {
+      name: '👥 Joueurs',
+      value: playersWithChamps,
+      inline: true,
+    },
+  ];
+
+  // Add champion field only if we have champion names
+  if (champions.length > 0) {
+    fields.push({
+      name: '🏆 Champion' + (champions.length > 1 ? 's' : ''),
+      value: champions.join(', '),
+      inline: true,
+    });
+  }
+
+  fields.push(
+    {
+      name: '⏱️ Temps restant',
+      value: '3 minutes pour parier',
+      inline: true,
+    },
+    {
+      name: '🔗 Parier maintenant',
+      value: `[Ouvrir JohnnyFF15](${siteUrl})`,
+      inline: false,
+    }
+  );
 
   return sendDiscordNotification({
     content: '<@&1466416446094442578>',  // Ping role JohnnyFF15
@@ -152,28 +195,7 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
         ? `Les paris sont ouverts pendant **3 minutes** !\n\n**${playersList} jouent ensemble ! Viens parier sur leurs feeds !**`
         : `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de ${playersList} !**`,
       color: COLORS.GREEN,
-      fields: [
-        {
-          name: '🎮 Mode de jeu',
-          value: gameMode || 'Ranked Solo/Duo',
-          inline: true,
-        },
-        {
-          name: '👥 Joueurs',
-          value: players.join(', '),
-          inline: true,
-        },
-        {
-          name: '⏱️ Temps restant',
-          value: '3 minutes pour parier',
-          inline: true,
-        },
-        {
-          name: '🔗 Parier maintenant',
-          value: `[Ouvrir JohnnyFF15](${siteUrl})`,
-          inline: false,
-        },
-      ],
+      fields,
       thumbnail: {
         url: 'https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/4644.png',
       },

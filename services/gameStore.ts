@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { riotApi, CurrentGameInfo, MatchDto, MatchParticipant, Region, getQueueName } from './riotApi';
+import { riotApi, CurrentGameInfo, MatchDto, MatchParticipant, Region, getQueueName, getChampionName } from './riotApi';
 import { supabase } from './supabase';
 import { useMatchHistoryStore } from './matchHistoryStore';
 import { resolveBets } from './betResolutionService';
@@ -52,6 +52,7 @@ interface PendingNotification {
   riotGameId: number;
   gameMode: string;
   playerName: string;
+  championName?: string;
 }
 
 let pendingNotifications: PendingNotification[] = [];
@@ -75,14 +76,15 @@ async function processPendingNotifications(): Promise<void> {
     gameGroups.set(notif.riotGameId, existing);
   }
 
-  // Send one notification per game (with all player names)
+  // Send one notification per game (with all player names and champion names)
   for (const [riotGameId, notifications] of gameGroups) {
     const playerNames = notifications.map(n => n.playerName);
+    const championNames = notifications.map(n => n.championName).filter(Boolean) as string[];
     const gameMode = notifications[0].gameMode;
 
     console.log(`Sending grouped notification for game ${riotGameId}: ${playerNames.join(', ')}`);
 
-    notifyGameStarted(riotGameId, gameMode, playerNames)
+    notifyGameStarted(riotGameId, gameMode, playerNames, championNames.length > 0 ? championNames : undefined)
       .then(sent => {
         if (sent) console.log('Discord notification sent successfully');
       })
@@ -450,12 +452,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         if (isNewGame) {
           console.log(`New game detected for ${targetPlayer.displayName}! Adding to pending notifications...`);
+          // Find champion from game participants
+          const playerParticipant = currentGame.participants.find(p => p.puuid === puuid);
+          const championName = playerParticipant ? getChampionName(playerParticipant.championId) : undefined;
           // Add to pending notifications - will be sent grouped after all players are checked
           addPendingNotification({
             gameId,
             riotGameId: currentGame.gameId,
             gameMode: getQueueName(currentGame.gameQueueConfigId),
-            playerName: targetPlayer.displayName
+            playerName: targetPlayer.displayName,
+            championName
           });
         }
       } else {
