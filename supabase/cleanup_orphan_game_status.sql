@@ -1,38 +1,24 @@
 -- =====================================================
--- Script pour nettoyer les entrées orphelines dans player_game_status
--- ET restreindre les écritures au service role seulement (pas le frontend)
+-- Script pour nettoyer player_game_status
+-- ET restreindre les écritures au service role seulement
 -- Exécute ce script dans l'éditeur SQL de Supabase
 -- =====================================================
 
 -- =====================================================
--- ÉTAPE 1: VOIR LES ENTRÉES ORPHELINES
+-- ÉTAPE 1: VOIR CE QUI EST DANS player_game_status
 -- =====================================================
-SELECT
-  pgs.player_id,
-  pgs.is_in_game,
-  pgs.game_id,
-  pgs.last_checker_id,
-  pgs.last_check_at,
-  pgs.updated_at
-FROM public.player_game_status pgs
-LEFT JOIN public.tracked_players tp ON pgs.player_id = tp.id
-WHERE tp.id IS NULL;
+SELECT * FROM public.player_game_status;
 
 -- =====================================================
--- ÉTAPE 2: SUPPRIMER TOUTES LES ENTRÉES ORPHELINES
+-- ÉTAPE 2: SUPPRIMER TOUTES LES ENTRÉES
+-- (On nettoie tout, le game-watcher recréera les bonnes)
 -- =====================================================
-DELETE FROM public.player_game_status pgs
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.tracked_players tp WHERE tp.id = pgs.player_id
-);
+TRUNCATE TABLE public.player_game_status;
 
 -- =====================================================
 -- ÉTAPE 3: VÉRIFICATION (doit retourner 0)
 -- =====================================================
-SELECT COUNT(*) as orphan_count
-FROM public.player_game_status pgs
-LEFT JOIN public.tracked_players tp ON pgs.player_id = tp.id
-WHERE tp.id IS NULL;
+SELECT COUNT(*) as remaining_count FROM public.player_game_status;
 
 -- =====================================================
 -- ÉTAPE 4: RESTREINDRE LES POLITIQUES RLS
@@ -44,37 +30,39 @@ WHERE tp.id IS NULL;
 DROP POLICY IF EXISTS "Authenticated users can insert player game status" ON public.player_game_status;
 DROP POLICY IF EXISTS "Authenticated users can update player game status" ON public.player_game_status;
 
+-- Supprimer aussi les nouvelles politiques si elles existent déjà (pour éviter les doublons)
+DROP POLICY IF EXISTS "Only service role can insert player game status" ON public.player_game_status;
+DROP POLICY IF EXISTS "Only service role can update player game status" ON public.player_game_status;
+DROP POLICY IF EXISTS "Only service role can delete player game status" ON public.player_game_status;
+
 -- Créer des politiques qui n'autorisent QUE le service role (utilisé par game-watcher)
 -- Note: Le service role bypass RLS par défaut, donc on crée des politiques restrictives
--- qui bloquent les utilisateurs normaux
+-- qui bloquent les utilisateurs normaux (authenticated)
 
--- Politique pour INSERT: seulement via service role (les utilisateurs normaux ne peuvent pas insérer)
+-- Politique pour INSERT: bloque les utilisateurs normaux
 CREATE POLICY "Only service role can insert player game status" ON public.player_game_status
-  FOR INSERT WITH CHECK (false);  -- Bloque tout le monde sauf service role
+  FOR INSERT WITH CHECK (false);
 
--- Politique pour UPDATE: seulement via service role
+-- Politique pour UPDATE: bloque les utilisateurs normaux
 CREATE POLICY "Only service role can update player game status" ON public.player_game_status
-  FOR UPDATE USING (false);  -- Bloque tout le monde sauf service role
+  FOR UPDATE USING (false);
 
--- Politique pour DELETE: seulement via service role
+-- Politique pour DELETE: bloque les utilisateurs normaux
 CREATE POLICY "Only service role can delete player game status" ON public.player_game_status
-  FOR DELETE USING (false);  -- Bloque tout le monde sauf service role
+  FOR DELETE USING (false);
 
 -- =====================================================
--- ÉTAPE 5: VÉRIFICATION FINALE
+-- ÉTAPE 5: VÉRIFICATION DES POLITIQUES
 -- =====================================================
-SELECT
-  pgs.player_id,
-  tp.display_name,
-  pgs.is_in_game,
-  pgs.last_checker_id,
-  pgs.last_check_at
-FROM public.player_game_status pgs
-LEFT JOIN public.tracked_players tp ON pgs.player_id = tp.id;
+SELECT policyname, cmd, qual, with_check
+FROM pg_policies
+WHERE tablename = 'player_game_status';
 
 -- =====================================================
 -- NOTE IMPORTANTE:
--- Après avoir exécuté ce script, le frontend ne pourra plus
--- écrire dans player_game_status. Seul le game-watcher script
--- (qui utilise le service role) pourra écrire.
+-- Après avoir exécuté ce script:
+-- 1. player_game_status est vidée
+-- 2. Le frontend ne peut plus écrire dans cette table
+-- 3. Seul game-watcher (service role) peut écrire
+-- 4. Les entrées ne reviendront plus automatiquement!
 -- =====================================================
