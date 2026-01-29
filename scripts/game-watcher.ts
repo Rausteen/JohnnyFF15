@@ -132,6 +132,60 @@ async function getTrackedPlayers(): Promise<TrackedPlayer[]> {
   return data || [];
 }
 
+// Clean up orphan entries in player_game_status that don't belong to active tracked players
+async function cleanupOrphanGameStatus(): Promise<void> {
+  console.log('🧹 Cleaning up orphan game status entries...');
+
+  // Get all active tracked player IDs
+  const players = await getTrackedPlayers();
+  const activePlayerIds = players.map(p => p.id);
+
+  if (activePlayerIds.length === 0) {
+    console.log('   No active players, skipping cleanup');
+    return;
+  }
+
+  // Get all entries in player_game_status
+  const { data: allStatus, error: fetchError } = await supabase
+    .from('player_game_status')
+    .select('player_id, last_checker_id');
+
+  if (fetchError) {
+    console.error('Error fetching game status entries:', fetchError);
+    return;
+  }
+
+  if (!allStatus || allStatus.length === 0) {
+    console.log('   No game status entries to clean');
+    return;
+  }
+
+  // Find orphan entries (not in active players OR created by browser)
+  const orphanIds = allStatus
+    .filter(s => !activePlayerIds.includes(s.player_id) ||
+                 (s.last_checker_id && s.last_checker_id.startsWith('browser_')))
+    .map(s => s.player_id);
+
+  if (orphanIds.length === 0) {
+    console.log('   No orphan entries found');
+    return;
+  }
+
+  console.log(`   Found ${orphanIds.length} orphan/browser entries, deleting...`);
+
+  // Delete orphan entries
+  const { error: deleteError } = await supabase
+    .from('player_game_status')
+    .delete()
+    .in('player_id', orphanIds);
+
+  if (deleteError) {
+    console.error('Error deleting orphan entries:', deleteError);
+  } else {
+    console.log(`   ✅ Deleted ${orphanIds.length} orphan entries`);
+  }
+}
+
 async function checkCurrentGame(puuid: string, region: string, retries = 2): Promise<CurrentGameInfo | null> {
   const platformMap: Record<string, string> = {
     EUW: 'euw1',
@@ -1033,6 +1087,9 @@ async function main(): Promise<void> {
 
   // Load champion data from Data Dragon
   await loadChampionData();
+
+  // Clean up orphan game status entries (from browser or inactive players)
+  await cleanupOrphanGameStatus();
 
   // Initial check
   await checkAllPlayers();
