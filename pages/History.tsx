@@ -30,10 +30,11 @@ const History = () => {
     return Array.from(playerMap.values());
   }, [matches, trackedPlayers]);
 
-  // Filtered matches
+  // Filtered matches - strict filtering by puuid
   const filteredMatches = useMemo(() => {
     if (selectedPlayerPuuid === 'ALL') return matches;
-    return matches.filter(m => m.puuid === selectedPlayerPuuid);
+    // Strict equality check - only show matches where puuid exactly matches
+    return matches.filter(m => m.puuid && m.puuid === selectedPlayerPuuid);
   }, [matches, selectedPlayerPuuid]);
 
   // Stats per player
@@ -209,7 +210,7 @@ const History = () => {
       ) : (
         <div className="relative border-l border-zinc-800 ml-4 md:ml-8 space-y-8">
           {filteredMatches.map((match) => (
-            <MatchCard key={match.id} match={match} trackedPlayers={trackedPlayers} />
+            <MatchCard key={`${match.id}_${match.puuid}`} match={match} trackedPlayers={trackedPlayers} />
           ))}
         </div>
       )}
