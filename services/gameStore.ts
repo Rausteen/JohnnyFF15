@@ -15,8 +15,35 @@ const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2,
 const STALE_THRESHOLD = 25000; // 25 seconds
 
 // Track which games we've already sent notifications for (prevents duplicates on refresh)
-// Key: puuid, Value: gameId that was notified
-const notifiedGameIds = new Map<string, string>();
+// Persisted to localStorage to survive page refreshes
+const NOTIFIED_GAMES_KEY = 'johnnyff_notified_games';
+
+function getNotifiedGames(): Map<string, string> {
+  try {
+    const stored = localStorage.getItem(NOTIFIED_GAMES_KEY);
+    if (stored) {
+      return new Map(JSON.parse(stored));
+    }
+  } catch (e) {
+    console.error('Error reading notified games from localStorage:', e);
+  }
+  return new Map();
+}
+
+function setNotifiedGame(puuid: string, gameId: string): void {
+  try {
+    const map = getNotifiedGames();
+    map.set(puuid, gameId);
+    localStorage.setItem(NOTIFIED_GAMES_KEY, JSON.stringify([...map]));
+  } catch (e) {
+    console.error('Error saving notified game to localStorage:', e);
+  }
+}
+
+function hasNotifiedGame(puuid: string, gameId: string): boolean {
+  const map = getNotifiedGames();
+  return map.get(puuid) === gameId;
+}
 
 // Player game status from Supabase
 interface PlayerGameStatusRow {
@@ -346,17 +373,15 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         let isNewGame = false;
 
-        // Check multiple sources to determine if this is truly a new game:
-        // 1. In-memory tracking (prevents duplicates within same browser session)
-        // 2. Supabase cache (prevents duplicates across sessions/browsers)
-        const alreadyNotifiedInMemory = notifiedGameIds.get(puuid) === gameId;
-        const supabaseAlreadyHasThisGame = statusData?.game_id === gameId;
+        // Check localStorage to determine if this is truly a new game
+        // This persists across page refreshes and is the source of truth for notifications
+        const alreadyNotifiedInLocalStorage = hasNotifiedGame(puuid, gameId);
 
         // Use functional set to avoid race conditions
         set(state => {
           const currentState = state.playerStates.get(puuid);
-          // Only consider it a new game if NEITHER source knows about it
-          isNewGame = !alreadyNotifiedInMemory && !supabaseAlreadyHasThisGame;
+          // Only consider it a new game if localStorage doesn't have this game_id
+          isNewGame = !alreadyNotifiedInLocalStorage;
 
           const newPlayerStates = new Map(state.playerStates);
           newPlayerStates.set(puuid, {
@@ -373,19 +398,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         await updatePlayerGameStatus(targetPlayer, true, gameId, currentGame, currentGame.gameStartTime);
 
-        if (isNewGame) {
-          // Mark this game as notified BEFORE sending to prevent race conditions
-          notifiedGameIds.set(puuid, gameId);
+        // Always mark this game in localStorage to prevent future duplicates
+        setNotifiedGame(puuid, gameId);
 
+        if (isNewGame) {
           console.log(`New game detected for ${targetPlayer.displayName}! Sending Discord notification...`);
           notifyGameStarted(currentGame.gameId, currentGame.gameMode || 'Ranked Solo/Duo', targetPlayer.displayName)
             .then(sent => {
               if (sent) console.log('Discord notification sent successfully');
             })
             .catch(err => console.error('Discord notification error:', err));
-        } else {
-          // Even if not a "new" game, make sure we track it to prevent future duplicates
-          notifiedGameIds.set(puuid, gameId);
         }
       } else {
         console.log(`${targetPlayer.displayName} is not in game`);
