@@ -595,8 +595,8 @@ const Dashboard = () => {
               </div>
             </div>
           )}
-          {/* Betting window closed message */}
-          {isInGame && gameTimeMinutes >= 3 && (
+          {/* Betting window closed message (disabled for testing - set to 999 minutes) */}
+          {isInGame && gameTimeMinutes >= 999 && (
             <div className="p-3 sm:p-4 rounded-xl border border-red-500/30 bg-red-500/5 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
               <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 shrink-0" />
               <div>
