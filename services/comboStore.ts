@@ -28,14 +28,19 @@ export const useComboStore = create<ComboState>((set, get) => ({
   totalOdds: () => {
     const { selections } = get();
     if (selections.length === 0) return 0;
-    return selections.reduce((acc, sel) => acc * sel.prop.odds, 1);
+    // Décroissance des cotes: 10% de réduction par pari supplémentaire
+    // 1er pari: 100%, 2ème: 90%, 3ème: 81%, 4ème: 72.9%
+    return selections.reduce((acc, sel, index) => {
+      const discountFactor = Math.pow(0.9, index);
+      return acc * sel.prop.odds * discountFactor;
+    }, 1);
   },
 
   addToCombo: (prop: Prop, playerPuuid?: string, playerName?: string, gameId?: string) => {
     const { selections, isInCombo } = get();
 
-    // Max 5 selections in a combo
-    if (selections.length >= 5) return;
+    // Max 4 selections in a combo (anti-abuse measure)
+    if (selections.length >= 4) return;
 
     // Don't add duplicates
     if (isInCombo(prop.id)) return;
