@@ -10,44 +10,92 @@ interface DragonScoreBetProps {
   player?: TrackedPlayer;
 }
 
-// Calculate odds based on score probability
-// More extreme/rare scores = higher odds
-function calculateDragonOdds(teamDragons: number, enemyDragons: number): number {
-  // Base probability distribution for dragon scores
-  // Average game has ~4-6 total dragons, distributed between teams
-  const totalDragons = teamDragons + enemyDragons;
+// Fixed odds for dragon scores (team dragons - enemy dragons)
+// Format: "teamDragons-enemyDragons" -> { odds, category }
+const DRAGON_SCORE_ODDS: Record<string, { odds: number; category: 'probable' | 'moyen' | 'rare' | 'legendaire' | 'edge' }> = {
+  // 🟢 Scores "probables" (bas payout)
+  '2-1': { odds: 1.6, category: 'probable' },
+  '1-2': { odds: 1.65, category: 'probable' },
+  '2-2': { odds: 1.5, category: 'probable' },
+  '3-2': { odds: 1.7, category: 'probable' },
+  '2-3': { odds: 1.75, category: 'probable' },
 
-  // Probability factors:
-  // 1. Total dragons: 3-5 total is most common
-  // 2. Score difference: close games more likely
-  // 3. Exact score match: always low probability
+  // 🟡 Scores "moyens"
+  '3-1': { odds: 1.9, category: 'moyen' },
+  '1-3': { odds: 1.95, category: 'moyen' },
+  '4-2': { odds: 2.3, category: 'moyen' },
+  '2-4': { odds: 2.25, category: 'moyen' },
+  '4-1': { odds: 2.5, category: 'moyen' },
+  '1-4': { odds: 2.45, category: 'moyen' },
 
-  let baseProbability = 0.15; // Base 15% chance
+  // 🔴 Scores "rares"
+  '4-3': { odds: 4.05, category: 'rare' },
+  '3-4': { odds: 4.0, category: 'rare' },
+  '5-2': { odds: 5.0, category: 'rare' },
+  '2-5': { odds: 5.05, category: 'rare' },
+  '5-1': { odds: 4.55, category: 'rare' },
+  '1-5': { odds: 4.5, category: 'rare' },
+  '4-0': { odds: 4.0, category: 'rare' },
+  '0-4': { odds: 4.0, category: 'rare' },
 
-  // Adjust for total dragons (0-8 range realistic)
-  if (totalDragons === 0) baseProbability *= 0.1; // Very rare: no dragons
-  else if (totalDragons <= 2) baseProbability *= 0.4;
-  else if (totalDragons <= 4) baseProbability *= 1.0; // Most common
-  else if (totalDragons <= 6) baseProbability *= 0.8;
-  else if (totalDragons <= 8) baseProbability *= 0.3;
-  else baseProbability *= 0.05; // Very rare: 9+ dragons
+  // 🏆 Scores "légendaires"
+  '5-3': { odds: 5.25, category: 'legendaire' },
+  '3-5': { odds: 5.2, category: 'legendaire' },
+  '5-0': { odds: 6.25, category: 'legendaire' },
+  '0-5': { odds: 6.2, category: 'legendaire' },
 
-  // Adjust for score difference (close games more likely)
+  // ⚠️ Scores très rares / edge cases
+  '0-0': { odds: 30.0, category: 'edge' },
+  '1-0': { odds: 15.0, category: 'edge' },
+  '0-1': { odds: 15.0, category: 'edge' },
+  '1-1': { odds: 8.0, category: 'edge' },
+  '3-3': { odds: 12.0, category: 'edge' },
+  '4-4': { odds: 25.0, category: 'edge' },
+};
+
+// Get odds for a score, with fallback calculation for undefined scores
+function getDragonScoreOdds(teamDragons: number, enemyDragons: number): number {
+  const key = `${teamDragons}-${enemyDragons}`;
+  if (DRAGON_SCORE_ODDS[key]) {
+    return DRAGON_SCORE_ODDS[key].odds;
+  }
+
+  // Fallback: calculate odds for scores not in the table
+  const total = teamDragons + enemyDragons;
   const diff = Math.abs(teamDragons - enemyDragons);
-  if (diff === 0) baseProbability *= 0.7; // Ties less common in objectives
-  else if (diff === 1) baseProbability *= 1.0;
-  else if (diff === 2) baseProbability *= 0.8;
-  else if (diff === 3) baseProbability *= 0.4;
-  else baseProbability *= 0.2; // 4+ diff is soul + elder territory
 
-  // Exact score penalty (guessing exact is hard)
-  baseProbability *= 0.5;
+  let baseOdds = 3.0;
 
-  // Convert probability to odds (minimum 2.0, max 50.0)
-  const odds = Math.min(50, Math.max(2.0, 1 / baseProbability));
+  // High scoring games are rarer
+  if (total >= 10) baseOdds *= 2.5;
+  else if (total >= 8) baseOdds *= 1.8;
+  else if (total >= 6) baseOdds *= 1.3;
 
-  // Round to 1 decimal
-  return Math.round(odds * 10) / 10;
+  // Big differences are rarer
+  if (diff >= 5) baseOdds *= 2.0;
+  else if (diff >= 4) baseOdds *= 1.5;
+
+  // Very low scores are rare
+  if (total <= 2) baseOdds *= 3.0;
+
+  return Math.min(50, Math.max(2.0, Math.round(baseOdds * 10) / 10));
+}
+
+// Get category info for display
+function getCategoryInfo(teamDragons: number, enemyDragons: number): { label: string; color: string } {
+  const key = `${teamDragons}-${enemyDragons}`;
+  const entry = DRAGON_SCORE_ODDS[key];
+
+  if (!entry) return { label: 'CUSTOM', color: 'text-zinc-400' };
+
+  switch (entry.category) {
+    case 'probable': return { label: 'PROBABLE', color: 'text-green-400' };
+    case 'moyen': return { label: 'MOYEN', color: 'text-yellow-400' };
+    case 'rare': return { label: 'RARE', color: 'text-orange-400' };
+    case 'legendaire': return { label: 'LÉGENDAIRE', color: 'text-purple-400' };
+    case 'edge': return { label: 'TRÈS RARE', color: 'text-red-400' };
+    default: return { label: 'CUSTOM', color: 'text-zinc-400' };
+  }
 }
 
 const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
@@ -76,8 +124,9 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
   const [loading, setLoading] = useState(false);
 
   const credits = profile?.credits || 0;
-  const odds = calculateDragonOdds(teamDragons, enemyDragons);
+  const odds = getDragonScoreOdds(teamDragons, enemyDragons);
   const potentialGain = amount ? Math.floor(parseInt(amount) * odds) : 0;
+  const categoryInfo = getCategoryInfo(teamDragons, enemyDragons);
 
   const adjustScore = (team: 'ally' | 'enemy', delta: number) => {
     if (team === 'ally') {
@@ -188,8 +237,8 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
           <div>
             <h3 className="font-bold text-white flex items-center gap-2">
               Dragon Score
-              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-bold rounded-full border border-amber-500/30">
-                PRESTIGE
+              <span className={`px-2 py-0.5 bg-white/10 ${categoryInfo.color} text-xs font-bold rounded-full border border-white/20`}>
+                {categoryInfo.label}
               </span>
             </h3>
             <p className="text-xs text-zinc-400">Prédit le score exact des dragons</p>
@@ -198,6 +247,31 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
       </div>
 
       <div className="p-4 space-y-4">
+        {/* Quick Presets */}
+        <div className="flex gap-2 justify-center flex-wrap">
+          {[
+            { t: 2, e: 1, label: '2-1' },
+            { t: 3, e: 2, label: '3-2' },
+            { t: 4, e: 0, label: '4-0' },
+            { t: 0, e: 4, label: '0-4' },
+          ].map((preset) => (
+            <button
+              key={preset.label}
+              onClick={() => {
+                setTeamDragons(preset.t);
+                setEnemyDragons(preset.e);
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                teamDragons === preset.t && enemyDragons === preset.e
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
         {/* Score Selector - Football Style */}
         <div className="flex items-center justify-center gap-4">
           {/* Team Score */}
@@ -260,7 +334,7 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
         <div className="flex items-center justify-center gap-2 py-2">
           <Trophy className="w-4 h-4 text-gold" />
           <span className="text-zinc-400 text-sm">Cote:</span>
-          <span className="text-2xl font-mono font-black text-gold">x{odds.toFixed(1)}</span>
+          <span className="text-2xl font-mono font-black text-gold">x{odds.toFixed(2)}</span>
         </div>
 
         {/* Quick Bet Buttons */}
