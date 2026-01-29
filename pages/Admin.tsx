@@ -14,6 +14,7 @@ import { supabase } from '../services/supabase';
 import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers } from '../services/playersService';
 import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { sendTestNotification } from '../services/discordWebhook';
+import { syncLastGame as syncLastGameCommand, checkPlayersStatus } from '../services/adminCommands';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -336,18 +337,17 @@ const Admin = () => {
     setForceSyncLoading(true);
     setForceSyncResult(null);
 
-    const result = await syncLastGame();
+    // Send command to game-watcher via Supabase
+    const result = await syncLastGameCommand();
 
-    if (result.success && result.match) {
-      setForceSyncResult({
-        success: true,
-        message: `Game ajoutée: ${result.match.champion_name} ${result.match.kills}/${result.match.deaths}/${result.match.assists} (${result.match.win ? 'Victoire' : 'Défaite'})`
-      });
-    } else {
-      setForceSyncResult({
-        success: false,
-        message: result.error || 'Erreur inconnue'
-      });
+    setForceSyncResult({
+      success: result.success,
+      message: result.message
+    });
+
+    // Reload matches from Supabase
+    if (result.success) {
+      await loadMatches();
     }
 
     setForceSyncLoading(false);

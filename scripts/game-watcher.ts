@@ -42,6 +42,16 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // Track notified games to avoid duplicates
 const notifiedGames = new Set<string>();
 
+// Command polling interval (5 seconds)
+const COMMAND_CHECK_INTERVAL = 5000;
+
+interface AdminCommand {
+  id: string;
+  command: string;
+  params: Record<string, unknown>;
+  status: string;
+}
+
 // Queue name mapping
 const QUEUE_NAMES: Record<number, string> = {
   420: 'Ranked Solo/Duo',
@@ -267,6 +277,269 @@ async function updateGameStatusInSupabase(
   }
 }
 
+// ============================================
+// ADMIN COMMANDS HANDLING
+// ============================================
+
+async function getPendingCommands(): Promise<AdminCommand[]> {
+  const { data, error } = await supabase
+    .from('admin_commands')
+    .select('*')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching commands:', error);
+    return [];
+  }
+  return data || [];
+}
+
+async function updateCommandStatus(
+  commandId: string,
+  status: 'running' | 'completed' | 'error',
+  result?: unknown
+): Promise<void> {
+  const update: Record<string, unknown> = { status };
+  if (result !== undefined) update.result = result;
+  if (status === 'completed' || status === 'error') {
+    update.completed_at = new Date().toISOString();
+  }
+
+  const { error } = await supabase
+    .from('admin_commands')
+    .update(update)
+    .eq('id', commandId);
+
+  if (error) {
+    console.error('Error updating command status:', error);
+  }
+}
+
+// Get match history from Riot API
+async function getMatchHistory(puuid: string, region: string, count: number = 1): Promise<string[] | null> {
+  const routingMap: Record<string, string> = {
+    EUW: 'europe',
+    EUNE: 'europe',
+    NA: 'americas',
+    KR: 'asia',
+  };
+
+  const routing = routingMap[region] || 'europe';
+  const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?start=0&count=${count}`;
+
+  try {
+    const response = await fetch(url, {
+      headers: { 'X-Riot-Token': RIOT_API_KEY }
+    });
+
+    if (!response.ok) {
+      console.error(`Match history API error: ${response.status}`);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching match history:', error);
+    return null;
+  }
+}
+
+// Get match details from Riot API
+async function getMatchDetails(matchId: string, region: string): Promise<unknown | null> {
+  const routingMap: Record<string, string> = {
+    EUW: 'europe',
+    EUNE: 'europe',
+    NA: 'americas',
+    KR: 'asia',
+  };
+
+  const routing = routingMap[region] || 'europe';
+  const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
+
+  try {
+    const response = await fetch(url, {
+      headers: { 'X-Riot-Token': RIOT_API_KEY }
+    });
+
+    if (!response.ok) {
+      console.error(`Match details API error: ${response.status}`);
+      return null;
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching match details:', error);
+    return null;
+  }
+}
+
+// Sync last game for all players
+async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message: string; matches: unknown[] }> {
+  console.log('📥 Syncing last game for all players...');
+
+  const players = await getTrackedPlayers();
+  if (players.length === 0) {
+    return { success: false, message: 'Aucun joueur configuré', matches: [] };
+  }
+
+  // Get existing match IDs from Supabase
+  const { data: existingMatches } = await supabase
+    .from('johnny_matches')
+    .select('id');
+  const existingIds = new Set((existingMatches || []).map((m: { id: string }) => m.id));
+
+  const newMatches: unknown[] = [];
+
+  for (const player of players) {
+    if (!player.puuid) continue;
+
+    const matchIds = await getMatchHistory(player.puuid, player.region, 1);
+    if (!matchIds || matchIds.length === 0) {
+      console.log(`  ⚠️ No matches found for ${player.display_name}`);
+      continue;
+    }
+
+    const latestMatchId = matchIds[0];
+
+    if (existingIds.has(latestMatchId)) {
+      console.log(`  ✓ Match already synced for ${player.display_name}`);
+      continue;
+    }
+
+    const matchData = await getMatchDetails(latestMatchId, player.region) as {
+      metadata: { matchId: string };
+      info: {
+        gameCreation: number;
+        gameDuration: number;
+        gameMode: string;
+        queueId: number;
+        gameEndedInSurrender?: boolean;
+        participants: Array<{
+          puuid: string;
+          championId: number;
+          championName: string;
+          kills: number;
+          deaths: number;
+          assists: number;
+          totalMinionsKilled: number;
+          neutralMinionsKilled: number;
+          visionScore: number;
+          goldEarned: number;
+          totalDamageDealtToChampions: number;
+          win: boolean;
+          firstBloodVictim?: boolean;
+          teamEarlySurrendered?: boolean;
+          teamId: number;
+        }>;
+      };
+    } | null;
+    if (!matchData) {
+      console.log(`  ⚠️ Could not fetch match for ${player.display_name}`);
+      continue;
+    }
+
+    const playerStats = matchData.info.participants.find((p: { puuid: string }) => p.puuid === player.puuid);
+    if (!playerStats) continue;
+
+    const team = matchData.info.participants.filter((p: { teamId: number }) => p.teamId === playerStats.teamId);
+    const teamKills = team.reduce((sum: number, p: { kills: number }) => sum + p.kills, 0);
+
+    const johnnyMatch = {
+      id: matchData.metadata.matchId,
+      puuid: player.puuid,
+      player_name: player.display_name,
+      game_creation: matchData.info.gameCreation,
+      game_duration: matchData.info.gameDuration,
+      game_mode: matchData.info.gameMode,
+      queue_id: matchData.info.queueId,
+      champion_id: playerStats.championId,
+      champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
+      kills: playerStats.kills,
+      deaths: playerStats.deaths,
+      assists: playerStats.assists,
+      cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
+      vision_score: playerStats.visionScore,
+      gold_earned: playerStats.goldEarned,
+      damage_dealt: playerStats.totalDamageDealtToChampions,
+      win: playerStats.win,
+      first_blood_victim: playerStats.firstBloodVictim === true,
+      game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
+      team_kills: teamKills,
+      created_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('johnny_matches')
+      .upsert([johnnyMatch], { onConflict: 'id' });
+
+    if (error) {
+      console.error(`  ❌ Error saving match for ${player.display_name}:`, error);
+    } else {
+      console.log(`  ✅ Synced match for ${player.display_name}: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
+      newMatches.push(johnnyMatch);
+      existingIds.add(latestMatchId);
+    }
+
+    // Small delay between players
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  if (newMatches.length === 0) {
+    return { success: true, message: 'Aucune nouvelle game trouvée', matches: [] };
+  }
+
+  return {
+    success: true,
+    message: `${newMatches.length} game(s) synchronisée(s)`,
+    matches: newMatches
+  };
+}
+
+// Execute a command
+async function executeCommand(command: AdminCommand): Promise<void> {
+  console.log(`\n⚡ Executing command: ${command.command}`);
+  await updateCommandStatus(command.id, 'running');
+
+  try {
+    let result: unknown;
+
+    switch (command.command) {
+      case 'sync_last_game':
+        result = await syncLastGameForAllPlayers();
+        break;
+
+      case 'check_status':
+        await checkAllPlayers();
+        result = { success: true, message: 'Status vérifié' };
+        break;
+
+      default:
+        result = { success: false, message: `Commande inconnue: ${command.command}` };
+    }
+
+    await updateCommandStatus(command.id, 'completed', result);
+    console.log(`✅ Command completed: ${command.command}`);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`❌ Command failed: ${command.command}`, error);
+    await updateCommandStatus(command.id, 'error', { success: false, message: errorMessage });
+  }
+}
+
+// Process pending commands
+async function processCommands(): Promise<void> {
+  const commands = await getPendingCommands();
+
+  for (const command of commands) {
+    await executeCommand(command);
+  }
+}
+
+// ============================================
+// GAME CHECKING
+// ============================================
+
 async function checkAllPlayers(): Promise<void> {
   console.log(`\n[${new Date().toLocaleTimeString()}] Checking players...`);
 
@@ -331,7 +604,8 @@ async function checkAllPlayers(): Promise<void> {
 // Main loop
 async function main(): Promise<void> {
   console.log('🎰 JohnnyFF15 Game Watcher Started');
-  console.log(`   Checking every ${CHECK_INTERVAL / 1000} seconds`);
+  console.log(`   Game check: every ${CHECK_INTERVAL / 1000} seconds`);
+  console.log(`   Command check: every ${COMMAND_CHECK_INTERVAL / 1000} seconds`);
   console.log('   Press Ctrl+C to stop\n');
 
   // Validate config
@@ -350,8 +624,11 @@ async function main(): Promise<void> {
   // Initial check
   await checkAllPlayers();
 
-  // Schedule periodic checks
+  // Schedule periodic game checks
   setInterval(checkAllPlayers, CHECK_INTERVAL);
+
+  // Schedule command processing
+  setInterval(processCommands, COMMAND_CHECK_INTERVAL);
 }
 
 main().catch(console.error);

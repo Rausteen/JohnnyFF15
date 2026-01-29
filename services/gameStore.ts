@@ -12,7 +12,7 @@ import { getActiveTrackedPlayers, updateTrackedPlayer } from './playersService';
 const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // How long before game status is considered stale (in ms)
-const STALE_THRESHOLD = 25000; // 25 seconds
+const STALE_THRESHOLD = 120000; // 2 minutes - game-watcher updates every 45s, so this should always use cached data
 
 // Track which games we've already sent notifications for (prevents duplicates on refresh)
 // Persisted to localStorage to survive page refreshes
