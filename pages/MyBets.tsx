@@ -360,6 +360,11 @@ const MyBets = () => {
                     {/* Game Info */}
                     <div className="text-left min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                        {group.playerName && (
+                          <span className="px-1.5 sm:px-2 py-0.5 bg-primary/20 text-primary text-xs font-bold rounded shrink-0">
+                            {group.playerName}
+                          </span>
+                        )}
                         <span className="font-bold text-white text-sm sm:text-lg truncate">{group.championName}</span>
                         {group.hasCombo && (
                           <span className="px-1.5 sm:px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full flex items-center gap-1 shrink-0">

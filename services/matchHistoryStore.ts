@@ -7,7 +7,8 @@ import { useGameStore } from './gameStore';
 // Type for a saved match in Supabase
 export interface JohnnyMatch {
   id: string; // Riot match ID
-  puuid: string; // Johnny's PUUID for this match
+  puuid: string; // Player's PUUID for this match
+  player_name?: string; // Display name of the player
   game_creation: number;
   game_duration: number;
   game_mode: string;
