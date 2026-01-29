@@ -37,6 +37,11 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
     return `🐉 Dragons: ${teamDragons} - ${enemyDragons}`;
   }
 
+  // Handle Kill Score bets (format: kill_score_X_Y)
+  if (propId.startsWith('kill_score_')) {
+    return `⚔️ K/D: ${stats.kills}/${stats.deaths}`;
+  }
+
   switch (propId) {
     // ========== EARLY GAME ==========
     case 'early1': // First Blood victime
@@ -138,6 +143,15 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     const actualEnemy = enemyTeam?.objectives.dragon.kills || 0;
 
     return predictedTeam === actualTeam && predictedEnemy === actualEnemy;
+  }
+
+  // Handle Kill Score bets (format: kill_score_X_Y)
+  if (propId.startsWith('kill_score_')) {
+    const parts = propId.split('_');
+    const predictedKills = parseInt(parts[2], 10);
+    const predictedDeaths = parseInt(parts[3], 10);
+
+    return stats.kills === predictedKills && stats.deaths === predictedDeaths;
   }
 
   switch (propId) {
