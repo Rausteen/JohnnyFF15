@@ -48,12 +48,14 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
       return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
     case 'kda4': // 0 Kill toute la game
       return `${stats.kills} kills`;
-    case 'kda5': // Johnny fait un kill
-      return `${stats.kills} kills`;
+    case 'kda5': // 0 Assist toute la game
+      return `${stats.assists} assists`;
     case 'kda6': // KDA positif
       return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
     case 'kda7': // Double kill ou plus
       return `${stats.doubleKills} double kills`;
+    case 'kda8': // Triple kill ou plus
+      return `${stats.tripleKills} triple kills`;
 
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte
@@ -142,14 +144,17 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'kda4': // 0 Kill toute la game
       return stats.kills === 0;
 
-    case 'kda5': // Johnny fait un kill (at least 1)
-      return stats.kills >= 1;
+    case 'kda5': // 0 Assist toute la game
+      return stats.assists === 0;
 
     case 'kda6': // KDA positif (≥1.0)
       return kda >= 1.0;
 
     case 'kda7': // Double kill ou plus
       return stats.doubleKills >= 1;
+
+    case 'kda8': // Triple kill ou plus
+      return stats.tripleKills >= 1;
 
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte (<4/min)

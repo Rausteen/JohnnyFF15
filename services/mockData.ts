@@ -80,6 +80,13 @@ export const MOCK_PROPS: Prop[] = [
     category: 'KDA'
   },
   {
+    id: 'kda5',
+    title: "0 Assist toute la game",
+    description: "{player} termine sans aucune assist.",
+    odds: 6.0,
+    category: 'KDA'
+  },
+  {
     id: 'out1',
     title: "FF avant 20 min",
     description: "Surrender avant 20 minutes.",
@@ -129,14 +136,14 @@ export const MOCK_PROPS: Prop[] = [
     id: 'out3',
     title: "VICTOIRE",
     description: "{player} gagne.",
-    odds: 1.6,
+    odds: 2.0,
     category: 'LATE'
   },
   {
     id: 'sp4',
     title: "Victoire + KDA > 2",
     description: "{player} gagne ET joue très bien.",
-    odds: 6.0,
+    odds: 4.0,
     category: 'LATE'
   },
 
@@ -145,35 +152,42 @@ export const MOCK_PROPS: Prop[] = [
     id: 'kda7',
     title: "Double kill ou plus",
     description: "{player} fait un double kill.",
-    odds: 12.0,
+    odds: 3.5,
+    category: 'KDA'
+  },
+  {
+    id: 'kda8',
+    title: "Triple kill ou plus",
+    description: "{player} fait un triple kill.",
+    odds: 8.0,
     category: 'KDA'
   },
   {
     id: 'early5',
     title: "First Blood kill",
     description: "{player} fait le premier kill de la game.",
-    odds: 20.0,
+    odds: 5.0,
     category: 'EARLY'
   },
   {
     id: 'sp2',
     title: "Le Miracle KDA",
     description: "{player} termine avec un KDA > 3.0.",
-    odds: 20.0,
+    odds: 8.0,
     category: 'LATE'
   },
   {
     id: 'sp3',
     title: "Le Carry Mystique",
     description: "{player} top damage de son équipe.",
-    odds: 35.0,
+    odds: 12.0,
     category: 'LATE'
   },
   {
     id: 'sp6',
     title: "Le Pentakill",
     description: "{player} fait un pentakill.",
-    odds: 100.0,
+    odds: 50.0,
     category: 'LATE'
   }
 ];
