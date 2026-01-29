@@ -11,7 +11,7 @@ import { Bet, TrackedPlayer } from '../types';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
-import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive } from '../services/playersService';
+import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers } from '../services/playersService';
 import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { sendTestNotification } from '../services/discordWebhook';
 
@@ -134,6 +134,27 @@ const Admin = () => {
   const [webhookTestLoading, setWebhookTestLoading] = useState(false);
   const [webhookResult, setWebhookResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // Inactive players (for reactivation)
+  const [inactivePlayers, setInactivePlayers] = useState<TrackedPlayer[]>([]);
+  const [reactivatingPlayerId, setReactivatingPlayerId] = useState<string | null>(null);
+
+  // Load inactive players
+  const loadInactivePlayers = async () => {
+    const players = await getInactiveTrackedPlayers();
+    setInactivePlayers(players);
+  };
+
+  // Reactivate a player
+  const handleReactivatePlayer = async (player: TrackedPlayer) => {
+    setReactivatingPlayerId(player.id);
+    const success = await togglePlayerActive(player.id, true);
+    if (success) {
+      await loadTrackedPlayers();
+      await loadInactivePlayers();
+    }
+    setReactivatingPlayerId(null);
+  };
+
   // Check if user is admin
   const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
 
@@ -141,6 +162,7 @@ const Admin = () => {
     loadTrackedPlayers();
     loadMatches();
     loadAllPendingBets();
+    loadInactivePlayers();
   }, []);
 
   // Redirect non-admin users
@@ -250,6 +272,7 @@ const Admin = () => {
     const success = await togglePlayerActive(player.id, !player.isActive);
     if (success) {
       await loadTrackedPlayers();
+      await loadInactivePlayers();
     }
   };
 
@@ -1021,6 +1044,41 @@ const Admin = () => {
                 </button>
               </div>
             </div>
+
+            {/* Inactive players section */}
+            {inactivePlayers.length > 0 && (
+              <div className="border-t border-zinc-800 pt-4 mt-4">
+                <div className="flex items-center gap-2 mb-3 text-sm text-zinc-400">
+                  <Power className="w-4 h-4" />
+                  Joueurs désactivés ({inactivePlayers.length})
+                </div>
+                <div className="space-y-2">
+                  {inactivePlayers.map((player) => (
+                    <div key={player.id} className="p-3 rounded-xl border bg-zinc-900/50 border-zinc-800 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-2 h-2 rounded-full bg-zinc-700" />
+                        <div className="min-w-0">
+                          <div className="font-medium text-zinc-400 truncate">{player.displayName}</div>
+                          <div className="text-xs text-zinc-600 truncate">{player.gameName}#{player.tagLine} • {player.region}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleReactivatePlayer(player)}
+                        disabled={reactivatingPlayerId === player.id}
+                        className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                      >
+                        {reactivatingPlayerId === player.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <ToggleRight className="w-3 h-3" />
+                        )}
+                        Réactiver
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Game Monitoring */}

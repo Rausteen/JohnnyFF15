@@ -69,6 +69,27 @@ export async function getActiveTrackedPlayers(): Promise<TrackedPlayer[]> {
   }
 }
 
+// Get inactive tracked players only
+export async function getInactiveTrackedPlayers(): Promise<TrackedPlayer[]> {
+  try {
+    const { data, error } = await supabase
+      .from('tracked_players')
+      .select('*')
+      .eq('is_active', false)
+      .order('display_name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching inactive players:', error);
+      return [];
+    }
+
+    return (data || []).map(supabasePlayerToLocal);
+  } catch (err) {
+    console.error('Error fetching inactive players:', err);
+    return [];
+  }
+}
+
 // Get a specific player by ID
 export async function getTrackedPlayerById(playerId: string): Promise<TrackedPlayer | null> {
   try {
