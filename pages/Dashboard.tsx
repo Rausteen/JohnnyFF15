@@ -16,15 +16,15 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-type CategoryFilter = 'ALL' | 'EARLY' | 'KDA' | 'GAMEPLAY' | 'LATE' | 'POPULAR';
+type CategoryFilter = 'ALL' | 'FACILE' | 'MOYEN' | 'DIFFICILE' | 'LEGENDAIRE' | 'POPULAR';
 
 const CATEGORY_INFO = {
   ALL: { label: 'Tous', icon: Swords, color: 'zinc' },
   POPULAR: { label: 'Populaires', icon: Star, color: 'gold' },
-  EARLY: { label: 'Early Game', icon: Timer, color: 'amber' },
-  KDA: { label: 'KDA', icon: Target, color: 'red' },
-  GAMEPLAY: { label: 'Gameplay', icon: Zap, color: 'blue' },
-  LATE: { label: 'Résultats', icon: Award, color: 'green' },
+  FACILE: { label: 'Facile', icon: Target, color: 'green', minOdds: 0, maxOdds: 2.0 },
+  MOYEN: { label: 'Moyen', icon: Zap, color: 'amber', minOdds: 2.0, maxOdds: 4.0 },
+  DIFFICILE: { label: 'Difficile', icon: Timer, color: 'orange', minOdds: 4.0, maxOdds: 10.0 },
+  LEGENDAIRE: { label: 'Légendaire', icon: Award, color: 'purple', minOdds: 10.0, maxOdds: 999 },
 };
 
 // Popular props (most bet on)
@@ -205,13 +205,17 @@ const Dashboard = () => {
   // Find player in the current game participants
   const playerInGame = currentGame?.participants.find(p => p.puuid === activePlayer?.puuid);
 
-  // Filter props by category
+  // Filter props by category (based on odds for difficulty levels)
   const filteredProps = useMemo(() => {
     if (categoryFilter === 'ALL') return allProps;
     if (categoryFilter === 'POPULAR') {
       return allProps.filter(p => POPULAR_PROP_IDS.includes(p.id));
     }
-    return allProps.filter(p => p.category === categoryFilter);
+    const catInfo = CATEGORY_INFO[categoryFilter];
+    if ('minOdds' in catInfo && 'maxOdds' in catInfo) {
+      return allProps.filter(p => p.odds >= catInfo.minOdds && p.odds < catInfo.maxOdds);
+    }
+    return allProps;
   }, [categoryFilter, allProps]);
 
   // Sort props by odds (lower first = more likely)
@@ -590,9 +594,14 @@ const Dashboard = () => {
             {(Object.entries(CATEGORY_INFO) as [CategoryFilter, typeof CATEGORY_INFO.ALL][]).map(([key, info]) => {
               const Icon = info.icon;
               const isActive = categoryFilter === key;
-              const count = key === 'ALL' ? allProps.length :
-                           key === 'POPULAR' ? allProps.filter(p => POPULAR_PROP_IDS.includes(p.id)).length :
-                           allProps.filter(p => p.category === key).length;
+              let count = 0;
+              if (key === 'ALL') {
+                count = allProps.length;
+              } else if (key === 'POPULAR') {
+                count = allProps.filter(p => POPULAR_PROP_IDS.includes(p.id)).length;
+              } else if ('minOdds' in info && 'maxOdds' in info) {
+                count = allProps.filter(p => p.odds >= (info as any).minOdds && p.odds < (info as any).maxOdds).length;
+              }
 
               return (
                 <button
@@ -606,7 +615,7 @@ const Dashboard = () => {
                 >
                   <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span className="hidden sm:inline">{info.label}</span>
-                  <span className="sm:hidden">{key === 'POPULAR' ? '⭐' : key === 'ALL' ? 'Tous' : info.label.slice(0, 4)}</span>
+                  <span className="sm:hidden">{key === 'POPULAR' ? '⭐' : key === 'ALL' ? 'Tous' : key === 'LEGENDAIRE' ? '🏆' : info.label.slice(0, 3)}</span>
                   <span className={`text-xs px-1 sm:px-1.5 py-0.5 rounded-full ${
                     isActive ? 'bg-white/20' : 'bg-zinc-800'
                   }`}>
