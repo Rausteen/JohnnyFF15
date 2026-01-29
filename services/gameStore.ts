@@ -342,15 +342,15 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         let isNewGame = false;
 
-        // Check if this is truly a new game by checking both local state AND Supabase cache
+        // Check if Supabase already has this game_id recorded (regardless of is_in_game status)
         // This prevents duplicate notifications after page refresh
-        const wasAlreadyKnownInSupabase = statusData?.is_in_game && statusData?.game_id === gameId;
+        const supabaseAlreadyHasThisGame = statusData?.game_id === gameId;
 
         // Use functional set to avoid race conditions
         set(state => {
           const currentState = state.playerStates.get(puuid);
-          // Only consider it a new game if neither local state nor Supabase knew about it
-          isNewGame = !currentState?.isInGame && !wasAlreadyKnownInSupabase;
+          // Only consider it a new game if Supabase has never seen this game_id
+          isNewGame = !supabaseAlreadyHasThisGame;
 
           const newPlayerStates = new Map(state.playerStates);
           newPlayerStates.set(puuid, {
