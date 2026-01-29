@@ -185,7 +185,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
             {prop.title}
           </h4>
           <p className="text-xs sm:text-sm text-zinc-500 mt-1 line-clamp-2">
-            {prop.description}
+            {prop.description.replace('{player}', activePlayer?.displayName || 'Le joueur')}
           </p>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">

@@ -8,14 +8,14 @@ export const MOCK_PROPS: Prop[] = [
   {
     id: 'out2',
     title: "Défaite",
-    description: "Johnny perd la game.",
+    description: "{player} perd la game.",
     odds: 1.7,
     category: 'LATE'
   },
   {
     id: 'early3',
     title: "5 morts ou plus",
-    description: "Johnny meurt au moins 5 fois.",
+    description: "{player} meurt au moins 5 fois.",
     odds: 1.8,
     category: 'EARLY'
   },
@@ -38,7 +38,7 @@ export const MOCK_PROPS: Prop[] = [
   {
     id: 'kda1',
     title: "10 morts ou plus",
-    description: "Johnny termine avec 10 morts ou plus.",
+    description: "{player} termine avec 10 morts ou plus.",
     odds: 2.8,
     category: 'KDA'
   },
@@ -66,7 +66,7 @@ export const MOCK_PROPS: Prop[] = [
   {
     id: 'early1',
     title: "First Blood victime",
-    description: "Johnny donne le first blood.",
+    description: "{player} donne le first blood.",
     odds: 2.5,
     category: 'EARLY'
   },
@@ -75,7 +75,7 @@ export const MOCK_PROPS: Prop[] = [
   {
     id: 'kda4',
     title: "0 Kill toute la game",
-    description: "Johnny termine sans aucun kill.",
+    description: "{player} termine sans aucun kill.",
     odds: 4.0,
     category: 'KDA'
   },
@@ -89,7 +89,7 @@ export const MOCK_PROPS: Prop[] = [
   {
     id: 'gp5',
     title: "Moins d'or que le support",
-    description: "Johnny finit avec moins d'or que le support allié.",
+    description: "{player} finit avec moins d'or que le support allié.",
     odds: 4.0,
     category: 'GAMEPLAY'
   },
@@ -128,14 +128,14 @@ export const MOCK_PROPS: Prop[] = [
   {
     id: 'out3',
     title: "VICTOIRE",
-    description: "Johnny gagne.",
+    description: "{player} gagne.",
     odds: 1.6,
     category: 'LATE'
   },
   {
     id: 'sp4',
     title: "Victoire + KDA > 2",
-    description: "Johnny gagne ET joue très bien.",
+    description: "{player} gagne ET joue très bien.",
     odds: 6.0,
     category: 'LATE'
   },
@@ -144,35 +144,35 @@ export const MOCK_PROPS: Prop[] = [
   {
     id: 'kda7',
     title: "Double kill ou plus",
-    description: "Johnny fait un double kill.",
+    description: "{player} fait un double kill.",
     odds: 12.0,
     category: 'KDA'
   },
   {
     id: 'early5',
     title: "First Blood kill",
-    description: "Johnny fait le premier kill de la game.",
+    description: "{player} fait le premier kill de la game.",
     odds: 20.0,
     category: 'EARLY'
   },
   {
     id: 'sp2',
     title: "Le Miracle KDA",
-    description: "Johnny termine avec un KDA > 3.0.",
+    description: "{player} termine avec un KDA > 3.0.",
     odds: 20.0,
     category: 'LATE'
   },
   {
     id: 'sp3',
     title: "Le Carry Mystique",
-    description: "Johnny top damage de son équipe.",
+    description: "{player} top damage de son équipe.",
     odds: 35.0,
     category: 'LATE'
   },
   {
     id: 'sp6',
     title: "Le Pentakill",
-    description: "Johnny fait un pentakill.",
+    description: "{player} fait un pentakill.",
     odds: 100.0,
     category: 'LATE'
   }
