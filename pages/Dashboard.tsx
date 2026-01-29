@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import PropCard from '../components/PropCard';
 import ComboBetSlip from '../components/ComboBetSlip';
+import DragonScoreBet from '../components/DragonScoreBet';
 import { usePropsStore } from '../services/propsStore';
 import { useStore } from '../services/store';
 import { useGameStore, PlayerGameState } from '../services/gameStore';
@@ -646,6 +647,14 @@ const Dashboard = () => {
               </div>
             </div>
           )}
+
+          {/* Dragon Score Bet - Prestige Bet */}
+          {isInGame && (
+            <div className="mb-4">
+              <DragonScoreBet player={activePlayer} />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {sortedProps.map(prop => (
               <PropCard key={prop.id} prop={prop} player={activePlayer} />

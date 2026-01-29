@@ -28,6 +28,15 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
   const teammates = match.info.participants.filter(p => p.teamId === stats.teamId && p.puuid !== stats.puuid);
   const lowestTeammateGold = teammates.length > 0 ? Math.min(...teammates.map(p => p.goldEarned)) : 0;
 
+  // Handle Dragon Score bets (format: dragon_score_X_Y)
+  if (propId.startsWith('dragon_score_')) {
+    const playerTeam = match.info.teams.find(t => t.teamId === stats.teamId);
+    const enemyTeam = match.info.teams.find(t => t.teamId !== stats.teamId);
+    const teamDragons = playerTeam?.objectives.dragon.kills || 0;
+    const enemyDragons = enemyTeam?.objectives.dragon.kills || 0;
+    return `🐉 Dragons: ${teamDragons} - ${enemyDragons}`;
+  }
+
   switch (propId) {
     // ========== EARLY GAME ==========
     case 'early1': // First Blood victime
@@ -116,6 +125,20 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
   // Check if Johnny has less gold than support (teammate with support item)
   const teammates = match.info.participants.filter(p => p.teamId === stats.teamId && p.puuid !== stats.puuid);
   const lowestTeammateGold = teammates.length > 0 ? Math.min(...teammates.map(p => p.goldEarned)) : Infinity;
+
+  // Handle Dragon Score bets (format: dragon_score_X_Y)
+  if (propId.startsWith('dragon_score_')) {
+    const parts = propId.split('_');
+    const predictedTeam = parseInt(parts[2], 10);
+    const predictedEnemy = parseInt(parts[3], 10);
+
+    const playerTeam = match.info.teams.find(t => t.teamId === stats.teamId);
+    const enemyTeam = match.info.teams.find(t => t.teamId !== stats.teamId);
+    const actualTeam = playerTeam?.objectives.dragon.kills || 0;
+    const actualEnemy = enemyTeam?.objectives.dragon.kills || 0;
+
+    return predictedTeam === actualTeam && predictedEnemy === actualEnemy;
+  }
 
   switch (propId) {
     // ========== EARLY GAME ==========
