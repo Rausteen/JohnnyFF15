@@ -34,7 +34,7 @@ const RIOT_API_KEY = process.env.VITE_RIOT_API_KEY || process.env.RIOT_API_KEY |
 const DISCORD_WEBHOOK_URL = process.env.VITE_DISCORD_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || '';
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
-const CHECK_INTERVAL = 30000; // 30 seconds
+const CHECK_INTERVAL = 60000; // 60 seconds
 
 // Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -93,7 +93,7 @@ async function getTrackedPlayers(): Promise<TrackedPlayer[]> {
   return data || [];
 }
 
-async function checkCurrentGame(puuid: string, region: string): Promise<CurrentGameInfo | null> {
+async function checkCurrentGame(puuid: string, region: string, retries = 2): Promise<CurrentGameInfo | null> {
   const platformMap: Record<string, string> = {
     EUW: 'euw1',
     EUNE: 'eun1',
@@ -110,6 +110,19 @@ async function checkCurrentGame(puuid: string, region: string): Promise<CurrentG
     });
 
     if (response.status === 404) return null; // Not in game
+
+    // Rate limited - wait and retry
+    if (response.status === 429) {
+      if (retries > 0) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '5', 10);
+        console.log(`  ⏳ Rate limited, waiting ${retryAfter}s...`);
+        await new Promise(r => setTimeout(r, retryAfter * 1000));
+        return checkCurrentGame(puuid, region, retries - 1);
+      }
+      console.error('Rate limit exceeded, skipping this check');
+      return null;
+    }
+
     if (!response.ok) {
       console.error(`Riot API error: ${response.status}`);
       return null;
@@ -265,8 +278,8 @@ async function checkAllPlayers(): Promise<void> {
       await updateGameStatusInSupabase(player.id, false, null, null);
     }
 
-    // Small delay between players to avoid rate limiting
-    await new Promise(r => setTimeout(r, 200));
+    // Delay between players to avoid rate limiting (1.5 sec)
+    await new Promise(r => setTimeout(r, 1500));
   }
 
   // Send notifications for new games
@@ -276,7 +289,7 @@ async function checkAllPlayers(): Promise<void> {
     if (!notifiedGames.has(notifKey)) {
       notifiedGames.add(notifKey);
 
-      const playerNames = players.map(p => p.displayName);
+      const playerNames = players.map(p => p.display_name);
       const gameMode = QUEUE_NAMES[game.gameQueueConfigId] || 'Normal';
 
       await sendDiscordNotification(playerNames, champions, gameMode, gameId);
