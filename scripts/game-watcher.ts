@@ -643,32 +643,229 @@ async function sendGameEndNotification(
   }
 }
 
+// Type for match participant stats
+interface MatchParticipant {
+  puuid: string;
+  championId: number;
+  championName: string;
+  kills: number;
+  deaths: number;
+  assists: number;
+  totalMinionsKilled: number;
+  neutralMinionsKilled: number;
+  visionScore: number;
+  goldEarned: number;
+  totalDamageDealtToChampions: number;
+  win: boolean;
+  firstBloodVictim?: boolean;
+  firstBloodKill?: boolean;
+  doubleKills?: number;
+  pentaKills?: number;
+  gameEndedInSurrender?: boolean;
+  teamEarlySurrendered?: boolean;
+  teamId: number;
+}
+
+// Type for match data
+interface MatchData {
+  metadata: { matchId: string };
+  info: {
+    gameCreation?: number;
+    gameDuration: number;
+    gameMode: string;
+    queueId: number;
+    gameEndedInSurrender?: boolean;
+    participants: MatchParticipant[];
+  };
+}
+
+// Evaluate if a prop condition was met based on match stats
+// (same logic as services/betResolutionService.ts)
+function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData): boolean {
+  const kda = (stats.kills + stats.assists) / Math.max(1, stats.deaths);
+  const csPerMin = (stats.totalMinionsKilled + stats.neutralMinionsKilled) / (match.info.gameDuration / 60);
+
+  // Get player's team kills for kill participation
+  const team = match.info.participants.filter(p => p.teamId === stats.teamId);
+  const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
+  const killParticipation = teamKills > 0 ? (stats.kills + stats.assists) / teamKills * 100 : 0;
+
+  // Check if player has less gold than lowest teammate
+  const teammates = match.info.participants.filter(p => p.teamId === stats.teamId && p.puuid !== stats.puuid);
+  const lowestTeammateGold = teammates.length > 0 ? Math.min(...teammates.map(p => p.goldEarned)) : Infinity;
+
+  switch (propId) {
+    // ========== EARLY GAME ==========
+    case 'early1': // First Blood victime
+      return stats.firstBloodVictim === true;
+    case 'early5': // First Blood kill
+      return stats.firstBloodKill === true;
+    case 'early3': // 5 morts ou plus
+      return stats.deaths >= 5;
+    case 'early4': // 0 mort toute la game
+      return stats.deaths === 0;
+
+    // ========== KDA ==========
+    case 'kda1': // Le 0/10 Powerspike (10+ deaths)
+      return stats.deaths >= 10;
+    case 'kda2': // Le 0/15 Légendaire (15+ deaths)
+      return stats.deaths >= 15;
+    case 'kda3': // KDA < 0.5
+      return kda < 0.5;
+    case 'kda4': // 0 Kill toute la game
+      return stats.kills === 0;
+    case 'kda5': // Johnny fait un kill (at least 1)
+      return stats.kills >= 1;
+    case 'kda6': // KDA positif (≥1.0)
+      return kda >= 1.0;
+    case 'kda7': // Double kill ou plus
+      return (stats.doubleKills || 0) >= 1;
+
+    // ========== GAMEPLAY ==========
+    case 'gp1': // CS de la honte (<4/min)
+      return csPerMin < 4;
+    case 'gp7': // CS > 6.5/min
+      return csPerMin > 6.5;
+    case 'gp2': // 0 Vision Score
+      return stats.visionScore === 0;
+    case 'gp3': // Vision < 5
+      return stats.visionScore < 5;
+    case 'gp4': // Moins de 8k dégâts
+      return stats.totalDamageDealtToChampions < 8000;
+    case 'gp5': // Moins d'or que le support
+      return stats.goldEarned < lowestTeammateGold;
+    case 'gp6': // Participation < 15%
+      return killParticipation < 15;
+
+    // ========== RÉSULTAT ==========
+    case 'out1': // FF avant 20 min
+      return (stats.gameEndedInSurrender || match.info.gameEndedInSurrender === true) && match.info.gameDuration < 1200;
+    case 'out2': // Défaite
+      return !stats.win;
+    case 'out3': // VICTOIRE
+      return stats.win;
+    case 'out4': // Game > 40 min
+      return match.info.gameDuration > 2400;
+
+    // ========== LÉGENDAIRES ==========
+    case 'sp1': // Le Perfect Int (10+ morts, 0 kill, défaite)
+      return stats.deaths >= 10 && stats.kills === 0 && !stats.win;
+    case 'sp2': // Le Miracle KDA (KDA > 3.0)
+      return kda > 3.0;
+    case 'sp3': // Le Carry Mystique (top damage de l'équipe)
+      const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
+      return stats.totalDamageDealtToChampions === maxTeamDamage;
+    case 'sp4': // Victoire + KDA > 2
+      return stats.win && kda > 2;
+    case 'sp5': // L'Invisible (<5k dégâts + <10% KP)
+      return stats.totalDamageDealtToChampions < 5000 && killParticipation < 10;
+    case 'sp6': // Le Pentakill
+      return (stats.pentaKills || 0) >= 1;
+
+    default:
+      console.warn(`  Unknown prop ID: ${propId}`);
+      return false;
+  }
+}
+
+// Get the actual stat string that explains the bet result
+function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchData): string {
+  const kda = (stats.kills + stats.assists) / Math.max(1, stats.deaths);
+  const csPerMin = (stats.totalMinionsKilled + stats.neutralMinionsKilled) / (match.info.gameDuration / 60);
+  const gameDurationMin = Math.floor(match.info.gameDuration / 60);
+
+  const team = match.info.participants.filter(p => p.teamId === stats.teamId);
+  const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
+  const killParticipation = teamKills > 0 ? (stats.kills + stats.assists) / teamKills * 100 : 0;
+
+  const teammates = match.info.participants.filter(p => p.teamId === stats.teamId && p.puuid !== stats.puuid);
+  const lowestTeammateGold = teammates.length > 0 ? Math.min(...teammates.map(p => p.goldEarned)) : 0;
+
+  switch (propId) {
+    case 'early1': return stats.firstBloodVictim ? '🩸 First Blood victime' : '✓ Pas First Blood victime';
+    case 'early5': return stats.firstBloodKill ? '🗡️ First Blood kill' : '✗ Pas First Blood';
+    case 'early3': return `${stats.deaths} morts`;
+    case 'early4': return `${stats.deaths} morts`;
+    case 'kda1': return `${stats.deaths} morts`;
+    case 'kda2': return `${stats.deaths} morts`;
+    case 'kda3': return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
+    case 'kda4': return `${stats.kills} kills`;
+    case 'kda5': return `${stats.kills} kills`;
+    case 'kda6': return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
+    case 'kda7': return `${stats.doubleKills || 0} double kills`;
+    case 'gp1': return `${csPerMin.toFixed(1)} CS/min`;
+    case 'gp7': return `${csPerMin.toFixed(1)} CS/min`;
+    case 'gp2': return `Vision: ${stats.visionScore}`;
+    case 'gp3': return `Vision: ${stats.visionScore}`;
+    case 'gp4': return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dégâts`;
+    case 'gp5': return `${stats.goldEarned} or (min équipe: ${lowestTeammateGold})`;
+    case 'gp6': return `${killParticipation.toFixed(0)}% KP`;
+    case 'out1': return `${stats.gameEndedInSurrender || match.info.gameEndedInSurrender ? 'FF' : 'Pas FF'} à ${gameDurationMin}min`;
+    case 'out2': return stats.win ? 'Victoire' : 'Défaite';
+    case 'out3': return stats.win ? 'Victoire' : 'Défaite';
+    case 'out4': return `Durée: ${gameDurationMin}min`;
+    case 'sp1': return `${stats.deaths} morts, ${stats.kills} kills, ${stats.win ? 'Win' : 'Défaite'}`;
+    case 'sp2': return `KDA: ${kda.toFixed(2)}`;
+    case 'sp3': {
+      const maxDmg = Math.max(...team.map(p => p.totalDamageDealtToChampions));
+      return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg (max: ${(maxDmg / 1000).toFixed(1)}k)`;
+    }
+    case 'sp4': return `${stats.win ? 'Win' : 'Défaite'}, KDA: ${kda.toFixed(2)}`;
+    case 'sp5': return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg, ${killParticipation.toFixed(0)}% KP`;
+    case 'sp6': return `${stats.pentaKills || 0} pentakill${(stats.pentaKills || 0) > 1 ? 's' : ''}`;
+    default: return `${stats.kills}/${stats.deaths}/${stats.assists}`;
+  }
+}
+
+// Update user credits using RPC or fallback
+async function updateUserCredits(userId: string, won: boolean, amount: number, payout: number): Promise<void> {
+  try {
+    // Try RPC function first
+    const { error } = await supabase.rpc('update_user_credits_on_bet_resolution', {
+      p_user_id: userId,
+      p_won: won,
+      p_amount: amount,
+      p_payout: payout
+    });
+
+    if (error) {
+      console.log(`  RPC failed, trying direct update...`);
+      // Fallback: direct update
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('credits, bets_won, bets_lost, jc_won, jc_lost')
+        .eq('id', userId)
+        .single();
+
+      if (profile) {
+        if (won) {
+          await supabase
+            .from('profiles')
+            .update({
+              credits: profile.credits + payout,
+              bets_won: (profile.bets_won || 0) + 1,
+              jc_won: (profile.jc_won || 0) + (payout - amount)
+            })
+            .eq('id', userId);
+        } else {
+          await supabase
+            .from('profiles')
+            .update({
+              bets_lost: (profile.bets_lost || 0) + 1,
+              jc_lost: (profile.jc_lost || 0) + amount
+            })
+            .eq('id', userId);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`  Error updating user credits:`, err);
+  }
+}
+
 // Resolve bets for a specific match
 async function resolveBetsForMatch(
-  matchData: {
-    metadata: { matchId: string };
-    info: {
-      gameDuration: number;
-      gameMode: string;
-      queueId: number;
-      participants: Array<{
-        puuid: string;
-        championId: number;
-        championName: string;
-        kills: number;
-        deaths: number;
-        assists: number;
-        totalMinionsKilled: number;
-        neutralMinionsKilled: number;
-        visionScore: number;
-        goldEarned: number;
-        totalDamageDealtToChampions: number;
-        win: boolean;
-        firstBloodVictim?: boolean;
-        teamId: number;
-      }>;
-    };
-  },
+  matchData: MatchData,
   playerPuuid: string,
   playerName: string
 ): Promise<{ resolved: number; errors: number }> {
@@ -678,11 +875,11 @@ async function resolveBetsForMatch(
     return { resolved: 0, errors: 1 };
   }
 
-  // Get pending bets for this player
-  const { data: pendingBets, error: betsError } = await supabase
+  // Get ALL pending bets, then filter by player
+  // This ensures we catch bets with NULL player_puuid (legacy) OR matching player_puuid
+  const { data: allPendingBets, error: betsError } = await supabase
     .from('bets')
     .select('*')
-    .eq('player_puuid', playerPuuid)
     .eq('status', 'PENDING');
 
   if (betsError) {
@@ -690,82 +887,46 @@ async function resolveBetsForMatch(
     return { resolved: 0, errors: 1 };
   }
 
-  if (!pendingBets || pendingBets.length === 0) {
+  // Filter bets: include if player_puuid is null OR matches the current player
+  const pendingBets = (allPendingBets || []).filter(bet =>
+    !bet.player_puuid || bet.player_puuid === playerPuuid
+  );
+
+  if (pendingBets.length === 0) {
     console.log(`  No pending bets for ${playerName}`);
     return { resolved: 0, errors: 0 };
   }
 
-  console.log(`  📊 Resolving ${pendingBets.length} bets for ${playerName}...`);
+  console.log(`  📊 Found ${pendingBets.length} pending bets for ${playerName} (${allPendingBets?.length || 0} total pending)`);
+
+  // Separate single bets from combo bets
+  const singleBets = pendingBets.filter(b => !b.combo_id);
+  const comboBets = pendingBets.filter(b => b.combo_id);
+
+  // Group combo bets by combo_id
+  const comboGroups = new Map<string, typeof comboBets>();
+  for (const bet of comboBets) {
+    const existing = comboGroups.get(bet.combo_id) || [];
+    existing.push(bet);
+    comboGroups.set(bet.combo_id, existing);
+  }
 
   let resolved = 0;
   let errors = 0;
 
-  for (const bet of pendingBets) {
+  // Process single bets
+  for (const bet of singleBets) {
     try {
-      // Determine if bet won based on bet type and actual stats
-      let won = false;
-      let actualValue: number | boolean = 0;
-
-      switch (bet.bet_type) {
-        case 'deaths_over':
-          actualValue = playerStats.deaths;
-          won = playerStats.deaths > bet.threshold;
-          break;
-        case 'deaths_under':
-          actualValue = playerStats.deaths;
-          won = playerStats.deaths < bet.threshold;
-          break;
-        case 'kills_over':
-          actualValue = playerStats.kills;
-          won = playerStats.kills > bet.threshold;
-          break;
-        case 'kills_under':
-          actualValue = playerStats.kills;
-          won = playerStats.kills < bet.threshold;
-          break;
-        case 'win':
-          actualValue = playerStats.win;
-          won = playerStats.win === true;
-          break;
-        case 'lose':
-          actualValue = playerStats.win;
-          won = playerStats.win === false;
-          break;
-        case 'first_blood_victim':
-          actualValue = playerStats.firstBloodVictim === true;
-          won = playerStats.firstBloodVictim === true;
-          break;
-        case 'kda_over':
-          const kda = playerStats.deaths === 0
-            ? playerStats.kills + playerStats.assists
-            : (playerStats.kills + playerStats.assists) / playerStats.deaths;
-          actualValue = kda;
-          won = kda > bet.threshold;
-          break;
-        case 'kda_under':
-          const kdaUnder = playerStats.deaths === 0
-            ? playerStats.kills + playerStats.assists
-            : (playerStats.kills + playerStats.assists) / playerStats.deaths;
-          actualValue = kdaUnder;
-          won = kdaUnder < bet.threshold;
-          break;
-        default:
-          console.warn(`  Unknown bet type: ${bet.bet_type}`);
-          continue;
-      }
-
-      // Calculate payout
-      const payout = won ? Math.floor(bet.amount * bet.odds) : 0;
+      const won = evaluateProp(bet.prop_id, playerStats, matchData);
+      const resolvedStat = getResolvedStat(bet.prop_id, playerStats, matchData);
+      const payout = won ? bet.potential_payout : 0;
 
       // Update bet status
       const { error: updateError } = await supabase
         .from('bets')
         .update({
-          status: won ? 'won' : 'lost',
-          actual_value: actualValue,
-          payout,
-          resolved_at: new Date().toISOString(),
-          match_id: matchData.metadata.matchId,
+          status: won ? 'WON' : 'LOST',
+          resolved_stat: resolvedStat,
         })
         .eq('id', bet.id);
 
@@ -775,34 +936,65 @@ async function resolveBetsForMatch(
         continue;
       }
 
-      // If won, add credits to user
-      if (won && payout > 0) {
-        const { error: creditError } = await supabase.rpc('add_credits_to_user', {
-          p_user_id: bet.user_id,
-          p_amount: payout,
-        });
-
-        if (creditError) {
-          // Fallback: direct update
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('credits')
-            .eq('id', bet.user_id)
-            .single();
-
-          if (profile) {
-            await supabase
-              .from('profiles')
-              .update({ credits: profile.credits + payout })
-              .eq('id', bet.user_id);
-          }
-        }
+      // Update user credits
+      if (bet.user_id) {
+        await updateUserCredits(bet.user_id, won, bet.amount, payout);
       }
 
-      console.log(`  ${won ? '✅' : '❌'} Bet ${bet.bet_type}: ${won ? 'WON' : 'LOST'} (actual: ${actualValue}, threshold: ${bet.threshold})`);
+      console.log(`  ${won ? '✅' : '❌'} ${bet.prop_title}: ${won ? 'WON' : 'LOST'} (${resolvedStat})`);
       resolved++;
     } catch (error) {
       console.error(`  Error resolving bet ${bet.id}:`, error);
+      errors++;
+    }
+  }
+
+  // Process combo bets - ALL bets in combo must win for payout
+  for (const [comboId, bets] of comboGroups) {
+    try {
+      console.log(`  🎲 Processing combo ${comboId.slice(0, 8)}... with ${bets.length} bets`);
+
+      // Evaluate each bet in the combo
+      const betResults = bets.map(bet => ({
+        bet,
+        won: evaluateProp(bet.prop_id, playerStats, matchData),
+        resolvedStat: getResolvedStat(bet.prop_id, playerStats, matchData)
+      }));
+
+      // Combo wins only if ALL bets won
+      const comboWon = betResults.every(r => r.won);
+
+      // Find the main bet (first bet in combo with the amount)
+      const mainBet = bets.find(b => b.amount > 0) || bets[0];
+      const totalAmount = mainBet.amount;
+      const potentialPayout = mainBet.potential_payout;
+
+      // Update all bets in the combo
+      for (const { bet, resolvedStat } of betResults) {
+        const { error: updateError } = await supabase
+          .from('bets')
+          .update({
+            status: comboWon ? 'WON' : 'LOST',
+            resolved_stat: resolvedStat,
+          })
+          .eq('id', bet.id);
+
+        if (updateError) {
+          console.error(`  Error updating combo bet ${bet.id}:`, updateError);
+          errors++;
+        } else {
+          resolved++;
+        }
+      }
+
+      // Update user credits for the combo (only once per combo)
+      if (mainBet.user_id) {
+        await updateUserCredits(mainBet.user_id, comboWon, totalAmount, potentialPayout);
+      }
+
+      console.log(`  ${comboWon ? '✅' : '❌'} Combo ${comboId.slice(0, 8)}...: ${comboWon ? 'WON +' + potentialPayout + ' JC' : 'LOST -' + totalAmount + ' JC'}`);
+    } catch (error) {
+      console.error(`  Error resolving combo ${comboId}:`, error);
       errors++;
     }
   }
@@ -826,7 +1018,7 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
   }
 
   const matchId = matchIds[0];
-  const matchData = await getMatchDetails(matchId, player.region) as {
+  const rawMatchData = await getMatchDetails(matchId, player.region) as {
     metadata: { matchId: string };
     info: {
       gameCreation: number;
@@ -848,11 +1040,18 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
         totalDamageDealtToChampions: number;
         win: boolean;
         firstBloodVictim?: boolean;
+        firstBloodKill?: boolean;
+        doubleKills?: number;
+        pentaKills?: number;
+        gameEndedInSurrender?: boolean;
         teamEarlySurrendered?: boolean;
         teamId: number;
       }>;
     };
   } | null;
+
+  // Cast to MatchData type for bet resolution
+  const matchData: MatchData | null = rawMatchData;
 
   if (!matchData) {
     console.error(`  ❌ Could not fetch match data for ${player.display_name}`);
