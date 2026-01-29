@@ -382,7 +382,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         const lastCheckTime = new Date(statusData.last_check_at).getTime();
         const timeSinceLastCheck = Date.now() - lastCheckTime;
 
-        console.log(`Using game-watcher data for ${targetPlayer.displayName} (${Math.round(timeSinceLastCheck / 1000)}s old)`);
+        // Silent - realtime updates will handle changes
 
         set(state => {
           const currentState = state.playerStates.get(puuid);
@@ -446,30 +446,30 @@ export const useGameStore = create<GameState>((set, get) => ({
     await processPendingNotifications();
   },
 
-  startPolling: (intervalMs = 30000) => {
+  startPolling: (_intervalMs = 30000) => {
     const { isPolling, trackedPlayers } = get();
 
     if (isPolling) {
-      console.log('Polling already active');
+      console.log('Realtime already active');
       return;
     }
 
     if (trackedPlayers.length === 0) {
-      console.warn('Cannot start polling: No tracked players');
+      console.warn('Cannot start realtime: No tracked players');
       return;
     }
 
-    console.log(`Starting polling every ${intervalMs / 1000}s for ${trackedPlayers.length} players`);
+    console.log(`Starting realtime subscription for ${trackedPlayers.length} players (no polling)`);
 
+    // Subscribe to realtime updates - game-watcher will push changes
     get().subscribeToAllPlayers();
+
+    // Do one initial check to populate state from existing data
     get().checkAllPlayersStatus();
 
-    const interval = window.setInterval(() => {
-      get().checkAllPlayersStatus();
-    }, intervalMs);
-
-    set({ isPolling: true, pollInterval: interval as unknown as number });
-    console.log('Polling started successfully');
+    // NO polling interval - we rely entirely on realtime updates from game-watcher
+    set({ isPolling: true, pollInterval: null });
+    console.log('Realtime subscription active');
   },
 
   stopPolling: () => {
