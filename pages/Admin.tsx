@@ -11,7 +11,7 @@ import { Bet, TrackedPlayer } from '../types';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
-import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers } from '../services/playersService';
+import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers } from '../services/playersService';
 import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { sendTestNotification } from '../services/discordWebhook';
 import { syncLastGame as syncLastGameCommand, checkPlayersStatus } from '../services/adminCommands';
@@ -277,17 +277,39 @@ const Admin = () => {
     }
   };
 
-  // Handler to delete a player
+  // Handler to delete a player PERMANENTLY
   const handleDeletePlayer = async (player: TrackedPlayer) => {
-    if (!confirm(`Supprimer ${player.displayName} de la liste de surveillance ?`)) {
+    if (!confirm(`Supprimer DÉFINITIVEMENT ${player.displayName} ?\n\nCette action supprimera le joueur de toutes les tables et empêchera sa recréation automatique.`)) {
       return;
     }
 
-    const success = await deleteTrackedPlayer(player.id);
-    if (success) {
+    const result = await permanentlyDeleteTrackedPlayer(player.id);
+    if (result.success) {
       await loadTrackedPlayers();
+      await loadInactivePlayers();
     } else {
-      console.error('Failed to delete player');
+      console.error('Failed to delete player:', result.message);
+      alert(`Erreur: ${result.message}`);
+    }
+  };
+
+  // Handler to delete ALL players
+  const handleDeleteAllPlayers = async () => {
+    if (!confirm(`⚠️ ATTENTION ⚠️\n\nSupprimer TOUS les joueurs suivis ?\n\nCette action est IRRÉVERSIBLE et supprimera tous les joueurs de toutes les tables.`)) {
+      return;
+    }
+
+    if (!confirm('DERNIÈRE CONFIRMATION\n\nTous les joueurs vont être supprimés définitivement.\nContinuer ?')) {
+      return;
+    }
+
+    const result = await deleteAllTrackedPlayers();
+    if (result.success) {
+      await loadTrackedPlayers();
+      await loadInactivePlayers();
+      alert(result.message);
+    } else {
+      alert(`Erreur: ${result.message}`);
     }
   };
 
@@ -1062,21 +1084,46 @@ const Admin = () => {
                           <div className="text-xs text-zinc-600 truncate">{player.gameName}#{player.tagLine} • {player.region}</div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleReactivatePlayer(player)}
-                        disabled={reactivatingPlayerId === player.id}
-                        className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
-                      >
-                        {reactivatingPlayerId === player.id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <ToggleRight className="w-3 h-3" />
-                        )}
-                        Réactiver
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleReactivatePlayer(player)}
+                          disabled={reactivatingPlayerId === player.id}
+                          className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                        >
+                          {reactivatingPlayerId === player.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <ToggleRight className="w-3 h-3" />
+                          )}
+                          Réactiver
+                        </button>
+                        <button
+                          onClick={() => handleDeletePlayer(player)}
+                          className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                          title="Supprimer définitivement"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Delete all players section */}
+            {(trackedPlayers.length > 0 || inactivePlayers.length > 0) && (
+              <div className="border-t border-zinc-800 pt-4 mt-4">
+                <p className="text-xs text-red-400 mb-3">
+                  ⚠️ Zone dangereuse - Supprime TOUS les joueurs définitivement
+                </p>
+                <button
+                  onClick={handleDeleteAllPlayers}
+                  className="w-full py-3 bg-red-600/30 hover:bg-red-600/50 border border-red-600/50 text-red-300 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Supprimer TOUS les joueurs
+                </button>
               </div>
             )}
           </div>

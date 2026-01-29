@@ -250,7 +250,7 @@ export async function updateTrackedPlayer(
   }
 }
 
-// Delete a tracked player
+// Delete a tracked player (soft delete - just removes from tracked_players)
 export async function deleteTrackedPlayer(playerId: string): Promise<boolean> {
   try {
     const { error } = await supabase
@@ -266,6 +266,118 @@ export async function deleteTrackedPlayer(playerId: string): Promise<boolean> {
   } catch (err) {
     console.error('Error deleting tracked player:', err);
     return false;
+  }
+}
+
+// PERMANENTLY delete a tracked player from ALL tables
+// This ensures the player cannot be recreated by migrations or other processes
+export async function permanentlyDeleteTrackedPlayer(playerId: string): Promise<{ success: boolean; message: string }> {
+  try {
+    // First get the player info
+    const { data: player, error: fetchError } = await supabase
+      .from('tracked_players')
+      .select('*')
+      .eq('id', playerId)
+      .single();
+
+    if (fetchError || !player) {
+      return { success: false, message: 'Joueur non trouvé' };
+    }
+
+    // 1. Delete from player_game_status (cascade should handle this, but let's be sure)
+    const { error: statusError } = await supabase
+      .from('player_game_status')
+      .delete()
+      .eq('player_id', playerId);
+
+    if (statusError) {
+      console.warn('Error deleting player_game_status:', statusError);
+    }
+
+    // 2. Delete from tracked_players
+    const { error: playerError } = await supabase
+      .from('tracked_players')
+      .delete()
+      .eq('id', playerId);
+
+    if (playerError) {
+      console.error('Error deleting tracked player:', playerError);
+      return { success: false, message: 'Erreur lors de la suppression du joueur' };
+    }
+
+    // 3. If this player matches johnny_config, clear it to prevent re-migration
+    if (player.display_name === 'Johnny' || player.game_name) {
+      const { error: configError } = await supabase
+        .from('johnny_config')
+        .update({
+          riot_id: null,
+          puuid: null,
+          last_match_id: null
+        })
+        .eq('id', 1);
+
+      if (configError) {
+        console.warn('Error clearing johnny_config:', configError);
+        // Not critical, continue
+      }
+    }
+
+    console.log(`Permanently deleted player: ${player.display_name} (${player.game_name}#${player.tag_line})`);
+    return { success: true, message: `${player.display_name} supprimé définitivement` };
+  } catch (err) {
+    console.error('Error permanently deleting player:', err);
+    return { success: false, message: 'Erreur inattendue lors de la suppression' };
+  }
+}
+
+// Delete ALL tracked players permanently
+export async function deleteAllTrackedPlayers(): Promise<{ success: boolean; message: string; count: number }> {
+  try {
+    // 1. Delete all player_game_status entries
+    const { error: statusError } = await supabase
+      .from('player_game_status')
+      .delete()
+      .neq('player_id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+    if (statusError) {
+      console.warn('Error deleting all player_game_status:', statusError);
+    }
+
+    // 2. Count players before deletion
+    const { count } = await supabase
+      .from('tracked_players')
+      .select('*', { count: 'exact', head: true });
+
+    // 3. Delete all tracked_players
+    const { error: playerError } = await supabase
+      .from('tracked_players')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+
+    if (playerError) {
+      console.error('Error deleting all tracked players:', playerError);
+      return { success: false, message: 'Erreur lors de la suppression', count: 0 };
+    }
+
+    // 4. Clear johnny_config to prevent re-migration
+    const { error: configError } = await supabase
+      .from('johnny_config')
+      .update({
+        riot_id: null,
+        puuid: null,
+        last_match_id: null
+      })
+      .eq('id', 1);
+
+    if (configError) {
+      console.warn('Error clearing johnny_config:', configError);
+    }
+
+    console.log(`Permanently deleted ALL ${count || 0} tracked players`);
+    return { success: true, message: `${count || 0} joueur(s) supprimé(s) définitivement`, count: count || 0 };
+  } catch (err) {
+    console.error('Error deleting all tracked players:', err);
+    return { success: false, message: 'Erreur inattendue', count: 0 };
   }
 }
 
