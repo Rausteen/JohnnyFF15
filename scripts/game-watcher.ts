@@ -271,10 +271,12 @@ async function checkAllPlayers(): Promise<void> {
       group.players.push(player);
       group.champions.push(championName);
 
-      console.log(`  🎮 ${player.display_name} is in game (${QUEUE_NAMES[game.gameQueueConfigId] || 'Unknown'})`);
+      const name = player.display_name || player.game_name || 'Unknown';
+      console.log(`  🎮 ${name} is in game (${QUEUE_NAMES[game.gameQueueConfigId] || 'Unknown'})`);
       await updateGameStatusInSupabase(player.id, true, String(gameId), game);
     } else {
-      console.log(`  ⏸️  ${player.display_name} not in game`);
+      const name = player.display_name || player.game_name || 'Unknown';
+      console.log(`  ⏸️  ${name} not in game`);
       await updateGameStatusInSupabase(player.id, false, null, null);
     }
 
@@ -289,7 +291,7 @@ async function checkAllPlayers(): Promise<void> {
     if (!notifiedGames.has(notifKey)) {
       notifiedGames.add(notifKey);
 
-      const playerNames = players.map(p => p.display_name);
+      const playerNames = players.map(p => p.display_name || p.game_name || 'Joueur').filter(Boolean);
       const gameMode = QUEUE_NAMES[game.gameQueueConfigId] || 'Normal';
 
       await sendDiscordNotification(playerNames, champions, gameMode, gameId);
