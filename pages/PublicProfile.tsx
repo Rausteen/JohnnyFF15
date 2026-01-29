@@ -49,13 +49,14 @@ const PublicProfile = () => {
 
   // Group bets by matchId/champion
   const groupedBets = useMemo(() => {
-    const groups: Record<string, { champion: string; bets: Bet[]; date: number }> = {};
+    const groups: Record<string, { champion: string; playerName?: string; bets: Bet[]; date: number }> = {};
 
     userBets.forEach(bet => {
       const key = bet.matchId || `unknown_${bet.timestamp}`;
       if (!groups[key]) {
         groups[key] = {
           champion: bet.championName || 'Inconnu',
+          playerName: bet.playerName,
           bets: [],
           date: bet.timestamp
         };
@@ -64,6 +65,10 @@ const PublicProfile = () => {
       // Keep earliest timestamp for the group
       if (bet.timestamp < groups[key].date) {
         groups[key].date = bet.timestamp;
+      }
+      // Update playerName if not set yet
+      if (!groups[key].playerName && bet.playerName) {
+        groups[key].playerName = bet.playerName;
       }
     });
 
@@ -353,10 +358,15 @@ const PublicProfile = () => {
                         />
                       </div>
                       <div className="text-left">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {group.playerName && (
+                            <span className="px-2 py-0.5 bg-primary/20 text-primary text-xs font-bold rounded">
+                              {group.playerName}
+                            </span>
+                          )}
                           <span className="font-bold text-white">{group.champion}</span>
                           {isCombo && (
-                            <span className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs font-bold flex items-center gap-1">
                               <Layers className="w-3 h-3" />
                               Combiné
                             </span>
@@ -413,6 +423,18 @@ const PublicProfile = () => {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
+                              {(bet.playerName || bet.championName) && (
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  {bet.playerName && (
+                                    <span className="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] font-bold rounded">
+                                      {bet.playerName}
+                                    </span>
+                                  )}
+                                  {bet.championName && (
+                                    <span className="text-[10px] text-zinc-500">{bet.championName}</span>
+                                  )}
+                                </div>
+                              )}
                               <div className="flex items-center gap-2">
                                 <span className="text-white font-medium">{bet.propTitle}</span>
                                 <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-lg">
