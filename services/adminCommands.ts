@@ -124,3 +124,13 @@ export async function getPuuid(
 ): Promise<CommandResult & { puuid?: string }> {
   return executeCommand('get_puuid', { gameName, tagLine, region }, 30000) as Promise<CommandResult & { puuid?: string }>;
 }
+
+/**
+ * Get match data by match ID
+ */
+export async function getMatch(
+  matchId: string,
+  region: string
+): Promise<CommandResult & { matchData?: unknown }> {
+  return executeCommand('get_match', { matchId, region }, 30000) as Promise<CommandResult & { matchData?: unknown }>;
+}

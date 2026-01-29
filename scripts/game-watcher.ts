@@ -571,6 +571,21 @@ async function executeCommand(command: AdminCommand): Promise<void> {
         break;
       }
 
+      case 'get_match': {
+        const { matchId, region } = command.params as { matchId: string; region: string };
+        if (!matchId || !region) {
+          result = { success: false, message: 'Paramètres manquants: matchId, region' };
+        } else {
+          const matchData = await getMatchDetails(matchId, region);
+          if (matchData) {
+            result = { success: true, message: 'Match récupéré', matchData };
+          } else {
+            result = { success: false, message: 'Match non trouvé ou erreur API' };
+          }
+        }
+        break;
+      }
+
       default:
         result = { success: false, message: `Commande inconnue: ${command.command}` };
     }

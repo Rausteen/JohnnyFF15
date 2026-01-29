@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { riotApi, CurrentGameInfo, MatchDto, MatchParticipant, Region, getQueueName, getChampionName } from './riotApi';
+import { CurrentGameInfo, MatchDto, MatchParticipant, getChampionName } from './riotApi';
 import { supabase } from './supabase';
 import { useMatchHistoryStore } from './matchHistoryStore';
 import { resolveBets } from './betResolutionService';
@@ -501,13 +501,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ loading: true, error: null });
 
     try {
-      riotApi.setRegion(player.region as Region);
-      const matchData = await riotApi.getMatch(matchId);
+      // Get match data via admin command (game-watcher handles the Riot API call)
+      const { getMatch } = await import('./adminCommands');
+      const result = await getMatch(matchId, player.region);
 
-      if (!matchData) {
-        set({ error: 'Impossible de charger cette game', loading: false });
+      if (!result.success || !result.matchData) {
+        set({ error: result.message || 'Impossible de charger cette game', loading: false });
         return false;
       }
+
+      const matchData = result.matchData as MatchDto;
 
       console.log(`Starting test mode with match ${matchId} for ${player.displayName}`);
 
