@@ -108,20 +108,31 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ loading: true });
     try {
       const players = await getActiveTrackedPlayers();
+      const existingStates = get().playerStates;
 
-      // Initialize player states
+      // Initialize player states, preserving existing game state
       const playerStates = new Map<string, PlayerGameState>();
       for (const player of players) {
         if (player.puuid) {
-          playerStates.set(player.puuid, {
-            player,
-            isInGame: false,
-            currentGame: null,
-            currentGameId: null,
-            gameStartTime: null,
-            lastMatch: null,
-            lastMatchStats: null
-          });
+          const existingState = existingStates.get(player.puuid);
+          if (existingState) {
+            // Preserve existing game state, just update player info
+            playerStates.set(player.puuid, {
+              ...existingState,
+              player // Update player info in case it changed
+            });
+          } else {
+            // New player, initialize with default state
+            playerStates.set(player.puuid, {
+              player,
+              isInGame: false,
+              currentGame: null,
+              currentGameId: null,
+              gameStartTime: null,
+              lastMatch: null,
+              lastMatchStats: null
+            });
+          }
         }
       }
 
