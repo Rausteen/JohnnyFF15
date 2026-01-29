@@ -62,11 +62,11 @@ const CHAMPIONS: Record<number, string> = {
 interface TrackedPlayer {
   id: string;
   puuid: string;
-  gameName: string;
-  tagLine: string;
+  game_name: string;
+  tag_line: string;
   region: string;
-  displayName: string;
-  isActive: boolean;
+  display_name: string;
+  is_active: boolean;
 }
 
 interface CurrentGameInfo {
@@ -83,7 +83,7 @@ async function getTrackedPlayers(): Promise<TrackedPlayer[]> {
   const { data, error } = await supabase
     .from('tracked_players')
     .select('*')
-    .eq('isActive', true);
+    .eq('is_active', true);
 
   if (error) {
     console.error('Error fetching tracked players:', error);
@@ -258,10 +258,10 @@ async function checkAllPlayers(): Promise<void> {
       group.players.push(player);
       group.champions.push(championName);
 
-      console.log(`  🎮 ${player.displayName} is in game (${QUEUE_NAMES[game.gameQueueConfigId] || 'Unknown'})`);
+      console.log(`  🎮 ${player.display_name} is in game (${QUEUE_NAMES[game.gameQueueConfigId] || 'Unknown'})`);
       await updateGameStatusInSupabase(player.id, true, String(gameId), game);
     } else {
-      console.log(`  ⏸️  ${player.displayName} not in game`);
+      console.log(`  ⏸️  ${player.display_name} not in game`);
       await updateGameStatusInSupabase(player.id, false, null, null);
     }
 
