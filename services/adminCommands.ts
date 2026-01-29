@@ -113,3 +113,14 @@ export async function syncLastGame(): Promise<CommandResult> {
 export async function checkPlayersStatus(): Promise<CommandResult> {
   return executeCommand('check_status');
 }
+
+/**
+ * Get PUUID for a player
+ */
+export async function getPuuid(
+  gameName: string,
+  tagLine: string,
+  region: string
+): Promise<CommandResult & { puuid?: string }> {
+  return executeCommand('get_puuid', { gameName, tagLine, region }, 30000) as Promise<CommandResult & { puuid?: string }>;
+}

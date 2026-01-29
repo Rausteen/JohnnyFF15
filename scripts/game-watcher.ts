@@ -496,6 +496,43 @@ async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message:
   };
 }
 
+// Get PUUID from Riot ID
+async function getPuuidFromRiotId(
+  gameName: string,
+  tagLine: string,
+  region: string
+): Promise<{ success: boolean; puuid?: string; message: string }> {
+  const routingMap: Record<string, string> = {
+    EUW: 'europe',
+    EUNE: 'europe',
+    NA: 'americas',
+    KR: 'asia',
+  };
+
+  const routing = routingMap[region] || 'europe';
+  const url = `https://${routing}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
+
+  try {
+    const response = await fetch(url, {
+      headers: { 'X-Riot-Token': RIOT_API_KEY }
+    });
+
+    if (response.status === 404) {
+      return { success: false, message: `Joueur ${gameName}#${tagLine} non trouvé` };
+    }
+
+    if (!response.ok) {
+      return { success: false, message: `Erreur API Riot: ${response.status}` };
+    }
+
+    const data = await response.json();
+    return { success: true, puuid: data.puuid, message: 'PUUID récupéré' };
+  } catch (error) {
+    console.error('Error fetching PUUID:', error);
+    return { success: false, message: 'Erreur lors de la récupération du PUUID' };
+  }
+}
+
 // Execute a command
 async function executeCommand(command: AdminCommand): Promise<void> {
   console.log(`\n⚡ Executing command: ${command.command}`);
@@ -513,6 +550,16 @@ async function executeCommand(command: AdminCommand): Promise<void> {
         await checkAllPlayers();
         result = { success: true, message: 'Status vérifié' };
         break;
+
+      case 'get_puuid': {
+        const { gameName, tagLine, region } = command.params as { gameName: string; tagLine: string; region: string };
+        if (!gameName || !tagLine || !region) {
+          result = { success: false, message: 'Paramètres manquants: gameName, tagLine, region' };
+        } else {
+          result = await getPuuidFromRiotId(gameName, tagLine, region);
+        }
+        break;
+      }
 
       default:
         result = { success: false, message: `Commande inconnue: ${command.command}` };

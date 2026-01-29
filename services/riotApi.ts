@@ -1,7 +1,12 @@
 // Riot Games API Service for JohnnyFF15
 // Documentation: https://developer.riotgames.com/apis
+//
+// ⚠️ IMPORTANT: All API calls are disabled in the frontend for security.
+// API calls are only made from the game-watcher script running on the server.
+// This file only contains types and helper functions.
 
-const RIOT_API_KEY = import.meta.env.VITE_RIOT_API_KEY;
+// API calls are disabled - all requests go through game-watcher
+const API_DISABLED = true;
 
 // Queue ID to readable name mapping
 export const QUEUE_TYPES: Record<number, string> = {
@@ -284,58 +289,14 @@ class RiotApiService {
     this.lastRequestTime = Date.now();
   }
 
-  private async fetch<T>(url: string, retryCount = 0): Promise<T | null> {
-    if (!RIOT_API_KEY) {
-      console.error('RIOT_API_KEY not configured in .env');
+  private async fetch<T>(_url: string, _retryCount = 0): Promise<T | null> {
+    // ⛔ API calls are disabled in frontend for security
+    // All API calls must go through the game-watcher script
+    if (API_DISABLED) {
+      console.warn('⛔ Riot API calls are disabled in frontend. Use game-watcher commands instead.');
       return null;
     }
-
-    // Respect rate limits
-    await this.waitForRateLimit();
-
-    try {
-      console.log('Riot API Request:', url);
-      const response = await fetch(url, {
-        headers: {
-          'X-Riot-Token': RIOT_API_KEY
-        }
-      });
-
-      console.log('Riot API Response:', response.status, response.statusText);
-
-      if (response.status === 404) {
-        // Player not in game or not found - this is expected
-        return null;
-      }
-
-      if (response.status === 403) {
-        console.error('Riot API: Access Forbidden - Check your API key');
-        return null;
-      }
-
-      if (response.status === 429) {
-        // Rate limited - retry with exponential backoff (max 3 retries)
-        if (retryCount < 3) {
-          const retryAfter = parseInt(response.headers.get('Retry-After') || '1', 10);
-          const waitTime = Math.max(retryAfter * 1000, Math.pow(2, retryCount) * 1000);
-          console.warn(`Riot API: Rate limited, retrying in ${waitTime}ms (attempt ${retryCount + 1}/3)`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          return this.fetch<T>(url, retryCount + 1);
-        }
-        console.error('Riot API: Rate limited - Max retries exceeded');
-        return null;
-      }
-
-      if (!response.ok) {
-        console.error(`Riot API error: ${response.status} ${response.statusText}`);
-        return null;
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Riot API fetch error:', error);
-      return null;
-    }
+    return null;
   }
 
   // Get PUUID from Riot ID (gameName#tagLine)

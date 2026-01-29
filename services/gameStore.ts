@@ -237,23 +237,22 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ loading: true, error: null });
 
     try {
-      riotApi.setRegion(region);
+      // Get PUUID via game-watcher command (no direct API call from frontend)
+      const { getPuuid } = await import('./adminCommands');
+      const puuidResult = await getPuuid(gameName, tagLine, region);
 
-      // Get PUUID from Riot API
-      const account = await riotApi.getAccountByRiotId(gameName, tagLine);
-
-      if (!account) {
-        set({ error: 'Joueur non trouvé. Vérifie le Riot ID.', loading: false });
+      if (!puuidResult.success || !puuidResult.puuid) {
+        set({ error: puuidResult.message || 'Joueur non trouvé. Vérifie le Riot ID.', loading: false });
         return false;
       }
 
       // Save to Supabase
-      const { data, error: insertError } = await supabase
+      const { error: insertError } = await supabase
         .from('tracked_players')
         .insert({
-          game_name: account.gameName,
-          tag_line: account.tagLine,
-          puuid: account.puuid,
+          game_name: gameName,
+          tag_line: tagLine,
+          puuid: puuidResult.puuid,
           region: region,
           display_name: displayName,
           is_active: true
