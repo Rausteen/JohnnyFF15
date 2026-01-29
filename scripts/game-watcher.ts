@@ -683,7 +683,7 @@ async function resolveBetsForMatch(
     .from('bets')
     .select('*')
     .eq('player_puuid', playerPuuid)
-    .eq('status', 'pending');
+    .eq('status', 'PENDING');
 
   if (betsError) {
     console.error('Error fetching pending bets:', betsError);
