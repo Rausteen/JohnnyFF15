@@ -19,7 +19,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
-import { resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+// ES module compatibility for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Load .env file from project root
 config({ path: resolve(__dirname, '..', '.env') });
