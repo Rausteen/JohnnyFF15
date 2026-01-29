@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { riotApi, CurrentGameInfo, MatchDto, MatchParticipant, Region } from './riotApi';
+import { riotApi, CurrentGameInfo, MatchDto, MatchParticipant, Region, getQueueName } from './riotApi';
 import { supabase } from './supabase';
 import { useMatchHistoryStore } from './matchHistoryStore';
 import { resolveBets } from './betResolutionService';
@@ -403,7 +403,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         if (isNewGame) {
           console.log(`New game detected for ${targetPlayer.displayName}! Sending Discord notification...`);
-          notifyGameStarted(currentGame.gameId, currentGame.gameMode || 'Ranked Solo/Duo', targetPlayer.displayName)
+          notifyGameStarted(currentGame.gameId, getQueueName(currentGame.gameQueueConfigId), targetPlayer.displayName)
             .then(sent => {
               if (sent) console.log('Discord notification sent successfully');
             })

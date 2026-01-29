@@ -4,7 +4,7 @@ import { useGameStore } from '../services/gameStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useMatchHistoryStore } from '../services/matchHistoryStore';
-import { Region, riotApi } from '../services/riotApi';
+import { Region, riotApi, getQueueName } from '../services/riotApi';
 import { resolveBets } from '../services/betResolutionService';
 import { getAllPendingBets, updateBetStatus, deleteUserBets } from '../services/betsService';
 import { Bet, TrackedPlayer } from '../types';
@@ -1024,7 +1024,7 @@ const Admin = () => {
                         <span className="text-xs text-green-400 font-mono">{gameTimeMinutes} min</span>
                       </div>
                       <div className="text-xs text-zinc-400">
-                        {currentGame?.gameMode || 'Inconnu'}
+                        {currentGame ? getQueueName(currentGame.gameQueueConfigId) : 'Inconnu'}
                       </div>
                     </div>
                   );
