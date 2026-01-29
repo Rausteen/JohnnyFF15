@@ -10,7 +10,7 @@
  *   npx tsc scripts/game-watcher.ts --outDir dist
  *   node dist/game-watcher.js
  *
- * Environment variables needed:
+ * Environment variables needed (in .env file):
  *   VITE_RIOT_API_KEY - Your Riot API key
  *   VITE_DISCORD_WEBHOOK_URL - Discord webhook URL
  *   VITE_SUPABASE_URL - Supabase URL
@@ -18,12 +18,17 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { config } from 'dotenv';
+import { resolve } from 'path';
 
-// Config from environment
-const RIOT_API_KEY = process.env.VITE_RIOT_API_KEY || '';
-const DISCORD_WEBHOOK_URL = process.env.VITE_DISCORD_WEBHOOK_URL || '';
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';
+// Load .env file from project root
+config({ path: resolve(__dirname, '..', '.env') });
+
+// Config from environment (support both VITE_ prefix and without)
+const RIOT_API_KEY = process.env.VITE_RIOT_API_KEY || process.env.RIOT_API_KEY || '';
+const DISCORD_WEBHOOK_URL = process.env.VITE_DISCORD_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || '';
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 const CHECK_INTERVAL = 30000; // 30 seconds
 
 // Supabase client
