@@ -152,7 +152,7 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
       let totalNewMatches = 0;
       const allNewMatches: JohnnyMatch[] = [];
 
-      // Sync 10 games per player
+      // Sync 1 game per player
       for (const player of trackedPlayers) {
         if (!player.puuid) continue;
 
@@ -161,8 +161,8 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
         // Set the correct region for this player
         riotApi.setRegion(player.region as Region);
 
-        // Fetch last 10 matches from Riot API for this player
-        const matchIds = await riotApi.getMatchHistory(player.puuid, 10);
+        // Fetch last match from Riot API for this player
+        const matchIds = await riotApi.getMatchHistory(player.puuid, 1);
         if (!matchIds) {
           console.warn(`Failed to fetch match history for ${player.displayName}`);
           continue;
