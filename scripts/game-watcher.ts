@@ -53,11 +53,37 @@ const QUEUE_NAMES: Record<number, string> = {
   1700: 'Arena',
 };
 
-// Champion name from ID (basic mapping, add more as needed)
-const CHAMPIONS: Record<number, string> = {
-  1: 'Annie', 2: 'Olaf', 3: 'Galio', 4: 'TwistedFate', 5: 'XinZhao',
-  // ... add more champions as needed
-};
+// Champion name from ID (loaded from Data Dragon)
+let CHAMPIONS: Record<number, string> = {};
+
+// Fetch champion data from Data Dragon
+async function loadChampionData(): Promise<void> {
+  try {
+    // Get latest version
+    const versionsRes = await fetch('https://ddragon.leagueoflegends.com/api/versions.json');
+    const versions = await versionsRes.json();
+    const latestVersion = versions[0];
+
+    // Fetch champion data
+    const champRes = await fetch(`https://ddragon.leagueoflegends.com/cdn/${latestVersion}/data/en_US/champion.json`);
+    const champData = await champRes.json();
+
+    // Build ID -> name mapping
+    for (const [name, data] of Object.entries(champData.data)) {
+      const champ = data as { key: string; name: string };
+      CHAMPIONS[parseInt(champ.key, 10)] = champ.name;
+    }
+
+    console.log(`✅ Loaded ${Object.keys(CHAMPIONS).length} champions from Data Dragon (v${latestVersion})`);
+  } catch (error) {
+    console.error('Failed to load champion data:', error);
+    // Fallback to basic champions
+    CHAMPIONS = {
+      1: 'Annie', 2: 'Olaf', 3: 'Galio', 4: 'Twisted Fate', 5: 'Xin Zhao',
+      6: 'Urgot', 7: 'LeBlanc', 8: 'Vladimir', 9: 'Fiddlesticks', 10: 'Kayle'
+    };
+  }
+}
 
 interface TrackedPlayer {
   id: string;
@@ -317,6 +343,9 @@ async function main(): Promise<void> {
     console.error('❌ Supabase credentials not set!');
     process.exit(1);
   }
+
+  // Load champion data from Data Dragon
+  await loadChampionData();
 
   // Initial check
   await checkAllPlayers();
