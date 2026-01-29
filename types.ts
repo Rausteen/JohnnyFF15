@@ -14,6 +14,7 @@ export interface TrackedPlayer {
   displayName: string; // e.g., "Johnny", "Rausteen"
   isActive: boolean;
   createdAt?: string;
+  userId?: string | null; // Linked Supabase user ID (prevents self-betting)
 }
 
 export enum BetStatus {

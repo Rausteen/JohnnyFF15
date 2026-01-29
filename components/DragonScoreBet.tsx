@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ChevronUp, ChevronDown, Flame, Trophy, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { ChevronUp, ChevronDown, Flame, Trophy, Loader2, AlertCircle, CheckCircle, UserX } from 'lucide-react';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useGameStore } from '../services/gameStore';
 import { TrackedPlayer } from '../types';
+import { isUserThePlayer } from '../services/playersService';
 
 interface DragonScoreBetProps {
   player?: TrackedPlayer;
@@ -116,6 +117,9 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
   const isInGame = testMode ? true : (playerState?.isInGame || false);
   const betMatchId = testMode ? testMatchId : playerState?.currentGameId;
 
+  // Check if user is the player they're trying to bet on (self-betting prevention)
+  const isSelfBetting = isUserThePlayer(activePlayer, user?.id);
+
   const [teamDragons, setTeamDragons] = useState(2);
   const [enemyDragons, setEnemyDragons] = useState(1);
   const [amount, setAmount] = useState<string>('');
@@ -153,6 +157,11 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
 
     if (!isInGame || !activePlayer) {
       setError("Aucune game en cours");
+      return;
+    }
+
+    if (isSelfBetting) {
+      setError("Tu ne peux pas parier sur toi-même !");
       return;
     }
 
@@ -396,7 +405,7 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
         {/* Place Bet Button */}
         <button
           onClick={handlePlaceBet}
-          disabled={!isInGame || !amount || loading || !user}
+          disabled={!isInGame || !amount || loading || !user || isSelfBetting}
           className="w-full py-3 bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 hover:opacity-90 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
@@ -406,6 +415,11 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
             </>
           ) : !user ? (
             'Connecte-toi pour parier'
+          ) : isSelfBetting ? (
+            <>
+              <UserX className="w-4 h-4" />
+              Tu ne peux pas parier sur toi
+            </>
           ) : (
             <>
               <Flame className="w-4 h-4" />

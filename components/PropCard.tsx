@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { TrendingUp, AlertCircle, CheckCircle, Loader2, Plus, Check, Layers } from 'lucide-react';
+import { TrendingUp, AlertCircle, CheckCircle, Loader2, Plus, Check, Layers, UserX } from 'lucide-react';
 import { Prop, TrackedPlayer } from '../types';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useGameStore } from '../services/gameStore';
 import { useComboStore } from '../services/comboStore';
+import { isUserThePlayer } from '../services/playersService';
 
 interface PropCardProps {
   prop: Prop;
@@ -47,9 +48,15 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
     ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
     : 0;
 
+  // Check if user is the player they're trying to bet on (self-betting prevention)
+  const isSelfBetting = isUserThePlayer(activePlayer, user?.id);
+
   // Check if betting is allowed based on prop type and game time
   const canBetOnProp = () => {
     if (!isInGame || !activePlayer) return false;
+
+    // Prevent self-betting
+    if (isSelfBetting) return false;
 
     // Global betting window: only allow bets in the first 4 minutes
     if (gameTimeMinutes >= 4) {
@@ -293,6 +300,11 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
             </>
           ) : !user ? (
             'Connecte-toi'
+          ) : isSelfBetting ? (
+            <>
+              <UserX className="w-4 h-4" />
+              Tu ne peux pas parier sur toi
+            </>
           ) : !canBetOnProp() ? (
             'Indisponible'
           ) : (

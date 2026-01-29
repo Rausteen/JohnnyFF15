@@ -12,6 +12,7 @@ export interface SupabaseTrackedPlayer {
   is_active: boolean;
   last_match_id: string | null;
   created_at: string;
+  user_id: string | null; // Linked Supabase user ID
 }
 
 // Convert Supabase player to local format
@@ -24,7 +25,8 @@ export function supabasePlayerToLocal(sp: SupabaseTrackedPlayer): TrackedPlayer 
     region: sp.region,
     displayName: sp.display_name,
     isActive: sp.is_active,
-    createdAt: sp.created_at
+    createdAt: sp.created_at,
+    userId: sp.user_id
   };
 }
 
@@ -222,6 +224,7 @@ export async function updateTrackedPlayer(
     displayName: string;
     isActive: boolean;
     lastMatchId: string | null;
+    userId: string | null;
   }>
 ): Promise<boolean> {
   try {
@@ -233,6 +236,7 @@ export async function updateTrackedPlayer(
     if (updates.displayName !== undefined) dbUpdates.display_name = updates.displayName;
     if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
     if (updates.lastMatchId !== undefined) dbUpdates.last_match_id = updates.lastMatchId;
+    if (updates.userId !== undefined) dbUpdates.user_id = updates.userId;
 
     const { error } = await supabase
       .from('tracked_players')
@@ -384,4 +388,20 @@ export async function deleteAllTrackedPlayers(): Promise<{ success: boolean; mes
 // Toggle player active status
 export async function togglePlayerActive(playerId: string, isActive: boolean): Promise<boolean> {
   return updateTrackedPlayer(playerId, { isActive });
+}
+
+// Link a Supabase user to a tracked player
+export async function linkUserToPlayer(playerId: string, userId: string): Promise<boolean> {
+  return updateTrackedPlayer(playerId, { userId });
+}
+
+// Unlink a user from a tracked player
+export async function unlinkUserFromPlayer(playerId: string): Promise<boolean> {
+  return updateTrackedPlayer(playerId, { userId: null });
+}
+
+// Check if a user is the tracked player (for self-betting prevention)
+export function isUserThePlayer(player: TrackedPlayer | undefined, userId: string | undefined): boolean {
+  if (!player || !userId) return false;
+  return player.userId === userId;
 }

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { X, Layers, TrendingUp, AlertCircle, CheckCircle, Loader2, Trash2 } from 'lucide-react';
+import { X, Layers, TrendingUp, AlertCircle, CheckCircle, Loader2, Trash2, UserX } from 'lucide-react';
 import { useComboStore } from '../services/comboStore';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useGameStore } from '../services/gameStore';
 import { TrackedPlayer } from '../types';
+import { isUserThePlayer } from '../services/playersService';
 
 interface ComboBetSlipProps {
   player?: TrackedPlayer; // The player we're betting on
@@ -34,6 +35,9 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
   // Get the match ID for the current bet
   const betMatchId = testMode ? testMatchId : playerState?.currentGameId;
 
+  // Check if user is the player they're trying to bet on (self-betting prevention)
+  const isSelfBetting = isUserThePlayer(activePlayer, user?.id);
+
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -60,6 +64,11 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
 
     if (!isInGame || !activePlayer) {
       setError("Aucune game en cours");
+      return;
+    }
+
+    if (isSelfBetting) {
+      setError("Tu ne peux pas parier sur toi-même !");
       return;
     }
 
@@ -277,7 +286,7 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
             {/* Place bet button */}
             <button
               onClick={handlePlaceCombo}
-              disabled={!isInGame || !amount || loading || !user || selections.length < 2}
+              disabled={!isInGame || !amount || loading || !user || selections.length < 2 || isSelfBetting}
               className="w-full py-3 bg-gradient-to-r from-primary via-accent to-primary-glow hover:opacity-90 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
@@ -287,6 +296,11 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
                 </>
               ) : !user ? (
                 'Connecte-toi pour parier'
+              ) : isSelfBetting ? (
+                <>
+                  <UserX className="w-4 h-4" />
+                  Tu ne peux pas parier sur toi
+                </>
               ) : !isInGame ? (
                 'Attends une game'
               ) : selections.length < 2 ? (
