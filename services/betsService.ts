@@ -73,14 +73,33 @@ export function localBetToSupabase(bet: Bet): Omit<SupabaseBet, 'created_at'> {
 export async function saveBetToSupabase(bet: Bet): Promise<boolean> {
   try {
     const supabaseBet = localBetToSupabase(bet);
-    const { error } = await supabase
+
+    // Debug: Check if user is authenticated
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('Saving bet - Session exists:', !!session, 'User ID:', session?.user?.id, 'Bet user_id:', supabaseBet.user_id);
+
+    if (!session) {
+      console.error('Cannot save bet: User not authenticated');
+      return false;
+    }
+
+    if (session.user.id !== supabaseBet.user_id) {
+      console.error('User ID mismatch! Session:', session.user.id, 'Bet:', supabaseBet.user_id);
+    }
+
+    const { data, error } = await supabase
       .from('bets')
-      .upsert([supabaseBet], { onConflict: 'id' });
+      .insert([supabaseBet])
+      .select();
 
     if (error) {
       console.error('Error saving bet to Supabase:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      console.error('Bet data:', JSON.stringify(supabaseBet, null, 2));
       return false;
     }
+
+    console.log('Bet saved successfully:', data);
     return true;
   } catch (err) {
     console.error('Error saving bet:', err);
