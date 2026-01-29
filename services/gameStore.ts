@@ -14,6 +14,10 @@ const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2,
 // How long before game status is considered stale (in ms)
 const STALE_THRESHOLD = 25000; // 25 seconds
 
+// Track which games we've already sent notifications for (prevents duplicates on refresh)
+// Key: puuid, Value: gameId that was notified
+const notifiedGameIds = new Map<string, string>();
+
 // Player game status from Supabase
 interface PlayerGameStatusRow {
   player_id: string;
@@ -342,15 +346,17 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         let isNewGame = false;
 
-        // Check if Supabase already has this game_id recorded (regardless of is_in_game status)
-        // This prevents duplicate notifications after page refresh
+        // Check multiple sources to determine if this is truly a new game:
+        // 1. In-memory tracking (prevents duplicates within same browser session)
+        // 2. Supabase cache (prevents duplicates across sessions/browsers)
+        const alreadyNotifiedInMemory = notifiedGameIds.get(puuid) === gameId;
         const supabaseAlreadyHasThisGame = statusData?.game_id === gameId;
 
         // Use functional set to avoid race conditions
         set(state => {
           const currentState = state.playerStates.get(puuid);
-          // Only consider it a new game if Supabase has never seen this game_id
-          isNewGame = !supabaseAlreadyHasThisGame;
+          // Only consider it a new game if NEITHER source knows about it
+          isNewGame = !alreadyNotifiedInMemory && !supabaseAlreadyHasThisGame;
 
           const newPlayerStates = new Map(state.playerStates);
           newPlayerStates.set(puuid, {
@@ -368,12 +374,18 @@ export const useGameStore = create<GameState>((set, get) => ({
         await updatePlayerGameStatus(targetPlayer, true, gameId, currentGame, currentGame.gameStartTime);
 
         if (isNewGame) {
+          // Mark this game as notified BEFORE sending to prevent race conditions
+          notifiedGameIds.set(puuid, gameId);
+
           console.log(`New game detected for ${targetPlayer.displayName}! Sending Discord notification...`);
           notifyGameStarted(currentGame.gameId, currentGame.gameMode || 'Ranked Solo/Duo', targetPlayer.displayName)
             .then(sent => {
               if (sent) console.log('Discord notification sent successfully');
             })
             .catch(err => console.error('Discord notification error:', err));
+        } else {
+          // Even if not a "new" game, make sure we track it to prevent future duplicates
+          notifiedGameIds.set(puuid, gameId);
         }
       } else {
         console.log(`${targetPlayer.displayName} is not in game`);
