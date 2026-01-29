@@ -152,6 +152,8 @@ const Dashboard = () => {
     totalOdds: number;
     potentialPayout: number;
     timestamp: number;
+    playerName?: string;
+    championName?: string;
   }
 
   const groupedBets = useMemo(() => {
@@ -170,7 +172,9 @@ const Dashboard = () => {
           totalAmount: bet.amount,
           totalOdds: bet.odds,
           potentialPayout: bet.potentialPayout,
-          timestamp: bet.timestamp
+          timestamp: bet.timestamp,
+          playerName: bet.playerName,
+          championName: bet.championName
         });
       }
     });
@@ -185,7 +189,9 @@ const Dashboard = () => {
         totalAmount: mainBet.amount,
         totalOdds: mainBet.odds,
         potentialPayout: mainBet.potentialPayout,
-        timestamp: mainBet.timestamp
+        timestamp: mainBet.timestamp,
+        playerName: mainBet.playerName,
+        championName: mainBet.championName
       });
     });
 
@@ -463,10 +469,22 @@ const Dashboard = () => {
                             x{group.totalOdds.toFixed(1)}
                           </span>
                         </div>
-                        <div className="space-y-0.5 mb-2 pl-2 border-l-2 border-purple-500/30">
+                        <div className="space-y-1 mb-2 pl-2 border-l-2 border-purple-500/30">
                           {group.bets.map((bet, idx) => (
-                            <div key={bet.id} className="text-xs text-zinc-300 truncate" title={bet.propTitle.replace(/^\[COMBO \d+\/\d+\] /, '')}>
-                              {idx + 1}. {bet.propTitle.replace(/^\[COMBO \d+\/\d+\] /, '')}
+                            <div key={bet.id} className="text-xs">
+                              <div className="flex items-center gap-1 mb-0.5">
+                                {bet.playerName && (
+                                  <span className="px-1 py-0.5 bg-primary/20 text-primary text-[9px] font-bold rounded">
+                                    {bet.playerName}
+                                  </span>
+                                )}
+                                {bet.championName && (
+                                  <span className="text-[9px] text-zinc-500">{bet.championName}</span>
+                                )}
+                              </div>
+                              <div className="text-zinc-300 truncate" title={bet.propTitle.replace(/^\[COMBO \d+\/\d+\] /, '')}>
+                                {idx + 1}. {bet.propTitle.replace(/^\[COMBO \d+\/\d+\] /, '')}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -502,9 +520,23 @@ const Dashboard = () => {
                       // Single bet display
                       <>
                         <div className="flex justify-between items-start gap-2 mb-1">
-                          <span className="font-medium text-zinc-200 text-xs sm:text-sm leading-tight">
-                            {group.bets[0].propTitle}
-                          </span>
+                          <div className="flex-1 min-w-0">
+                            {(group.playerName || group.championName) && (
+                              <div className="flex items-center gap-1.5 mb-1">
+                                {group.playerName && (
+                                  <span className="px-1.5 py-0.5 bg-primary/20 text-primary text-[10px] font-bold rounded shrink-0">
+                                    {group.playerName}
+                                  </span>
+                                )}
+                                {group.championName && (
+                                  <span className="text-[10px] text-zinc-400">{group.championName}</span>
+                                )}
+                              </div>
+                            )}
+                            <span className="font-medium text-zinc-200 text-xs sm:text-sm leading-tight block truncate">
+                              {group.bets[0].propTitle}
+                            </span>
+                          </div>
                           <span className="text-amber-400 font-mono text-xs bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
                             x{group.totalOdds.toFixed(1)}
                           </span>
@@ -656,6 +688,18 @@ const Dashboard = () => {
                         <div key={bet.id} className="p-2.5 hover:bg-zinc-800/30 transition-colors">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex-1 min-w-0">
+                              {(bet.playerName || bet.championName) && (
+                                <div className="flex items-center gap-1 mb-0.5">
+                                  {bet.playerName && (
+                                    <span className="px-1 py-0.5 bg-primary/20 text-primary text-[9px] font-bold rounded">
+                                      {bet.playerName}
+                                    </span>
+                                  )}
+                                  {bet.championName && (
+                                    <span className="text-[9px] text-zinc-500">{bet.championName}</span>
+                                  )}
+                                </div>
+                              )}
                               <div className="text-xs text-zinc-300 truncate">
                                 {bet.propTitle.replace(/^\[COMBO \d+\/\d+\] /, '')}
                               </div>
