@@ -1018,18 +1018,30 @@ const Admin = () => {
                                   setLinkingPlayerId(null);
                                 }
                               }}
-                              className="absolute right-0 top-0 w-32 p-1 text-xs bg-zinc-800 border border-zinc-600 rounded text-white"
+                              onFocus={() => {
+                                if (allUsers.length === 0) fetchAllUsers();
+                              }}
+                              className="absolute right-0 top-0 w-40 p-1 text-xs bg-zinc-800 border border-zinc-600 rounded text-white"
                               autoFocus
-                              onBlur={() => setLinkingPlayerId(null)}
+                              onBlur={() => setTimeout(() => setLinkingPlayerId(null), 150)}
                             >
                               <option value="">Annuler</option>
-                              {allUsers.map(u => (
-                                <option key={u.id} value={u.id}>{u.pseudo}</option>
-                              ))}
+                              {usersLoading ? (
+                                <option disabled>Chargement...</option>
+                              ) : allUsers.length === 0 ? (
+                                <option disabled>Aucun utilisateur</option>
+                              ) : (
+                                allUsers.map(u => (
+                                  <option key={u.id} value={u.id}>{u.pseudo}</option>
+                                ))
+                              )}
                             </select>
                           ) : (
                             <button
-                              onClick={() => setLinkingPlayerId(player.id)}
+                              onClick={() => {
+                                if (allUsers.length === 0) fetchAllUsers();
+                                setLinkingPlayerId(player.id);
+                              }}
                               className="p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
                               title="Lier à un compte (anti self-bet)"
                             >
