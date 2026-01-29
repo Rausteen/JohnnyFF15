@@ -131,78 +131,20 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     }
   },
 
-  // Sync matches from Riot API to Supabase (for all tracked players)
+  // Sync matches via game-watcher command (no direct API calls)
   syncMatches: async () => {
     set({ syncing: true, error: null });
 
     try {
-      // Get all tracked players
-      const trackedPlayers = await getActiveTrackedPlayers();
+      // Use game-watcher command to sync matches
+      const { syncLastGame } = await import('./adminCommands');
+      const result = await syncLastGame();
 
-      if (trackedPlayers.length === 0) {
-        console.warn('No tracked players found, cannot sync matches');
-        set({ syncing: false });
-        return { newMatches: 0 };
-      }
-
-      // Get existing match IDs to avoid duplicates
-      const { matches } = get();
-      const existingIds = new Set(matches.map(m => m.id));
-
-      let totalNewMatches = 0;
-      const allNewMatches: JohnnyMatch[] = [];
-
-      // Sync 1 game per player
-      for (const player of trackedPlayers) {
-        if (!player.puuid) continue;
-
-        console.log(`Syncing matches for ${player.displayName}...`);
-
-        // Set the correct region for this player
-        riotApi.setRegion(player.region as Region);
-
-        // Fetch last match from Riot API for this player
-        const matchIds = await riotApi.getMatchHistory(player.puuid, 1);
-        if (!matchIds) {
-          console.warn(`Failed to fetch match history for ${player.displayName}`);
-          continue;
-        }
-
-        // Filter out matches we already have
-        const newMatchIds = matchIds.filter(id => !existingIds.has(id));
-
-        // Fetch details for each new match
-        for (const matchId of newMatchIds) {
-          const match = await riotApi.getMatch(matchId);
-          if (!match) continue;
-
-          const johnnyMatch = convertMatchToJohnnyMatch(match, player.puuid, player.displayName);
-          if (johnnyMatch) {
-            allNewMatches.push(johnnyMatch);
-            existingIds.add(matchId); // Avoid duplicates if same match for multiple players
-          }
-
-          // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        totalNewMatches += newMatchIds.length;
-      }
-
-      // Save all new matches to Supabase
-      if (allNewMatches.length > 0) {
-        const { error: insertError } = await supabase
-          .from('johnny_matches')
-          .upsert(allNewMatches, { onConflict: 'id' });
-
-        if (insertError) throw insertError;
-
-        // Reload matches from Supabase
-        await get().loadMatches();
-      }
+      // Reload matches from Supabase
+      await get().loadMatches();
 
       set({ syncing: false, lastSync: new Date() });
-      return { newMatches: allNewMatches.length };
+      return { newMatches: result.matches?.length || 0 };
     } catch (error: any) {
       console.error('Error syncing matches:', error);
       set({ error: error.message, syncing: false });
@@ -210,99 +152,29 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     }
   },
 
-  // Force sync only the last game for each player (for admin when auto-sync fails)
+  // Force sync only the last game for each player via game-watcher command
   syncLastGame: async () => {
     set({ syncing: true, error: null });
 
     try {
-      // Get all tracked players
-      const trackedPlayers = await getActiveTrackedPlayers();
+      // Use game-watcher command to sync matches
+      const { syncLastGame: syncLastGameCommand } = await import('./adminCommands');
+      const result = await syncLastGameCommand();
 
-      if (trackedPlayers.length === 0) {
-        set({ syncing: false });
-        return { success: false, error: 'Aucun joueur configuré' };
+      // Reload matches from Supabase
+      await get().loadMatches();
+
+      set({ syncing: false, lastSync: new Date() });
+
+      if (!result.success) {
+        return { success: false, error: result.message };
       }
 
-      const { matches } = get();
-      const existingIds = new Set(matches.map(m => m.id));
-      const newMatches: JohnnyMatch[] = [];
-      let lastMatch: JohnnyMatch | undefined;
-
-      for (const player of trackedPlayers) {
-        if (!player.puuid) continue;
-
-        // Set the correct region for this player
-        riotApi.setRegion(player.region as Region);
-
-        // Get just the last match ID
-        const matchIds = await riotApi.getMatchHistory(player.puuid, 1);
-        if (!matchIds || matchIds.length === 0) {
-          console.warn(`No matches found for ${player.displayName}`);
-          continue;
-        }
-
-        const latestMatchId = matchIds[0];
-
-        // Check if already in museum
-        if (existingIds.has(latestMatchId)) {
-          console.log(`Match ${latestMatchId} already in museum for ${player.displayName}`);
-          continue;
-        }
-
-        // Fetch the match details
-        const match = await riotApi.getMatch(latestMatchId);
-        if (!match) {
-          console.warn(`Could not fetch match details for ${player.displayName}`);
-          continue;
-        }
-
-        const johnnyMatch = convertMatchToJohnnyMatch(match, player.puuid, player.displayName);
-        if (!johnnyMatch) {
-          console.warn(`Player ${player.displayName} not found in match ${latestMatchId}`);
-          continue;
-        }
-
-        newMatches.push(johnnyMatch);
-        existingIds.add(latestMatchId);
-        lastMatch = johnnyMatch;
-
-        // Auto-resolve pending bets for this match
-        try {
-          console.log(`Auto-resolving pending bets for ${player.displayName}'s match:`, johnnyMatch.id);
-          const results = await resolveBets(match, player.puuid, player.displayName);
-          if (results.length > 0) {
-            const won = results.filter(r => r.won).length;
-            const lost = results.length - won;
-            console.log(`Auto-resolved ${results.length} bets: ${won} won, ${lost} lost`);
-          }
-        } catch (resolveError) {
-          console.error('Error auto-resolving bets:', resolveError);
-        }
-
-        // Small delay between players
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      if (newMatches.length === 0) {
-        set({ syncing: false, lastSync: new Date() });
-        return { success: false, error: 'Aucune nouvelle game trouvée' };
-      }
-
-      // Save to Supabase
-      const { error: insertError } = await supabase
-        .from('johnny_matches')
-        .upsert(newMatches, { onConflict: 'id' });
-
-      if (insertError) throw insertError;
-
-      // Update local state
-      set({
-        matches: [...newMatches, ...matches],
-        syncing: false,
-        lastSync: new Date()
-      });
-
-      return { success: true, match: lastMatch };
+      const matches = result.matches as JohnnyMatch[] | undefined;
+      return {
+        success: true,
+        match: matches && matches.length > 0 ? matches[matches.length - 1] : undefined
+      };
     } catch (error: any) {
       console.error('Error syncing last game:', error);
       set({ error: error.message, syncing: false });

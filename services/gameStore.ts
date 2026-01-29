@@ -223,6 +223,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         : players[0] || null;
 
       set({ trackedPlayers: players, playerStates, selectedPlayer, loading: false });
+
+      // Auto-subscribe to realtime updates (no polling needed, game-watcher handles checks)
+      get().subscribeToAllPlayers();
     } catch (error: any) {
       console.error('Error loading tracked players:', error);
       set({ error: error.message, loading: false });

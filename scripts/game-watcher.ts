@@ -383,11 +383,11 @@ async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message:
     return { success: false, message: 'Aucun joueur configuré', matches: [] };
   }
 
-  // Get existing match IDs from Supabase
+  // Get existing matches from Supabase (match ID + puuid combo)
   const { data: existingMatches } = await supabase
     .from('johnny_matches')
-    .select('id');
-  const existingIds = new Set((existingMatches || []).map((m: { id: string }) => m.id));
+    .select('id, puuid');
+  const existingKeys = new Set((existingMatches || []).map((m: { id: string; puuid: string }) => `${m.id}_${m.puuid}`));
 
   const newMatches: unknown[] = [];
 
@@ -401,8 +401,9 @@ async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message:
     }
 
     const latestMatchId = matchIds[0];
+    const matchKey = `${latestMatchId}_${player.puuid}`;
 
-    if (existingIds.has(latestMatchId)) {
+    if (existingKeys.has(matchKey)) {
       console.log(`  ✓ Match already synced for ${player.display_name}`);
       continue;
     }
@@ -469,16 +470,22 @@ async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message:
       created_at: new Date().toISOString()
     };
 
+    // Use insert instead of upsert to allow same match_id for different players
     const { error } = await supabase
       .from('johnny_matches')
-      .upsert([johnnyMatch], { onConflict: 'id' });
+      .insert([johnnyMatch]);
 
     if (error) {
-      console.error(`  ❌ Error saving match for ${player.display_name}:`, error);
+      // If duplicate key error, it means match already exists for this player
+      if (error.code === '23505') {
+        console.log(`  ✓ Match already exists for ${player.display_name}`);
+      } else {
+        console.error(`  ❌ Error saving match for ${player.display_name}:`, error);
+      }
     } else {
       console.log(`  ✅ Synced match for ${player.display_name}: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
       newMatches.push(johnnyMatch);
-      existingIds.add(latestMatchId);
+      existingKeys.add(matchKey);
     }
 
     // Small delay between players
