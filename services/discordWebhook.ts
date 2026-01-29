@@ -50,6 +50,16 @@ const COLORS = {
 
 // Track last notification to avoid duplicates
 let lastNotifiedGameId: number | null = null;
+let lastEndedGameIds: Set<string> = new Set(); // Track ended games per player to avoid duplicates
+
+// Helper to get champion image URL
+function getChampionImageUrl(championName: string): string {
+  // Normalize champion name for URL (remove spaces, handle special cases)
+  const normalizedName = championName
+    .replace(/['\s]/g, '') // Remove apostrophes and spaces
+    .replace(/\./g, ''); // Remove dots (e.g., "K'Sante" -> "KSante", "Bel'Veth" -> "BelVeth")
+  return `https://ddragon.leagueoflegends.com/cdn/14.1.1/img/champion/${normalizedName}.png`;
+}
 
 export async function sendDiscordNotification(message: DiscordMessage): Promise<boolean> {
   const webhookUrl = getWebhookUrl();
@@ -185,6 +195,11 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
     }
   );
 
+  // Use the first champion's image as thumbnail (or default icon if no champion)
+  const thumbnailUrl = champions.length > 0
+    ? getChampionImageUrl(champions[0])
+    : 'https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/4644.png';
+
   return sendDiscordNotification({
     content: '<@&1466416446094442578>',  // Ping role JohnnyFF15
     embeds: [{
@@ -197,7 +212,7 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
       color: COLORS.GREEN,
       fields,
       thumbnail: {
-        url: 'https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/4644.png',
+        url: thumbnailUrl,
       },
       footer: {
         text: 'JohnnyFF15 - Le casino du feed',
@@ -222,13 +237,24 @@ export async function notifyBettingClosed(gameId: number): Promise<boolean> {
   });
 }
 
-export async function notifyGameEnded(won: boolean, kills: number, deaths: number, assists: number, championName: string, playerName: string = 'Johnny'): Promise<boolean> {
+export async function notifyGameEnded(won: boolean, kills: number, deaths: number, assists: number, championName: string, playerName: string = 'Johnny', matchId?: string): Promise<boolean> {
+  // Avoid duplicate notifications for the same game end
+  const dedupeKey = `${playerName}_${matchId || `${championName}_${kills}_${deaths}_${assists}`}`;
+  if (lastEndedGameIds.has(dedupeKey)) {
+    console.log(`Skipping duplicate end-game notification for ${playerName}`);
+    return false;
+  }
+  lastEndedGameIds.add(dedupeKey);
+
+  // Clean up old entries after 5 minutes
+  setTimeout(() => lastEndedGameIds.delete(dedupeKey), 5 * 60 * 1000);
+
   const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
 
   return sendDiscordNotification({
     embeds: [{
       title: won ? '✅ VICTOIRE (comment ?!)' : '💀 DÉFAITE (comme prévu)',
-      description: `${playerName} a terminé sa game en **${championName}**`,
+      description: `${playerName} a terminé sa game sur **${championName}**`,
       color: won ? COLORS.GREEN : COLORS.RED,
       fields: [
         {
@@ -247,6 +273,9 @@ export async function notifyGameEnded(won: boolean, kills: number, deaths: numbe
           inline: false,
         },
       ],
+      thumbnail: {
+        url: getChampionImageUrl(championName),
+      },
       footer: {
         text: 'JohnnyFF15 - Les paris sont résolus !',
       },

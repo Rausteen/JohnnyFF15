@@ -802,7 +802,8 @@ function handleGameEnd(player: TrackedPlayer, previousGameId: string) {
           stats.deaths,
           stats.assists,
           stats.championName,
-          player.displayName
+          player.displayName,
+          lastMatch.metadata.matchId
         ).catch(err => console.error('Discord end notification error:', err));
       }
 
