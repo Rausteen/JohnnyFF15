@@ -192,7 +192,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
           {/* Add to combo button */}
           {canBetOnProp() && user && (
             <button
-              onClick={() => inCombo ? removeFromCombo(prop.id) : addToCombo(prop)}
+              onClick={() => inCombo ? removeFromCombo(prop.id) : addToCombo(prop, activePlayer?.puuid, activePlayer?.displayName, betMatchId || undefined)}
               disabled={!inCombo && selections.length >= 5}
               className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 inCombo

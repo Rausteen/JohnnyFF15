@@ -110,6 +110,7 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
       }
 
       // Place each bet in the combo as a linked bet (all bets must succeed)
+      // Each selection uses its OWN stored player info (not the current activePlayer)
       const comboId = `combo_${Date.now()}`;
       const comboTotal = selections.length;
       const betPromises = selections.map((sel, index) =>
@@ -118,12 +119,12 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
           `[COMBO ${index + 1}/${comboTotal}] ${sel.prop.title}`,
           combinedOdds, // Use combined odds for display
           index === 0 ? val : 0, // Only first bet shows the amount
-          betMatchId || undefined,
+          sel.gameId || betMatchId || undefined, // Use stored gameId from selection
           { comboId, comboIndex: index + 1, comboTotal },
           user.id,
           championName,
-          activePlayer?.puuid,
-          activePlayer?.displayName
+          sel.playerPuuid || activePlayer?.puuid, // Use stored player from selection
+          sel.playerName || activePlayer?.displayName // Use stored player name from selection
         )
       );
 

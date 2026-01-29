@@ -127,7 +127,7 @@ export async function sendTestNotification(championName: string = 'Yasuo', gameM
   });
 }
 
-export async function notifyGameStarted(gameId: number, gameMode: string, playerName: string = 'Johnny', championName?: string): Promise<boolean> {
+export async function notifyGameStarted(gameId: number, gameMode: string, playerNames: string | string[] = 'Johnny', championName?: string): Promise<boolean> {
   // Avoid duplicate notifications for the same game
   if (lastNotifiedGameId === gameId) {
     return false;
@@ -136,11 +136,21 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
 
   const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
 
+  // Handle single player or multiple players
+  const players = Array.isArray(playerNames) ? playerNames : [playerNames];
+  const playersList = players.join(' et ');
+  const playersUpper = players.map(p => p.toUpperCase()).join(' & ');
+  const isMultiplePlayers = players.length > 1;
+
   return sendDiscordNotification({
     content: '<@&1466416446094442578>',  // Ping role JohnnyFF15
     embeds: [{
-      title: `🎰 ${playerName.toUpperCase()} EST EN GAME !`,
-      description: `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de ${playerName} !**`,
+      title: isMultiplePlayers
+        ? `🎰 ${playersUpper} SONT EN GAME ENSEMBLE !`
+        : `🎰 ${playersUpper} EST EN GAME !`,
+      description: isMultiplePlayers
+        ? `Les paris sont ouverts pendant **3 minutes** !\n\n**${playersList} jouent ensemble ! Viens parier sur leurs feeds !**`
+        : `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de ${playersList} !**`,
       color: COLORS.GREEN,
       fields: [
         {
@@ -148,11 +158,11 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
           value: gameMode || 'Ranked Solo/Duo',
           inline: true,
         },
-        ...(championName ? [{
-          name: '🏆 Champion',
-          value: championName,
+        {
+          name: '👥 Joueurs',
+          value: players.join(', '),
           inline: true,
-        }] : []),
+        },
         {
           name: '⏱️ Temps restant',
           value: '3 minutes pour parier',

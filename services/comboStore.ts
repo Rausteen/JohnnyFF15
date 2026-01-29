@@ -4,6 +4,9 @@ import { Prop } from '../types';
 export interface ComboSelection {
   prop: Prop;
   addedAt: number;
+  playerPuuid?: string;  // The player this bet is for
+  playerName?: string;   // Display name of the player
+  gameId?: string;       // The game ID at time of adding
 }
 
 interface ComboState {
@@ -13,7 +16,7 @@ interface ComboState {
   totalOdds: () => number;
 
   // Actions
-  addToCombo: (prop: Prop) => void;
+  addToCombo: (prop: Prop, playerPuuid?: string, playerName?: string, gameId?: string) => void;
   removeFromCombo: (propId: string) => void;
   clearCombo: () => void;
   isInCombo: (propId: string) => boolean;
@@ -28,7 +31,7 @@ export const useComboStore = create<ComboState>((set, get) => ({
     return selections.reduce((acc, sel) => acc * sel.prop.odds, 1);
   },
 
-  addToCombo: (prop: Prop) => {
+  addToCombo: (prop: Prop, playerPuuid?: string, playerName?: string, gameId?: string) => {
     const { selections, isInCombo } = get();
 
     // Max 5 selections in a combo
@@ -38,7 +41,7 @@ export const useComboStore = create<ComboState>((set, get) => ({
     if (isInCombo(prop.id)) return;
 
     set({
-      selections: [...selections, { prop, addedAt: Date.now() }]
+      selections: [...selections, { prop, addedAt: Date.now(), playerPuuid, playerName, gameId }]
     });
   },
 

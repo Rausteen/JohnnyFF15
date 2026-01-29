@@ -45,6 +45,53 @@ function hasNotifiedGame(puuid: string, gameId: string): boolean {
   return map.get(puuid) === gameId;
 }
 
+// Pending notifications to be sent after all player checks complete
+// This allows grouping players in the same game into one notification
+interface PendingNotification {
+  gameId: string;
+  riotGameId: number;
+  gameMode: string;
+  playerName: string;
+}
+
+let pendingNotifications: PendingNotification[] = [];
+
+function addPendingNotification(notification: PendingNotification): void {
+  pendingNotifications.push(notification);
+}
+
+function clearPendingNotifications(): void {
+  pendingNotifications = [];
+}
+
+async function processPendingNotifications(): Promise<void> {
+  if (pendingNotifications.length === 0) return;
+
+  // Group notifications by riotGameId (players in the same game)
+  const gameGroups = new Map<number, PendingNotification[]>();
+  for (const notif of pendingNotifications) {
+    const existing = gameGroups.get(notif.riotGameId) || [];
+    existing.push(notif);
+    gameGroups.set(notif.riotGameId, existing);
+  }
+
+  // Send one notification per game (with all player names)
+  for (const [riotGameId, notifications] of gameGroups) {
+    const playerNames = notifications.map(n => n.playerName);
+    const gameMode = notifications[0].gameMode;
+
+    console.log(`Sending grouped notification for game ${riotGameId}: ${playerNames.join(', ')}`);
+
+    notifyGameStarted(riotGameId, gameMode, playerNames)
+      .then(sent => {
+        if (sent) console.log('Discord notification sent successfully');
+      })
+      .catch(err => console.error('Discord notification error:', err));
+  }
+
+  clearPendingNotifications();
+}
+
 // Player game status from Supabase
 interface PlayerGameStatusRow {
   player_id: string;
@@ -402,12 +449,14 @@ export const useGameStore = create<GameState>((set, get) => ({
         setNotifiedGame(puuid, gameId);
 
         if (isNewGame) {
-          console.log(`New game detected for ${targetPlayer.displayName}! Sending Discord notification...`);
-          notifyGameStarted(currentGame.gameId, getQueueName(currentGame.gameQueueConfigId), targetPlayer.displayName)
-            .then(sent => {
-              if (sent) console.log('Discord notification sent successfully');
-            })
-            .catch(err => console.error('Discord notification error:', err));
+          console.log(`New game detected for ${targetPlayer.displayName}! Adding to pending notifications...`);
+          // Add to pending notifications - will be sent grouped after all players are checked
+          addPendingNotification({
+            gameId,
+            riotGameId: currentGame.gameId,
+            gameMode: getQueueName(currentGame.gameQueueConfigId),
+            playerName: targetPlayer.displayName
+          });
         }
       } else {
         console.log(`${targetPlayer.displayName} is not in game`);
@@ -450,12 +499,19 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     if (testMode) return;
 
+    // Clear any pending notifications from previous check
+    clearPendingNotifications();
+
     // Check all players in parallel
     await Promise.all(
       trackedPlayers
         .filter(p => p.puuid && p.isActive)
         .map(player => get().checkGameStatus(player))
     );
+
+    // After all checks complete, send grouped notifications
+    // (players in the same game will be grouped together)
+    await processPendingNotifications();
   },
 
   startPolling: (intervalMs = 30000) => {
