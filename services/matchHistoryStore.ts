@@ -182,77 +182,15 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
     }
   },
 
-  // Check if there's a new match for a specific player (call this after game ends)
-  checkForNewMatch: async (playerPuuid?: string, playerName?: string, playerRegion?: string) => {
-    const { matches } = get();
+  // ⛔ DISABLED: All Riot API calls and bet resolution are handled by game-watcher script
+  // This function now only reloads matches from Supabase
+  checkForNewMatch: async (_playerPuuid?: string, _playerName?: string, _playerRegion?: string) => {
+    console.log('⛔ checkForNewMatch disabled - game-watcher handles all match fetching and bet resolution');
 
-    // If no player specified, check all tracked players
-    if (!playerPuuid) {
-      const trackedPlayers = await getActiveTrackedPlayers();
-      if (trackedPlayers.length === 0) {
-        console.warn('checkForNewMatch: No tracked players configured');
-        return null;
-      }
+    // Just reload matches from Supabase to get any new ones added by game-watcher
+    await get().loadMatches();
 
-      let foundMatch: JohnnyMatch | null = null;
-      for (const player of trackedPlayers) {
-        if (!player.puuid) continue;
-        const match = await get().checkForNewMatch(player.puuid, player.displayName, player.region);
-        if (match) foundMatch = match;
-      }
-      return foundMatch;
-    }
-
-    try {
-      // Set region if provided
-      if (playerRegion) {
-        riotApi.setRegion(playerRegion as Region);
-      }
-
-      const matchIds = await riotApi.getMatchHistory(playerPuuid, 1);
-      if (!matchIds || matchIds.length === 0) return null;
-
-      const latestMatchId = matchIds[0];
-
-      // Check if this match is already saved
-      const existingIds = new Set(matches.map(m => m.id));
-      if (existingIds.has(latestMatchId)) return null;
-
-      // Fetch and save the new match
-      const match = await riotApi.getMatch(latestMatchId);
-      if (!match) return null;
-
-      const johnnyMatch = convertMatchToJohnnyMatch(match, playerPuuid, playerName);
-      if (!johnnyMatch) return null;
-
-      // Save to Supabase
-      const { error } = await supabase
-        .from('johnny_matches')
-        .upsert([johnnyMatch], { onConflict: 'id' });
-
-      if (error) throw error;
-
-      // Update local state
-      set({ matches: [johnnyMatch, ...matches] });
-
-      // Auto-resolve pending bets for this match
-      try {
-        console.log(`Auto-resolving pending bets for ${playerName || 'player'}'s new match:`, johnnyMatch.id);
-        const results = await resolveBets(match, playerPuuid, playerName);
-        if (results.length > 0) {
-          const won = results.filter(r => r.won).length;
-          const lost = results.length - won;
-          console.log(`Auto-resolved ${results.length} bets: ${won} won, ${lost} lost`);
-        }
-      } catch (resolveError) {
-        console.error('Error auto-resolving bets:', resolveError);
-      }
-
-      return johnnyMatch;
-    } catch (error) {
-      console.error('Error checking for new match:', error);
-      return null;
-    }
+    return null;
   },
 
   // Clear all matches from Supabase (admin only)

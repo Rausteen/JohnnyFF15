@@ -370,7 +370,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     const puuid = targetPlayer.puuid;
 
     try {
-      // Check Supabase for recent game status
+      // ⛔ FRONTEND ONLY READS FROM SUPABASE - NO RIOT API CALLS
+      // The game-watcher script handles all Riot API calls and bet resolution
       const { data: statusData } = await supabase
         .from('player_game_status')
         .select('*')
@@ -381,103 +382,32 @@ export const useGameStore = create<GameState>((set, get) => ({
         const lastCheckTime = new Date(statusData.last_check_at).getTime();
         const timeSinceLastCheck = Date.now() - lastCheckTime;
 
-        if (timeSinceLastCheck < STALE_THRESHOLD) {
-          console.log(`Using cached status for ${targetPlayer.displayName} (${Math.round(timeSinceLastCheck / 1000)}s old)`);
+        console.log(`Using game-watcher data for ${targetPlayer.displayName} (${Math.round(timeSinceLastCheck / 1000)}s old)`);
 
-          // Use functional set to avoid race conditions with parallel updates
-          let wasInGame = false;
-          let previousGameId: string | null = null;
-
-          set(state => {
-            const currentState = state.playerStates.get(puuid);
-            wasInGame = currentState?.isInGame || false;
-            previousGameId = currentState?.currentGameId || null;
-
-            const newPlayerStates = new Map(state.playerStates);
-            newPlayerStates.set(puuid, {
-              player: targetPlayer,
-              isInGame: statusData.is_in_game,
-              currentGame: statusData.game_data,
-              currentGameId: statusData.game_id,
-              gameStartTime: statusData.game_start_time,
-              lastMatch: currentState?.lastMatch || null,
-              lastMatchStats: currentState?.lastMatchStats || null
-            });
-            return { playerStates: newPlayerStates };
-          });
-
-          if (wasInGame && !statusData.is_in_game && previousGameId) {
-            handleGameEnd(targetPlayer, previousGameId);
-          }
-          return;
-        }
-      }
-
-      // Poll Riot API
-      console.log(`Checking game status for ${targetPlayer.displayName} (${targetPlayer.gameName}#${targetPlayer.tagLine})`);
-      riotApi.setRegion(targetPlayer.region as Region);
-      const currentGame = await riotApi.getCurrentGame(puuid);
-
-      if (currentGame) {
-        const gameId = `${currentGame.platformId}_${currentGame.gameId}`;
-        console.log(`${targetPlayer.displayName} is IN GAME!`, gameId);
-
-        let isNewGame = false;
-
-        // Check localStorage to determine if this is truly a new game
-        // This persists across page refreshes and is the source of truth for notifications
-        const alreadyNotifiedInLocalStorage = hasNotifiedGame(puuid, gameId);
-
-        // Use functional set to avoid race conditions
         set(state => {
           const currentState = state.playerStates.get(puuid);
-          // Only consider it a new game if localStorage doesn't have this game_id
-          isNewGame = !alreadyNotifiedInLocalStorage;
 
           const newPlayerStates = new Map(state.playerStates);
           newPlayerStates.set(puuid, {
             player: targetPlayer,
-            isInGame: true,
-            currentGame,
-            currentGameId: gameId,
-            gameStartTime: currentGame.gameStartTime,
+            isInGame: statusData.is_in_game,
+            currentGame: statusData.game_data,
+            currentGameId: statusData.game_id,
+            gameStartTime: statusData.game_start_time,
             lastMatch: currentState?.lastMatch || null,
             lastMatchStats: currentState?.lastMatchStats || null
           });
           return { playerStates: newPlayerStates };
         });
 
-        await updatePlayerGameStatus(targetPlayer, true, gameId, currentGame, currentGame.gameStartTime);
-
-        // Always mark this game in localStorage to prevent future duplicates
-        setNotifiedGame(puuid, gameId);
-
-        if (isNewGame) {
-          console.log(`New game detected for ${targetPlayer.displayName}! Adding to pending notifications...`);
-          // Find champion from game participants
-          const playerParticipant = currentGame.participants.find(p => p.puuid === puuid);
-          const championName = playerParticipant ? getChampionName(playerParticipant.championId) : undefined;
-          // Add to pending notifications - will be sent grouped after all players are checked
-          addPendingNotification({
-            gameId,
-            riotGameId: currentGame.gameId,
-            gameMode: getQueueName(currentGame.gameQueueConfigId),
-            playerName: targetPlayer.displayName,
-            championName
-          });
-        }
+        // Note: Game end handling (bet resolution) is done by game-watcher script
+        // Frontend does NOT handle bet resolution anymore
       } else {
-        console.log(`${targetPlayer.displayName} is not in game`);
+        // No status data yet - player not being monitored by game-watcher
+        console.log(`No game-watcher data for ${targetPlayer.displayName} - waiting for script to update`);
 
-        let wasInGame = false;
-        let previousGameId: string | null = null;
-
-        // Use functional set to avoid race conditions
         set(state => {
           const currentState = state.playerStates.get(puuid);
-          wasInGame = currentState?.isInGame || false;
-          previousGameId = currentState?.currentGameId || null;
-
           const newPlayerStates = new Map(state.playerStates);
           newPlayerStates.set(puuid, {
             player: targetPlayer,
@@ -490,15 +420,9 @@ export const useGameStore = create<GameState>((set, get) => ({
           });
           return { playerStates: newPlayerStates };
         });
-
-        await updatePlayerGameStatus(targetPlayer, false, null, null, null);
-
-        if (wasInGame && previousGameId) {
-          handleGameEnd(targetPlayer, previousGameId);
-        }
       }
     } catch (error: any) {
-      console.error(`Error checking game status for ${targetPlayer.displayName}:`, error);
+      console.error(`Error reading game status for ${targetPlayer.displayName}:`, error);
     }
   },
 
@@ -559,35 +483,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ isPolling: false, pollInterval: null });
   },
 
-  fetchLastMatch: async (player: TrackedPlayer) => {
-    if (!player.puuid) return;
-
-    set({ loading: true });
-
-    try {
-      riotApi.setRegion(player.region as Region);
-      const lastMatch = await riotApi.getLastMatch(player.puuid);
-
-      if (lastMatch) {
-        const stats = riotApi.getPlayerStatsFromMatch(lastMatch, player.puuid);
-
-        const { playerStates } = get();
-        const currentState = playerStates.get(player.puuid);
-
-        const newPlayerStates = new Map(playerStates);
-        newPlayerStates.set(player.puuid, {
-          ...currentState!,
-          lastMatch,
-          lastMatchStats: stats
-        });
-        set({ playerStates: newPlayerStates, loading: false });
-      } else {
-        set({ loading: false });
-      }
-    } catch (error: any) {
-      console.error('Error fetching last match:', error);
-      set({ loading: false });
-    }
+  // ⛔ DISABLED: All Riot API calls are handled by game-watcher script
+  fetchLastMatch: async (_player: TrackedPlayer) => {
+    console.log('⛔ fetchLastMatch disabled - game-watcher handles all match fetching');
+    // Do nothing - matches are fetched and saved by game-watcher script
+    // Frontend reads from johnny_matches table via Supabase realtime
   },
 
   clearError: () => set({ error: null }),
@@ -725,90 +625,14 @@ async function updatePlayerGameStatus(
   console.log('⛔ updatePlayerGameStatus disabled - using game-watcher data only');
 }
 
-// Helper function to handle game end (bet resolution)
-function handleGameEnd(player: TrackedPlayer, previousGameId: string) {
-  console.log(`Game ended for ${player.displayName}! Previous game ID:`, previousGameId);
-  console.log('Waiting for Riot API to process match data (90 seconds)...');
-
-  setTimeout(async () => {
-    if (!player.puuid) return;
-
-    console.log(`Fetching last match for ${player.displayName} bet resolution...`);
-
-    riotApi.setRegion(player.region as Region);
-    let lastMatch = await riotApi.getLastMatch(player.puuid);
-    let retryCount = 0;
-    const maxRetries = 4;
-    const retryDelays = [30000, 60000, 60000, 60000];
-
-    while (lastMatch && lastMatch.metadata.matchId !== previousGameId && retryCount < maxRetries) {
-      console.log(`Match found (${lastMatch.metadata.matchId}) doesn't match expected (${previousGameId})`);
-      console.log(`Retrying in ${retryDelays[retryCount] / 1000}s...`);
-      await new Promise(resolve => setTimeout(resolve, retryDelays[retryCount]));
-      lastMatch = await riotApi.getLastMatch(player.puuid);
-      retryCount++;
-    }
-
-    if (!lastMatch) {
-      console.log('No match found yet, retrying in 30 seconds...');
-      await new Promise(resolve => setTimeout(resolve, 30000));
-      lastMatch = await riotApi.getLastMatch(player.puuid);
-    }
-
-    if (lastMatch) {
-      if (lastMatch.metadata.matchId !== previousGameId) {
-        console.error(`MATCH ID MISMATCH for ${player.displayName}! Expected: ${previousGameId}, Got: ${lastMatch.metadata.matchId}`);
-        console.error('NOT resolving bets to prevent wrong resolution.');
-        return;
-      }
-
-      const stats = riotApi.getPlayerStatsFromMatch(lastMatch, player.puuid);
-
-      // Update player state
-      const { playerStates } = useGameStore.getState();
-      const currentState = playerStates.get(player.puuid);
-      if (currentState) {
-        const newPlayerStates = new Map(playerStates);
-        newPlayerStates.set(player.puuid, {
-          ...currentState,
-          lastMatch,
-          lastMatchStats: stats,
-          currentGameId: null
-        });
-        useGameStore.setState({ playerStates: newPlayerStates });
-      }
-
-      console.log(`Match verified for ${player.displayName}:`, lastMatch.metadata.matchId);
-      console.log(`${player.displayName} stats:`, stats?.kills, '/', stats?.deaths, '/', stats?.assists);
-
-      if (stats) {
-        notifyGameEnded(
-          stats.win,
-          stats.kills,
-          stats.deaths,
-          stats.assists,
-          stats.championName,
-          player.displayName,
-          lastMatch.metadata.matchId
-        ).catch(err => console.error('Discord end notification error:', err));
-      }
-
-      console.log(`Resolving pending bets for ${player.displayName}, match:`, previousGameId);
-      const results = await resolveBets(lastMatch, player.puuid, player.displayName, previousGameId);
-      console.log('Bet resolution complete:', results.length, 'bets resolved');
-
-      if (results.length > 0) {
-        const won = results.filter(r => r.won).length;
-        const lost = results.length - won;
-        console.log(`Results: ${won} won, ${lost} lost`);
-      }
-
-      // Save to match history
-      console.log('Auto-syncing match to museum...');
-      const matchHistoryStore = useMatchHistoryStore.getState();
-      await matchHistoryStore.checkForNewMatch();
-    } else {
-      console.error(`Could not fetch match data for ${player.displayName} after retries`);
-    }
-  }, 90000);
+// ⛔ DISABLED: Game end handling is now done by game-watcher script
+// The frontend no longer makes any Riot API calls or resolves bets
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function handleGameEnd(_player: TrackedPlayer, _previousGameId: string) {
+  console.log('⛔ handleGameEnd disabled - game-watcher script handles all bet resolution');
+  // Do nothing - game-watcher handles:
+  // 1. Fetching match data from Riot API
+  // 2. Resolving bets
+  // 3. Sending Discord notifications
+  // 4. Saving match to history
 }
