@@ -8,8 +8,8 @@ import { notifyGameStarted, notifyGameEnded } from './discordWebhook';
 import { TrackedPlayer } from '../types';
 import { getActiveTrackedPlayers, updateTrackedPlayer } from './playersService';
 
-// Generate a unique browser ID for this session
-const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+// Browser ID is no longer used - all status updates come from game-watcher
+// const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 // How long before game status is considered stale (in ms)
 const STALE_THRESHOLD = 120000; // 2 minutes - game-watcher updates every 45s, so this should always use cached data
@@ -712,33 +712,17 @@ export const useGameStore = create<GameState>((set, get) => ({
 }));
 
 // Helper function to update player game status in Supabase
+// ⛔ DISABLED: All game status updates now come from game-watcher script only
+// This prevents frontend from creating stale/duplicate entries
 async function updatePlayerGameStatus(
-  player: TrackedPlayer,
-  isInGame: boolean,
-  gameId: string | null,
-  gameData: CurrentGameInfo | null,
-  gameStartTime: number | null
+  _player: TrackedPlayer,
+  _isInGame: boolean,
+  _gameId: string | null,
+  _gameData: CurrentGameInfo | null,
+  _gameStartTime: number | null
 ) {
-  try {
-    const { error } = await supabase
-      .from('player_game_status')
-      .upsert({
-        player_id: player.id,
-        is_in_game: isInGame,
-        game_id: gameId,
-        game_data: gameData,
-        game_start_time: gameStartTime,
-        last_check_at: new Date().toISOString(),
-        last_checker_id: BROWSER_ID,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'player_id' });
-
-    if (error) {
-      console.error('Error updating player game status:', error);
-    }
-  } catch (e) {
-    console.error('Failed to update player game status:', e);
-  }
+  // Do nothing - game-watcher handles all status updates
+  console.log('⛔ updatePlayerGameStatus disabled - using game-watcher data only');
 }
 
 // Helper function to handle game end (bet resolution)
