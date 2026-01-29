@@ -34,7 +34,7 @@ const RIOT_API_KEY = process.env.VITE_RIOT_API_KEY || process.env.RIOT_API_KEY |
 const DISCORD_WEBHOOK_URL = process.env.VITE_DISCORD_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || '';
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
-const CHECK_INTERVAL = 60000; // 60 seconds
+const CHECK_INTERVAL = 45000; // 45 seconds
 
 // Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -306,8 +306,8 @@ async function checkAllPlayers(): Promise<void> {
       await updateGameStatusInSupabase(player.id, false, null, null);
     }
 
-    // Delay between players to avoid rate limiting (1.5 sec)
-    await new Promise(r => setTimeout(r, 1500));
+    // Delay between players to avoid rate limiting (500ms)
+    await new Promise(r => setTimeout(r, 500));
   }
 
   // Send notifications for new games
