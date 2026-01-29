@@ -137,7 +137,7 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
   const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
 
   return sendDiscordNotification({
-    content: '@everyone',
+    content: '<@&1466416446094442578>',  // Ping role JohnnyFF15
     embeds: [{
       title: `🎰 ${playerName.toUpperCase()} EST EN GAME !`,
       description: `Les paris sont ouverts pendant **3 minutes** !\n\n**Viens parier sur le feed de ${playerName} !**`,
