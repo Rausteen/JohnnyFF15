@@ -163,11 +163,17 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
            stats.assists === predictedAssists;
   }
 
-  // Handle Exact Damage bets (format: exact_damage_Xk)
+  // Handle Exact Damage bets (format: exact_damage_Xk or exact_damage_40k+)
   if (propId.startsWith('exact_damage_')) {
-    const predictedK = parseInt(propId.replace('exact_damage_', '').replace('k', ''), 10);
+    const damageStr = propId.replace('exact_damage_', '');
     const actualK = Math.floor(stats.totalDamageDealtToChampions / 1000);
 
+    // Handle 40k+ case
+    if (damageStr === '40k+') {
+      return actualK >= 40;
+    }
+
+    const predictedK = parseInt(damageStr.replace('k', ''), 10);
     // Win if damage is within the 1k range (e.g., 12k means 12000-12999)
     return actualK === predictedK;
   }

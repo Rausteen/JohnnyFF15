@@ -197,8 +197,13 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
         propId = `exact_kda_${kills}_${deaths}_${assists}`;
         propTitle = `🎯 KDA exact: ${kills}/${deaths}/${assists}`;
       } else {
-        propId = `exact_damage_${damageK}k`;
-        propTitle = `⚔️ Dégâts exacts: ${damageK}k - ${damageK + 1}k`;
+        if (damageK >= 40) {
+          propId = `exact_damage_40k+`;
+          propTitle = `⚔️ Dégâts exacts: 40k+`;
+        } else {
+          propId = `exact_damage_${damageK}k`;
+          propTitle = `⚔️ Dégâts exacts: ${damageK}k - ${damageK + 1}k`;
+        }
       }
 
       const bet = await placeBet(
@@ -395,17 +400,17 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
           <>
             {/* Damage Presets */}
             <div className="flex gap-2 justify-center flex-wrap">
-              {[5, 10, 15, 20, 25].map((d) => (
+              {[5, 10, 15, 20, 25, 40].map((d) => (
                 <button
                   key={d}
                   onClick={() => setDamageK(d)}
                   className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
                     damageK === d
-                      ? 'bg-orange-500 text-white'
+                      ? d === 40 ? 'bg-purple-500 text-white' : 'bg-orange-500 text-white'
                       : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                   }`}
                 >
-                  {d}k
+                  {d === 40 ? '40k+' : `${d}k`}
                 </button>
               ))}
             </div>
@@ -422,7 +427,11 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
                 </button>
                 <div className="px-6 py-3 bg-zinc-800/50 rounded-xl border border-orange-500/30">
                   <span className="text-3xl font-black text-orange-400 font-mono">{damageK}k</span>
-                  <span className="text-zinc-500 text-sm ml-1">- {damageK + 1}k</span>
+                  {damageK >= 40 ? (
+                    <span className="text-purple-400 text-sm ml-1 font-bold">+</span>
+                  ) : (
+                    <span className="text-zinc-500 text-sm ml-1">- {damageK + 1}k</span>
+                  )}
                 </div>
                 <button
                   onClick={() => adjustStat('damage', 1)}
@@ -519,7 +528,11 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
           ) : (
             <>
               <Target className="w-4 h-4" />
-              {betType === 'kda' ? `Parier ${kills}/${deaths}/${assists}` : `Parier ${damageK}k - ${damageK + 1}k`}
+              {betType === 'kda'
+                ? `Parier ${kills}/${deaths}/${assists}`
+                : damageK >= 40
+                  ? 'Parier 40k+'
+                  : `Parier ${damageK}k - ${damageK + 1}k`}
             </>
           )}
         </button>
