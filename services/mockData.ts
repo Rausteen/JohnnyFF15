@@ -16,7 +16,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'early3',
     title: "5 morts ou plus",
     description: "{player} meurt au moins 5 fois.",
-    odds: 1.8,
+    odds: 1.6,
     category: 'EARLY'
   },
   {
@@ -39,7 +39,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'kda1',
     title: "10 morts ou plus",
     description: "{player} termine avec 10 morts ou plus.",
-    odds: 2.8,
+    odds: 2.7,
     category: 'KDA'
   },
   {
@@ -83,7 +83,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'kda5',
     title: "0 Assist toute la game",
     description: "{player} termine sans aucune assist.",
-    odds: 6.0,
+    odds: 7.0,
     category: 'KDA'
   },
   {
@@ -136,7 +136,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'kda9',
     title: "KDA ≥ 2",
     description: "{player} termine avec un KDA supérieur ou égal à 2.",
-    odds: 3.5,
+    odds: 2.5,
     category: 'KDA'
   },
 

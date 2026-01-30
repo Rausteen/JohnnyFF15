@@ -34,11 +34,11 @@ const PROP_TYPES: Record<string, PropType> = {
   'early5': 'POSITIVE',    // First Blood kill
   'sp2': 'POSITIVE',       // Le Miracle KDA (KDA > 3.0)
   'sp3': 'POSITIVE',       // Le Carry Mystique (top damage)
-  'sp6': 'POSITIVE',       // Le Pentakill
 
   // NEUTRAL props (don't change based on skill)
   'out2': 'NEUTRAL',       // Defaite - pure win/loss
   'out3': 'NEUTRAL',       // VICTOIRE - pure win/loss
+  'sp6': 'NEUTRAL',        // Le Pentakill - reste mythique pour tous
 };
 
 // Limits for adjusted odds
