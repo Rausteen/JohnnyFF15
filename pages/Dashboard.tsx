@@ -59,6 +59,14 @@ const Dashboard = () => {
   // Public pending bets (all users with pseudos)
   const [publicPendingBets, setPublicPendingBets] = useState<BetWithPseudo[]>([]);
 
+  // Check if current user is a tracked player who is in-game
+  // If so, they shouldn't see bets to avoid influencing their gameplay
+  const isCurrentUserInGame = useMemo(() => {
+    if (!user) return false;
+    const playersInGame = getPlayersInGame();
+    return playersInGame.some(state => state.player.userId === user.id);
+  }, [user, getPlayersInGame, playerStates]);
+
   // Get players currently in game
   const playersInGame = getPlayersInGame();
   const isInGame = isAnyPlayerInGame();
@@ -664,7 +672,8 @@ const Dashboard = () => {
       </div>
 
       {/* Public Pending Bets Section - Grouped by User */}
-      {publicPendingBets.length > 0 && (
+      {/* Hidden when current user is a tracked player who is in-game (to avoid influencing gameplay) */}
+      {publicPendingBets.length > 0 && !isCurrentUserInGame && (
         <section className="mt-6">
           <div className="flex items-center gap-3 mb-4">
             <Eye className="w-5 h-5 text-amber-400" />

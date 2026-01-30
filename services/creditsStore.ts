@@ -30,6 +30,7 @@ interface CreditsState {
   claimDailyBonus: () => Promise<{ success: boolean; error?: string }>;
   canClaimDailyBonus: () => boolean;
   getTimeUntilNextBonus: () => { hours: number; minutes: number } | null;
+  transferCredits: (recipientPseudo: string, amount: number) => Promise<{ success: boolean; error?: string }>;
   clearProfile: () => void;
 }
 
@@ -259,6 +260,60 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
       return { success: true };
     } catch (error: any) {
       console.error('Error claiming daily bonus:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  transferCredits: async (recipientPseudo: string, amount: number) => {
+    const { profile } = get();
+    if (!profile) return { success: false, error: 'Non connecte' };
+    if (amount <= 0) return { success: false, error: 'Montant invalide' };
+    if (profile.credits < amount) return { success: false, error: 'Credits insuffisants' };
+    if (profile.pseudo.toLowerCase() === recipientPseudo.toLowerCase()) {
+      return { success: false, error: 'Tu ne peux pas te transferer des credits' };
+    }
+
+    try {
+      // Find recipient by pseudo
+      const { data: recipient, error: findError } = await supabase
+        .from('profiles')
+        .select('id, pseudo, credits')
+        .ilike('pseudo', recipientPseudo)
+        .single();
+
+      if (findError || !recipient) {
+        return { success: false, error: 'Joueur non trouve' };
+      }
+
+      // Subtract from sender
+      const { error: senderError } = await supabase
+        .from('profiles')
+        .update({ credits: profile.credits - amount })
+        .eq('id', profile.id);
+
+      if (senderError) throw senderError;
+
+      // Add to recipient
+      const { error: recipientError } = await supabase
+        .from('profiles')
+        .update({ credits: recipient.credits + amount })
+        .eq('id', recipient.id);
+
+      if (recipientError) {
+        // Rollback sender's credits
+        await supabase
+          .from('profiles')
+          .update({ credits: profile.credits })
+          .eq('id', profile.id);
+        throw recipientError;
+      }
+
+      // Update local state
+      set({ profile: { ...profile, credits: profile.credits - amount } });
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error transferring credits:', error);
       return { success: false, error: error.message };
     }
   },

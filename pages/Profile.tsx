@@ -2,14 +2,20 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
-import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp } from 'lucide-react';
+import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2 } from 'lucide-react';
 
 const Profile = () => {
   const navigate = useNavigate();
   const { user, signOut, loading: authLoading } = useAuthStore();
-  const { profile, claimDailyBonus, canClaimDailyBonus, getTimeUntilNextBonus, loading: creditsLoading } = useCreditsStore();
+  const { profile, claimDailyBonus, canClaimDailyBonus, getTimeUntilNextBonus, transferCredits, loading: creditsLoading } = useCreditsStore();
   const [bonusMessage, setBonusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [timeUntilBonus, setTimeUntilBonus] = useState<{ hours: number; minutes: number } | null>(null);
+
+  // Transfer credits state
+  const [transferRecipient, setTransferRecipient] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferMessage, setTransferMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Update countdown timer
   useEffect(() => {
@@ -36,6 +42,30 @@ const Profile = () => {
       setTimeout(() => setBonusMessage(null), 5000);
     } else {
       setBonusMessage({ type: 'error', text: result.error || 'Erreur lors de la réclamation' });
+    }
+  };
+
+  const handleTransfer = async () => {
+    if (!transferRecipient.trim() || !transferAmount) return;
+    const amount = parseInt(transferAmount, 10);
+    if (isNaN(amount) || amount <= 0) {
+      setTransferMessage({ type: 'error', text: 'Montant invalide' });
+      return;
+    }
+
+    setTransferLoading(true);
+    setTransferMessage(null);
+
+    const result = await transferCredits(transferRecipient.trim(), amount);
+
+    setTransferLoading(false);
+    if (result.success) {
+      setTransferMessage({ type: 'success', text: `${amount.toLocaleString('fr-FR')} JC envoyés à ${transferRecipient}!` });
+      setTransferRecipient('');
+      setTransferAmount('');
+      setTimeout(() => setTransferMessage(null), 5000);
+    } else {
+      setTransferMessage({ type: 'error', text: result.error || 'Erreur lors du transfert' });
     }
   };
 
@@ -214,6 +244,67 @@ const Profile = () => {
               <div className="text-3xl font-bold text-red-400">-{(profile?.jc_lost || 0).toLocaleString('fr-FR')}</div>
               <div className="text-xs text-zinc-500 uppercase mt-1">JC perdus</div>
             </div>
+          </div>
+        </div>
+
+        {/* Transfer Credits Card */}
+        <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-3 bg-blue-500/10 rounded-xl">
+              <Send className="w-6 h-6 text-blue-400" />
+            </div>
+            <h2 className="text-xl font-bold text-white">Envoyer des JC</h2>
+          </div>
+
+          {transferMessage && (
+            <div className={`mb-4 p-3 rounded-lg text-sm font-bold ${
+              transferMessage.type === 'success'
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+            }`}>
+              {transferMessage.text}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs text-zinc-500 uppercase tracking-wide mb-2">Pseudo du destinataire</label>
+              <input
+                type="text"
+                value={transferRecipient}
+                onChange={(e) => setTransferRecipient(e.target.value)}
+                placeholder="Ex: Johnny"
+                className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white placeholder-zinc-600 focus:border-blue-500/50 focus:outline-none transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-zinc-500 uppercase tracking-wide mb-2">Montant</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={transferAmount}
+                  onChange={(e) => setTransferAmount(e.target.value)}
+                  placeholder="1000"
+                  min="1"
+                  className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white placeholder-zinc-600 focus:border-blue-500/50 focus:outline-none transition pr-12"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-bold">JC</span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleTransfer}
+              disabled={transferLoading || !transferRecipient.trim() || !transferAmount}
+              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-500/20 border border-blue-500/30 rounded-xl text-blue-400 hover:bg-blue-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+            >
+              {transferLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+              Envoyer
+            </button>
           </div>
         </div>
 
