@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../services/authStore';
-import { useCreditsStore } from '../services/creditsStore';
-import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2 } from 'lucide-react';
+import { useCreditsStore, TRANSFER_LIMITS } from '../services/creditsStore';
+import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info } from 'lucide-react';
 
 const Profile = () => {
   const navigate = useNavigate();
   const { user, signOut, loading: authLoading } = useAuthStore();
-  const { profile, claimDailyBonus, canClaimDailyBonus, getTimeUntilNextBonus, transferCredits, loading: creditsLoading } = useCreditsStore();
+  const { profile, claimDailyBonus, canClaimDailyBonus, getTimeUntilNextBonus, transferCredits, getTransferLimits, loading: creditsLoading } = useCreditsStore();
   const [bonusMessage, setBonusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [timeUntilBonus, setTimeUntilBonus] = useState<{ hours: number; minutes: number } | null>(null);
 
@@ -60,7 +60,8 @@ const Profile = () => {
 
     setTransferLoading(false);
     if (result.success) {
-      setTransferMessage({ type: 'success', text: `${amount.toLocaleString('fr-FR')} JC envoyés à ${transferRecipient}!` });
+      const feeText = result.fee ? ` (frais: ${result.fee.toLocaleString('fr-FR')} JC)` : '';
+      setTransferMessage({ type: 'success', text: `${amount.toLocaleString('fr-FR')} JC envoyés à ${transferRecipient}!${feeText}` });
       setTransferRecipient('');
       setTransferAmount('');
       setTimeout(() => setTransferMessage(null), 5000);
@@ -68,6 +69,9 @@ const Profile = () => {
       setTransferMessage({ type: 'error', text: result.error || 'Erreur lors du transfert' });
     }
   };
+
+  // Get current transfer limits
+  const transferLimits = getTransferLimits();
 
   if (!user) {
     return (
@@ -249,11 +253,33 @@ const Profile = () => {
 
         {/* Transfer Credits Card */}
         <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 mb-4">
             <div className="p-3 bg-blue-500/10 rounded-xl">
               <Send className="w-6 h-6 text-blue-400" />
             </div>
             <h2 className="text-xl font-bold text-white">Envoyer des JC</h2>
+          </div>
+
+          {/* Transfer limits info */}
+          <div className="mb-4 p-3 bg-black/30 rounded-xl border border-white/5 text-xs space-y-1">
+            <div className="flex items-center gap-2 text-zinc-400 mb-2">
+              <Info className="w-3 h-3" />
+              <span className="font-bold">Limites</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-zinc-500">
+              <span>Min/Max:</span>
+              <span className="text-zinc-300">{TRANSFER_LIMITS.MIN.toLocaleString('fr-FR')} - {transferLimits.max.toLocaleString('fr-FR')} JC</span>
+              <span>Frais:</span>
+              <span className="text-amber-400">{transferLimits.fee}%</span>
+              <span>Limite/jour:</span>
+              <span className="text-zinc-300">{transferLimits.dailyRemaining.toLocaleString('fr-FR')} JC restants</span>
+              {transferLimits.cooldownRemaining && (
+                <>
+                  <span>Cooldown:</span>
+                  <span className="text-red-400">{Math.ceil(transferLimits.cooldownRemaining / 60)} min</span>
+                </>
+              )}
+            </div>
           </div>
 
           {transferMessage && (
@@ -285,17 +311,23 @@ const Profile = () => {
                   type="number"
                   value={transferAmount}
                   onChange={(e) => setTransferAmount(e.target.value)}
-                  placeholder="1000"
-                  min="1"
+                  placeholder={`${TRANSFER_LIMITS.MIN} - ${transferLimits.max}`}
+                  min={TRANSFER_LIMITS.MIN}
+                  max={transferLimits.max}
                   className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white placeholder-zinc-600 focus:border-blue-500/50 focus:outline-none transition pr-12"
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-bold">JC</span>
               </div>
+              {transferAmount && parseInt(transferAmount) >= TRANSFER_LIMITS.MIN && (
+                <div className="mt-1 text-xs text-amber-400">
+                  Frais: {Math.ceil(parseInt(transferAmount) * TRANSFER_LIMITS.FEE_PERCENT).toLocaleString('fr-FR')} JC
+                </div>
+              )}
             </div>
 
             <button
               onClick={handleTransfer}
-              disabled={transferLoading || !transferRecipient.trim() || !transferAmount}
+              disabled={transferLoading || !transferRecipient.trim() || !transferAmount || transferLimits.cooldownRemaining !== null}
               className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-500/20 border border-blue-500/30 rounded-xl text-blue-400 hover:bg-blue-500/30 transition disabled:opacity-50 disabled:cursor-not-allowed font-bold"
             >
               {transferLoading ? (
@@ -303,7 +335,7 @@ const Profile = () => {
               ) : (
                 <Send className="w-5 h-5" />
               )}
-              Envoyer
+              {transferLimits.cooldownRemaining ? `Attendre ${Math.ceil(transferLimits.cooldownRemaining / 60)} min` : 'Envoyer'}
             </button>
           </div>
         </div>

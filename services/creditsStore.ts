@@ -12,7 +12,20 @@ interface UserProfile {
   jc_won: number;
   jc_lost: number;
   created_at: string;
+  // Transfer tracking
+  last_transfer_at: string | null;
+  daily_transfer_total: number;
+  daily_transfer_date: string | null;
 }
+
+// Transfer limits
+const TRANSFER_MIN = 100;                    // Minimum 100 JC
+const TRANSFER_MAX = 10000;                  // Maximum 10,000 JC per transaction
+const TRANSFER_MAX_PERCENT = 0.5;            // Or max 50% of balance
+const TRANSFER_DAILY_LIMIT = 50000;          // 50,000 JC per day
+const TRANSFER_COOLDOWN_MS = 5 * 60 * 1000;  // 5 minutes between transfers
+const TRANSFER_FEE_PERCENT = 0.05;           // 5% fee
+const TRANSFER_MIN_BALANCE = 500;            // Keep at least 500 JC after transfer
 
 interface CreditsState {
   profile: UserProfile | null;
@@ -30,9 +43,21 @@ interface CreditsState {
   claimDailyBonus: () => Promise<{ success: boolean; error?: string }>;
   canClaimDailyBonus: () => boolean;
   getTimeUntilNextBonus: () => { hours: number; minutes: number } | null;
-  transferCredits: (recipientPseudo: string, amount: number) => Promise<{ success: boolean; error?: string }>;
+  transferCredits: (recipientPseudo: string, amount: number) => Promise<{ success: boolean; error?: string; fee?: number }>;
+  getTransferLimits: () => { min: number; max: number; dailyRemaining: number; cooldownRemaining: number | null; fee: number };
   clearProfile: () => void;
 }
+
+// Export constants for UI
+export const TRANSFER_LIMITS = {
+  MIN: TRANSFER_MIN,
+  MAX: TRANSFER_MAX,
+  MAX_PERCENT: TRANSFER_MAX_PERCENT,
+  DAILY_LIMIT: TRANSFER_DAILY_LIMIT,
+  COOLDOWN_MS: TRANSFER_COOLDOWN_MS,
+  FEE_PERCENT: TRANSFER_FEE_PERCENT,
+  MIN_BALANCE: TRANSFER_MIN_BALANCE
+};
 
 const DAILY_BONUS_AMOUNT = 1000;
 const DAILY_BONUS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -267,10 +292,57 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
   transferCredits: async (recipientPseudo: string, amount: number) => {
     const { profile } = get();
     if (!profile) return { success: false, error: 'Non connecte' };
+
+    // Basic validations
     if (amount <= 0) return { success: false, error: 'Montant invalide' };
-    if (profile.credits < amount) return { success: false, error: 'Credits insuffisants' };
     if (profile.pseudo.toLowerCase() === recipientPseudo.toLowerCase()) {
       return { success: false, error: 'Tu ne peux pas te transferer des credits' };
+    }
+
+    // Minimum amount
+    if (amount < TRANSFER_MIN) {
+      return { success: false, error: `Minimum ${TRANSFER_MIN.toLocaleString('fr-FR')} JC` };
+    }
+
+    // Maximum per transaction (lesser of fixed max or 50% of balance)
+    const maxAllowed = Math.min(TRANSFER_MAX, Math.floor(profile.credits * TRANSFER_MAX_PERCENT));
+    if (amount > maxAllowed) {
+      return { success: false, error: `Maximum ${maxAllowed.toLocaleString('fr-FR')} JC par transfert` };
+    }
+
+    // Calculate fee
+    const fee = Math.ceil(amount * TRANSFER_FEE_PERCENT);
+    const totalDeducted = amount + fee;
+
+    // Check sufficient credits (including fee)
+    if (profile.credits < totalDeducted) {
+      return { success: false, error: `Credits insuffisants (${amount.toLocaleString('fr-FR')} + ${fee.toLocaleString('fr-FR')} frais)` };
+    }
+
+    // Check minimum balance after transfer
+    if (profile.credits - totalDeducted < TRANSFER_MIN_BALANCE) {
+      return { success: false, error: `Tu dois garder au moins ${TRANSFER_MIN_BALANCE.toLocaleString('fr-FR')} JC` };
+    }
+
+    // Check cooldown
+    if (profile.last_transfer_at) {
+      const lastTransfer = new Date(profile.last_transfer_at).getTime();
+      const timeSince = Date.now() - lastTransfer;
+      if (timeSince < TRANSFER_COOLDOWN_MS) {
+        const remaining = Math.ceil((TRANSFER_COOLDOWN_MS - timeSince) / 60000);
+        return { success: false, error: `Attends encore ${remaining} min avant le prochain transfert` };
+      }
+    }
+
+    // Check daily limit
+    const today = new Date().toISOString().split('T')[0];
+    let dailyTotal = 0;
+    if (profile.daily_transfer_date === today) {
+      dailyTotal = profile.daily_transfer_total || 0;
+    }
+    if (dailyTotal + amount > TRANSFER_DAILY_LIMIT) {
+      const remaining = TRANSFER_DAILY_LIMIT - dailyTotal;
+      return { success: false, error: `Limite quotidienne: encore ${remaining.toLocaleString('fr-FR')} JC disponibles` };
     }
 
     try {
@@ -285,15 +357,23 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
         return { success: false, error: 'Joueur non trouve' };
       }
 
-      // Subtract from sender
+      const now = new Date().toISOString();
+      const newDailyTotal = (profile.daily_transfer_date === today ? dailyTotal : 0) + amount;
+
+      // Subtract from sender (amount + fee) and update transfer tracking
       const { error: senderError } = await supabase
         .from('profiles')
-        .update({ credits: profile.credits - amount })
+        .update({
+          credits: profile.credits - totalDeducted,
+          last_transfer_at: now,
+          daily_transfer_total: newDailyTotal,
+          daily_transfer_date: today
+        })
         .eq('id', profile.id);
 
       if (senderError) throw senderError;
 
-      // Add to recipient
+      // Add to recipient (amount only, fee is burned)
       const { error: recipientError } = await supabase
         .from('profiles')
         .update({ credits: recipient.credits + amount })
@@ -303,19 +383,65 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
         // Rollback sender's credits
         await supabase
           .from('profiles')
-          .update({ credits: profile.credits })
+          .update({
+            credits: profile.credits,
+            last_transfer_at: profile.last_transfer_at,
+            daily_transfer_total: profile.daily_transfer_total,
+            daily_transfer_date: profile.daily_transfer_date
+          })
           .eq('id', profile.id);
         throw recipientError;
       }
 
       // Update local state
-      set({ profile: { ...profile, credits: profile.credits - amount } });
+      set({
+        profile: {
+          ...profile,
+          credits: profile.credits - totalDeducted,
+          last_transfer_at: now,
+          daily_transfer_total: newDailyTotal,
+          daily_transfer_date: today
+        }
+      });
 
-      return { success: true };
+      return { success: true, fee };
     } catch (error: any) {
       console.error('Error transferring credits:', error);
       return { success: false, error: error.message };
     }
+  },
+
+  getTransferLimits: () => {
+    const { profile } = get();
+    if (!profile) {
+      return { min: TRANSFER_MIN, max: 0, dailyRemaining: 0, cooldownRemaining: null, fee: TRANSFER_FEE_PERCENT * 100 };
+    }
+
+    // Max per transaction
+    const maxAllowed = Math.min(TRANSFER_MAX, Math.floor(profile.credits * TRANSFER_MAX_PERCENT));
+
+    // Daily remaining
+    const today = new Date().toISOString().split('T')[0];
+    const dailyUsed = profile.daily_transfer_date === today ? (profile.daily_transfer_total || 0) : 0;
+    const dailyRemaining = TRANSFER_DAILY_LIMIT - dailyUsed;
+
+    // Cooldown remaining
+    let cooldownRemaining: number | null = null;
+    if (profile.last_transfer_at) {
+      const lastTransfer = new Date(profile.last_transfer_at).getTime();
+      const timeSince = Date.now() - lastTransfer;
+      if (timeSince < TRANSFER_COOLDOWN_MS) {
+        cooldownRemaining = Math.ceil((TRANSFER_COOLDOWN_MS - timeSince) / 1000);
+      }
+    }
+
+    return {
+      min: TRANSFER_MIN,
+      max: Math.max(0, Math.min(maxAllowed, dailyRemaining)),
+      dailyRemaining,
+      cooldownRemaining,
+      fee: TRANSFER_FEE_PERCENT * 100
+    };
   },
 
   clearProfile: () => {
