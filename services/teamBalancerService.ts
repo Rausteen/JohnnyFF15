@@ -47,11 +47,13 @@ export function balanceTeams(players: PlayerWithSkill[]): BalancedTeamsResult {
  * Attempt to balance teams with some randomization
  */
 function tryBalanceTeams(players: PlayerWithSkill[]): BalancedTeamsResult {
-  // Shuffle players to add randomness
-  const shuffled = [...players].sort(() => Math.random() - 0.5);
-
-  // Sort by skill (descending) for snake draft
-  const sorted = shuffled.sort((a, b) => b.skillRating.odverall - a.skillRating.odverall);
+  // Sort by skill with randomization for players with similar skill levels
+  // Add random factor of ±5 to skill for sorting, creating variation between attempts
+  const sorted = [...players].sort((a, b) => {
+    const aSkill = a.skillRating.odverall + (Math.random() - 0.5) * 10;
+    const bSkill = b.skillRating.odverall + (Math.random() - 0.5) * 10;
+    return bSkill - aSkill;
+  });
 
   // Snake draft: alternate picks between teams
   // 1-2-2-2-2-1 pattern for fairness
