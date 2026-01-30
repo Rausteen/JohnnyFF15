@@ -2,7 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore, TRANSFER_LIMITS } from '../services/creditsStore';
-import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info } from 'lucide-react';
+import { supabase } from '../services/supabase';
+import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown } from 'lucide-react';
+
+interface UserOption {
+  id: string;
+  pseudo: string;
+}
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -16,6 +22,7 @@ const Profile = () => {
   const [transferAmount, setTransferAmount] = useState('');
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferMessage, setTransferMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [allUsers, setAllUsers] = useState<UserOption[]>([]);
 
   // Update countdown timer
   useEffect(() => {
@@ -28,6 +35,21 @@ const Profile = () => {
 
     return () => clearInterval(interval);
   }, [getTimeUntilNextBonus, profile?.last_daily_bonus]);
+
+  // Load all users for transfer dropdown
+  useEffect(() => {
+    const loadUsers = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, pseudo')
+        .order('pseudo');
+
+      if (!error && data) {
+        setAllUsers(data);
+      }
+    };
+    loadUsers();
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -294,14 +316,25 @@ const Profile = () => {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs text-zinc-500 uppercase tracking-wide mb-2">Pseudo du destinataire</label>
-              <input
-                type="text"
-                value={transferRecipient}
-                onChange={(e) => setTransferRecipient(e.target.value)}
-                placeholder="Ex: Johnny"
-                className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white placeholder-zinc-600 focus:border-blue-500/50 focus:outline-none transition"
-              />
+              <label className="block text-xs text-zinc-500 uppercase tracking-wide mb-2">Destinataire</label>
+              <div className="relative">
+                <select
+                  value={transferRecipient}
+                  onChange={(e) => setTransferRecipient(e.target.value)}
+                  className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-xl text-white focus:border-blue-500/50 focus:outline-none transition appearance-none cursor-pointer"
+                >
+                  <option value="" className="bg-zinc-900">Choisir un joueur...</option>
+                  {allUsers
+                    .filter(u => u.pseudo !== profile?.pseudo)
+                    .map(u => (
+                      <option key={u.id} value={u.pseudo} className="bg-zinc-900">
+                        {u.pseudo}
+                      </option>
+                    ))
+                  }
+                </select>
+                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+              </div>
             </div>
 
             <div>
