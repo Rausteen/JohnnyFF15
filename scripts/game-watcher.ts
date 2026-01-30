@@ -751,7 +751,8 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
     const rankInfo = await getRankedInfo(player.puuid, player.region);
 
     if (rankInfo) {
-      const { error } = await supabase
+      // Try with rank_updated_at first, fallback without it if column doesn't exist
+      let { error } = await supabase
         .from('tracked_players')
         .update({
           solo_tier: rankInfo.tier,
@@ -761,6 +762,19 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
         })
         .eq('id', player.id);
 
+      // If column doesn't exist, try without rank_updated_at
+      if (error?.code === 'PGRST204') {
+        const result = await supabase
+          .from('tracked_players')
+          .update({
+            solo_tier: rankInfo.tier,
+            solo_division: rankInfo.division,
+            solo_lp: rankInfo.lp
+          })
+          .eq('id', player.id);
+        error = result.error;
+      }
+
       if (error) {
         console.error(`  ❌ Error updating rank for ${player.display_name}:`, error);
       } else {
@@ -769,7 +783,7 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
       }
     } else {
       // Player is unranked - clear rank info
-      const { error } = await supabase
+      let { error } = await supabase
         .from('tracked_players')
         .update({
           solo_tier: null,
@@ -778,6 +792,19 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
           rank_updated_at: new Date().toISOString()
         })
         .eq('id', player.id);
+
+      // If column doesn't exist, try without rank_updated_at
+      if (error?.code === 'PGRST204') {
+        const result = await supabase
+          .from('tracked_players')
+          .update({
+            solo_tier: null,
+            solo_division: null,
+            solo_lp: null
+          })
+          .eq('id', player.id);
+        error = result.error;
+      }
 
       if (!error) {
         console.log(`  ⚠️ ${player.display_name}: Unranked`);

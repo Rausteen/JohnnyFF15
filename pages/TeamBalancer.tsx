@@ -10,9 +10,12 @@ import {
   Trophy,
   Target,
   Eye,
-  Crosshair
+  Crosshair,
+  ShieldX
 } from 'lucide-react';
 import { useGameStore } from '../services/gameStore';
+import { useAuthStore } from '../services/authStore';
+import { useCreditsStore } from '../services/creditsStore';
 import { calculateMultiplePlayerSkillRatings, getSkillTier } from '../services/playerStatsService';
 import { balanceTeams, quickBalance } from '../services/teamBalancerService';
 import {
@@ -26,8 +29,13 @@ import {
   RANK_COLORS
 } from '../types';
 
+// Admin users (by pseudo)
+const ADMIN_USERS = ['Rausteen'];
+
 const TeamBalancer = () => {
   const { trackedPlayers, loadTrackedPlayers } = useGameStore();
+  const { user } = useAuthStore();
+  const { profile } = useCreditsStore();
 
   const [playersWithSkill, setPlayersWithSkill] = useState<PlayerWithSkill[]>([]);
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
@@ -35,6 +43,9 @@ const TeamBalancer = () => {
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Check if user is admin
+  const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
 
   // Load players and calculate skill ratings
   useEffect(() => {
@@ -117,6 +128,27 @@ const TeamBalancer = () => {
     const result = balanceTeams(selected);
     setBalancedTeams(result);
   };
+
+  // Redirect non-admin users
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center">
+        <ShieldX className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-white mb-2">Acces refuse</h1>
+        <p className="text-zinc-400">Tu dois etre connecte pour acceder a cette page.</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center">
+        <ShieldX className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold text-white mb-2">Zone interdite</h1>
+        <p className="text-zinc-400">Seuls les admins ont acces au Team Balancer.</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
