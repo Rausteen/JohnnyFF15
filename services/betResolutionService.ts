@@ -37,15 +37,15 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
     return `🐉 Dragons: ${teamDragons} - ${enemyDragons}`;
   }
 
-  // Handle Exact KDA bets (format: exact_kda_X.X-Y.Y or exact_kda_X.X+)
+  // Handle Exact KDA bets (format: exact_kda_K_D_A)
   if (propId.startsWith('exact_kda_')) {
-    return `🎯 KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
+    return `🎯 K/D/A: ${stats.kills}/${stats.deaths}/${stats.assists}`;
   }
 
-  // Handle Exact Damage bets (format: exact_damage_X-Y or exact_damage_X+)
+  // Handle Exact Damage bets (format: exact_damage_Xk)
   if (propId.startsWith('exact_damage_')) {
-    const damageK = stats.totalDamageDealtToChampions / 1000;
-    return `⚔️ Dégâts: ${damageK.toFixed(1)}k`;
+    const damageK = Math.floor(stats.totalDamageDealtToChampions / 1000);
+    return `⚔️ Dégâts: ${damageK}k`;
   }
 
   switch (propId) {
@@ -151,35 +151,25 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     return predictedTeam === actualTeam && predictedEnemy === actualEnemy;
   }
 
-  // Handle Exact KDA bets (format: exact_kda_X.X-Y.Y or exact_kda_X.X+)
+  // Handle Exact KDA bets (format: exact_kda_K_D_A)
   if (propId.startsWith('exact_kda_')) {
-    const range = propId.replace('exact_kda_', '');
+    const parts = propId.replace('exact_kda_', '').split('_');
+    const predictedKills = parseInt(parts[0], 10);
+    const predictedDeaths = parseInt(parts[1], 10);
+    const predictedAssists = parseInt(parts[2], 10);
 
-    if (range.endsWith('+')) {
-      const min = parseFloat(range.replace('+', ''));
-      return kda >= min;
-    }
-
-    const [minStr, maxStr] = range.split('-');
-    const min = parseFloat(minStr);
-    const max = parseFloat(maxStr);
-    return kda >= min && kda < max;
+    return stats.kills === predictedKills &&
+           stats.deaths === predictedDeaths &&
+           stats.assists === predictedAssists;
   }
 
-  // Handle Exact Damage bets (format: exact_damage_X-Y or exact_damage_X+)
+  // Handle Exact Damage bets (format: exact_damage_Xk)
   if (propId.startsWith('exact_damage_')) {
-    const range = propId.replace('exact_damage_', '');
-    const damageK = stats.totalDamageDealtToChampions / 1000;
+    const predictedK = parseInt(propId.replace('exact_damage_', '').replace('k', ''), 10);
+    const actualK = Math.floor(stats.totalDamageDealtToChampions / 1000);
 
-    if (range.endsWith('+')) {
-      const min = parseFloat(range.replace('+', ''));
-      return damageK >= min;
-    }
-
-    const [minStr, maxStr] = range.split('-');
-    const min = parseFloat(minStr);
-    const max = parseFloat(maxStr);
-    return damageK >= min && damageK < max;
+    // Win if damage is within the 1k range (e.g., 12k means 12000-12999)
+    return actualK === predictedK;
   }
 
   switch (propId) {

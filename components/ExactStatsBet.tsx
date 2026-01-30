@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Target, Swords, ChevronUp, ChevronDown, Trophy, Loader2, AlertCircle, CheckCircle, UserX } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Target, Swords, Skull, Heart, ChevronUp, ChevronDown, Trophy, Loader2, AlertCircle, CheckCircle, UserX } from 'lucide-react';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
@@ -13,44 +13,71 @@ interface ExactStatsBetProps {
 
 type BetType = 'kda' | 'damage';
 
-// KDA ranges with odds - based on how likely each range is
-const KDA_ODDS: Record<string, { odds: number; label: string; category: 'facile' | 'moyen' | 'difficile' | 'legendaire' }> = {
-  '0.0-0.5': { odds: 3.5, label: '0 - 0.5', category: 'moyen' },
-  '0.5-1.0': { odds: 2.8, label: '0.5 - 1', category: 'facile' },
-  '1.0-1.5': { odds: 2.5, label: '1 - 1.5', category: 'facile' },
-  '1.5-2.0': { odds: 3.0, label: '1.5 - 2', category: 'moyen' },
-  '2.0-2.5': { odds: 3.8, label: '2 - 2.5', category: 'moyen' },
-  '2.5-3.0': { odds: 4.5, label: '2.5 - 3', category: 'difficile' },
-  '3.0-4.0': { odds: 5.5, label: '3 - 4', category: 'difficile' },
-  '4.0-5.0': { odds: 8.0, label: '4 - 5', category: 'legendaire' },
-  '5.0+': { odds: 12.0, label: '5+', category: 'legendaire' },
-};
+// Calculate odds for exact K/D/A
+// Base odds are high because exact stats are rare
+function calculateKdaOdds(kills: number, deaths: number, assists: number): number {
+  // Base odds for exact K/D/A prediction
+  let baseOdds = 15.0;
 
-// Damage ranges (in thousands) with odds
-const DAMAGE_ODDS: Record<string, { odds: number; label: string; category: 'facile' | 'moyen' | 'difficile' | 'legendaire' }> = {
-  '0-5': { odds: 6.0, label: '0 - 5k', category: 'difficile' },
-  '5-8': { odds: 4.0, label: '5 - 8k', category: 'moyen' },
-  '8-10': { odds: 3.2, label: '8 - 10k', category: 'facile' },
-  '10-12': { odds: 3.0, label: '10 - 12k', category: 'facile' },
-  '12-15': { odds: 3.2, label: '12 - 15k', category: 'facile' },
-  '15-18': { odds: 3.8, label: '15 - 18k', category: 'moyen' },
-  '18-22': { odds: 4.5, label: '18 - 22k', category: 'moyen' },
-  '22-26': { odds: 6.0, label: '22 - 26k', category: 'difficile' },
-  '26-30': { odds: 8.0, label: '26 - 30k', category: 'difficile' },
-  '30+': { odds: 12.0, label: '30k+', category: 'legendaire' },
-};
-
-const KDA_OPTIONS = Object.keys(KDA_ODDS);
-const DAMAGE_OPTIONS = Object.keys(DAMAGE_ODDS);
-
-function getCategoryStyle(category: string): { bg: string; text: string; border: string } {
-  switch (category) {
-    case 'facile': return { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/30' };
-    case 'moyen': return { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/30' };
-    case 'difficile': return { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/30' };
-    case 'legendaire': return { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/30' };
-    default: return { bg: 'bg-zinc-500/10', text: 'text-zinc-400', border: 'border-zinc-500/30' };
+  // Common kill ranges (2-8) are more predictable
+  if (kills >= 2 && kills <= 8) {
+    baseOdds *= 0.8;
+  } else if (kills === 0) {
+    baseOdds *= 1.3; // 0 kills is specific
+  } else if (kills >= 10) {
+    baseOdds *= 1.5; // 10+ kills is rare
   }
+
+  // Common death ranges (3-7) are more predictable
+  if (deaths >= 3 && deaths <= 7) {
+    baseOdds *= 0.8;
+  } else if (deaths === 0) {
+    baseOdds *= 2.0; // 0 deaths is very rare
+  } else if (deaths >= 10) {
+    baseOdds *= 1.2; // 10+ deaths happens in bad games
+  }
+
+  // Common assist ranges (4-12) are more predictable
+  if (assists >= 4 && assists <= 12) {
+    baseOdds *= 0.85;
+  } else if (assists === 0) {
+    baseOdds *= 1.4; // 0 assists is rare
+  } else if (assists >= 15) {
+    baseOdds *= 1.3; // High assists is good support play
+  }
+
+  // Round to 1 decimal
+  return Math.round(Math.max(8.0, Math.min(50.0, baseOdds)) * 10) / 10;
+}
+
+// Calculate odds for exact damage (within 1k range)
+function calculateDamageOdds(damageK: number): number {
+  // Base odds for damage prediction (1k precision)
+  let baseOdds = 12.0;
+
+  // Very low damage (support/tank/feeder)
+  if (damageK < 5) {
+    baseOdds *= 1.5;
+  } else if (damageK >= 5 && damageK < 10) {
+    baseOdds *= 1.2;
+  } else if (damageK >= 10 && damageK < 18) {
+    // Most common damage range
+    baseOdds *= 0.9;
+  } else if (damageK >= 18 && damageK < 25) {
+    baseOdds *= 1.1;
+  } else if (damageK >= 25) {
+    // High damage carry
+    baseOdds *= 1.4;
+  }
+
+  return Math.round(Math.max(6.0, Math.min(25.0, baseOdds)) * 10) / 10;
+}
+
+function getCategoryFromOdds(odds: number): { label: string; bg: string; text: string; border: string } {
+  if (odds < 10) return { label: 'MOYEN', bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/30' };
+  if (odds < 15) return { label: 'DIFFICILE', bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/30' };
+  if (odds < 25) return { label: 'TRÈS DUR', bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/30' };
+  return { label: 'LÉGENDAIRE', bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/30' };
 }
 
 const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
@@ -72,8 +99,10 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
   const isSelfBetting = isUserThePlayer(activePlayer, user?.id);
 
   const [betType, setBetType] = useState<BetType>('kda');
-  const [selectedKda, setSelectedKda] = useState('1.0-1.5');
-  const [selectedDamage, setSelectedDamage] = useState('10-12');
+  const [kills, setKills] = useState(4);
+  const [deaths, setDeaths] = useState(5);
+  const [assists, setAssists] = useState(7);
+  const [damageK, setDamageK] = useState(12);
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -81,13 +110,34 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
 
   const credits = profile?.credits || 0;
 
-  const currentOdds = betType === 'kda'
-    ? KDA_ODDS[selectedKda]
-    : DAMAGE_ODDS[selectedDamage];
+  const odds = useMemo(() => {
+    if (betType === 'kda') {
+      return calculateKdaOdds(kills, deaths, assists);
+    } else {
+      return calculateDamageOdds(damageK);
+    }
+  }, [betType, kills, deaths, assists, damageK]);
 
-  const odds = currentOdds?.odds || 3.0;
   const potentialGain = amount ? Math.floor(parseInt(amount) * odds) : 0;
-  const categoryStyle = getCategoryStyle(currentOdds?.category || 'moyen');
+  const categoryStyle = getCategoryFromOdds(odds);
+
+  const adjustStat = (stat: 'kills' | 'deaths' | 'assists' | 'damage', delta: number) => {
+    switch (stat) {
+      case 'kills':
+        setKills(prev => Math.max(0, Math.min(20, prev + delta)));
+        break;
+      case 'deaths':
+        setDeaths(prev => Math.max(0, Math.min(20, prev + delta)));
+        break;
+      case 'assists':
+        setAssists(prev => Math.max(0, Math.min(30, prev + delta)));
+        break;
+      case 'damage':
+        setDamageK(prev => Math.max(0, Math.min(40, prev + delta)));
+        break;
+    }
+    setError(null);
+  };
 
   const handlePlaceBet = async () => {
     setError(null);
@@ -144,11 +194,11 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
       let propTitle: string;
 
       if (betType === 'kda') {
-        propId = `exact_kda_${selectedKda}`;
-        propTitle = `🎯 KDA exact: ${KDA_ODDS[selectedKda].label}`;
+        propId = `exact_kda_${kills}_${deaths}_${assists}`;
+        propTitle = `🎯 KDA exact: ${kills}/${deaths}/${assists}`;
       } else {
-        propId = `exact_damage_${selectedDamage}`;
-        propTitle = `⚔️ Dégâts exacts: ${DAMAGE_ODDS[selectedDamage].label}`;
+        propId = `exact_damage_${damageK}k`;
+        propTitle = `⚔️ Dégâts exacts: ${damageK}k - ${damageK + 1}k`;
       }
 
       const bet = await placeBet(
@@ -186,6 +236,14 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
 
   const quickBets = [50, 100, 250];
 
+  // Quick presets for KDA
+  const kdaPresets = [
+    { k: 0, d: 10, a: 2, label: '0/10/2' },
+    { k: 5, d: 5, a: 10, label: '5/5/10' },
+    { k: 10, d: 3, a: 8, label: '10/3/8' },
+    { k: 3, d: 0, a: 5, label: '3/0/5' },
+  ];
+
   if (!isInGame) {
     return null;
   }
@@ -202,10 +260,10 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
             <h3 className="font-bold text-white flex items-center gap-2">
               Stats Exactes
               <span className={`px-2 py-0.5 ${categoryStyle.bg} ${categoryStyle.text} text-xs font-bold rounded-full border ${categoryStyle.border}`}>
-                {currentOdds?.category?.toUpperCase() || 'MOYEN'}
+                {categoryStyle.label}
               </span>
             </h3>
-            <p className="text-xs text-zinc-400">Prédit le KDA ou les dégâts exacts</p>
+            <p className="text-xs text-zinc-400">Prédit le K/D/A ou les dégâts exacts</p>
           </div>
         </div>
       </div>
@@ -222,7 +280,7 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
             }`}
           >
             <Target className="w-4 h-4" />
-            KDA
+            K/D/A
           </button>
           <button
             onClick={() => setBetType('damage')}
@@ -237,41 +295,151 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
           </button>
         </div>
 
-        {/* Options Grid */}
-        <div className="grid grid-cols-3 gap-2">
-          {(betType === 'kda' ? KDA_OPTIONS : DAMAGE_OPTIONS).map((option) => {
-            const optionData = betType === 'kda' ? KDA_ODDS[option] : DAMAGE_ODDS[option];
-            const isSelected = betType === 'kda' ? selectedKda === option : selectedDamage === option;
-            const style = getCategoryStyle(optionData.category);
+        {betType === 'kda' ? (
+          <>
+            {/* KDA Presets */}
+            <div className="flex gap-2 justify-center flex-wrap">
+              {kdaPresets.map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => {
+                    setKills(preset.k);
+                    setDeaths(preset.d);
+                    setAssists(preset.a);
+                  }}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    kills === preset.k && deaths === preset.d && assists === preset.a
+                      ? 'bg-cyan-500 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
 
-            return (
-              <button
-                key={option}
-                onClick={() => {
-                  if (betType === 'kda') setSelectedKda(option);
-                  else setSelectedDamage(option);
-                  setError(null);
-                }}
-                className={`p-2 rounded-xl text-center transition-all border ${
-                  isSelected
-                    ? `${style.bg} ${style.border} ${style.text}`
-                    : 'bg-zinc-800/50 border-zinc-700 text-zinc-400 hover:border-zinc-600'
-                }`}
-              >
-                <div className="text-sm font-bold">{optionData.label}</div>
-                <div className={`text-xs ${isSelected ? style.text : 'text-zinc-500'}`}>
-                  x{optionData.odds}
+            {/* K/D/A Selector */}
+            <div className="flex items-center justify-center gap-2">
+              {/* Kills */}
+              <div className="flex flex-col items-center">
+                <span className="text-xs text-green-400 font-bold mb-1 uppercase">Kills</span>
+                <div className="flex flex-col items-center bg-zinc-800/50 rounded-xl border border-green-500/30 overflow-hidden">
+                  <button
+                    onClick={() => adjustStat('kills', 1)}
+                    className="w-full p-1.5 hover:bg-green-500/20 transition-colors border-b border-zinc-700"
+                  >
+                    <ChevronUp className="w-4 h-4 text-green-400 mx-auto" />
+                  </button>
+                  <div className="px-4 py-2">
+                    <span className="text-2xl font-black text-green-400 font-mono">{kills}</span>
+                  </div>
+                  <button
+                    onClick={() => adjustStat('kills', -1)}
+                    className="w-full p-1.5 hover:bg-green-500/20 transition-colors border-t border-zinc-700"
+                  >
+                    <ChevronDown className="w-4 h-4 text-green-400 mx-auto" />
+                  </button>
                 </div>
-              </button>
-            );
-          })}
-        </div>
+              </div>
+
+              <span className="text-2xl font-black text-zinc-600 mt-5">/</span>
+
+              {/* Deaths */}
+              <div className="flex flex-col items-center">
+                <span className="text-xs text-red-400 font-bold mb-1 uppercase">Deaths</span>
+                <div className="flex flex-col items-center bg-zinc-800/50 rounded-xl border border-red-500/30 overflow-hidden">
+                  <button
+                    onClick={() => adjustStat('deaths', 1)}
+                    className="w-full p-1.5 hover:bg-red-500/20 transition-colors border-b border-zinc-700"
+                  >
+                    <ChevronUp className="w-4 h-4 text-red-400 mx-auto" />
+                  </button>
+                  <div className="px-4 py-2">
+                    <span className="text-2xl font-black text-red-400 font-mono">{deaths}</span>
+                  </div>
+                  <button
+                    onClick={() => adjustStat('deaths', -1)}
+                    className="w-full p-1.5 hover:bg-red-500/20 transition-colors border-t border-zinc-700"
+                  >
+                    <ChevronDown className="w-4 h-4 text-red-400 mx-auto" />
+                  </button>
+                </div>
+              </div>
+
+              <span className="text-2xl font-black text-zinc-600 mt-5">/</span>
+
+              {/* Assists */}
+              <div className="flex flex-col items-center">
+                <span className="text-xs text-blue-400 font-bold mb-1 uppercase">Assists</span>
+                <div className="flex flex-col items-center bg-zinc-800/50 rounded-xl border border-blue-500/30 overflow-hidden">
+                  <button
+                    onClick={() => adjustStat('assists', 1)}
+                    className="w-full p-1.5 hover:bg-blue-500/20 transition-colors border-b border-zinc-700"
+                  >
+                    <ChevronUp className="w-4 h-4 text-blue-400 mx-auto" />
+                  </button>
+                  <div className="px-4 py-2">
+                    <span className="text-2xl font-black text-blue-400 font-mono">{assists}</span>
+                  </div>
+                  <button
+                    onClick={() => adjustStat('assists', -1)}
+                    className="w-full p-1.5 hover:bg-blue-500/20 transition-colors border-t border-zinc-700"
+                  >
+                    <ChevronDown className="w-4 h-4 text-blue-400 mx-auto" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Damage Presets */}
+            <div className="flex gap-2 justify-center flex-wrap">
+              {[5, 10, 15, 20, 25].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDamageK(d)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                    damageK === d
+                      ? 'bg-orange-500 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                  }`}
+                >
+                  {d}k
+                </button>
+              ))}
+            </div>
+
+            {/* Damage Selector */}
+            <div className="flex flex-col items-center">
+              <span className="text-xs text-orange-400 font-bold mb-2 uppercase">Dégâts (en milliers)</span>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => adjustStat('damage', -1)}
+                  className="w-10 h-10 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors"
+                >
+                  <ChevronDown className="w-5 h-5 text-orange-400" />
+                </button>
+                <div className="px-6 py-3 bg-zinc-800/50 rounded-xl border border-orange-500/30">
+                  <span className="text-3xl font-black text-orange-400 font-mono">{damageK}k</span>
+                  <span className="text-zinc-500 text-sm ml-1">- {damageK + 1}k</span>
+                </div>
+                <button
+                  onClick={() => adjustStat('damage', 1)}
+                  className="w-10 h-10 rounded-lg bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center transition-colors"
+                >
+                  <ChevronUp className="w-5 h-5 text-orange-400" />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Odds Display */}
         <div className="flex items-center justify-center gap-2 py-2">
           <Trophy className="w-4 h-4 text-gold" />
           <span className="text-zinc-400 text-sm">Cote:</span>
-          <span className="text-2xl font-mono font-black text-gold">x{odds.toFixed(2)}</span>
+          <span className="text-2xl font-mono font-black text-gold">x{odds.toFixed(1)}</span>
         </div>
 
         {/* Quick Bet Buttons */}
@@ -351,7 +519,7 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
           ) : (
             <>
               <Target className="w-4 h-4" />
-              {betType === 'kda' ? `Parier KDA ${KDA_ODDS[selectedKda].label}` : `Parier ${DAMAGE_ODDS[selectedDamage].label}`}
+              {betType === 'kda' ? `Parier ${kills}/${deaths}/${assists}` : `Parier ${damageK}k - ${damageK + 1}k`}
             </>
           )}
         </button>
@@ -359,8 +527,8 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
         {/* Info */}
         <p className="text-center text-xs text-zinc-500">
           {betType === 'kda'
-            ? 'KDA = (Kills + Assists) / max(1, Deaths)'
-            : 'Dégâts aux champions à la fin de la game'}
+            ? 'Prédit les Kills / Deaths / Assists exacts'
+            : 'Prédit les dégâts aux champions (±1000)'}
         </p>
       </div>
     </div>
