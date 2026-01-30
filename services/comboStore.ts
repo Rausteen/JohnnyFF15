@@ -21,6 +21,8 @@ interface ComboState {
   removeFromCombo: (propId: string) => void;
   clearCombo: () => void;
   isInCombo: (propId: string) => boolean;
+  canAddPlayer: (playerPuuid?: string) => boolean;
+  getComboPlayerPuuid: () => string | undefined;
 }
 
 export const useComboStore = create<ComboState>((set, get) => ({
@@ -46,6 +48,14 @@ export const useComboStore = create<ComboState>((set, get) => ({
     // Don't add duplicates
     if (isInCombo(prop.id)) return;
 
+    // Don't allow combining bets from different players
+    if (selections.length > 0 && playerPuuid) {
+      const firstPlayerPuuid = selections[0].playerPuuid;
+      if (firstPlayerPuuid && firstPlayerPuuid !== playerPuuid) {
+        return; // Can't combine bets from different players
+      }
+    }
+
     set({
       selections: [...selections, { prop, adjustedOdds, addedAt: Date.now(), playerPuuid, playerName, gameId }]
     });
@@ -64,5 +74,23 @@ export const useComboStore = create<ComboState>((set, get) => ({
   isInCombo: (propId: string) => {
     const { selections } = get();
     return selections.some(s => s.prop.id === propId);
+  },
+
+  canAddPlayer: (playerPuuid?: string) => {
+    const { selections } = get();
+    // If no selections yet, any player can be added
+    if (selections.length === 0) return true;
+    // If no puuid provided, allow it
+    if (!playerPuuid) return true;
+    // Check if the first selection has the same player
+    const firstPlayerPuuid = selections[0].playerPuuid;
+    if (!firstPlayerPuuid) return true;
+    return firstPlayerPuuid === playerPuuid;
+  },
+
+  getComboPlayerPuuid: () => {
+    const { selections } = get();
+    if (selections.length === 0) return undefined;
+    return selections[0].playerPuuid;
   }
 }));

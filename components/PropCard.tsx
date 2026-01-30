@@ -27,9 +27,10 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
     playerStates,
     getPlayerSkillRating
   } = useGameStore();
-  const { addToCombo, removeFromCombo, isInCombo, selections } = useComboStore();
+  const { addToCombo, removeFromCombo, isInCombo, selections, canAddPlayer } = useComboStore();
 
   const inCombo = isInCombo(prop.id);
+  const canAddToCombo = canAddPlayer(player?.puuid);
 
   // Use the player prop or fall back to test player
   const activePlayer = testMode ? testPlayer : player;
@@ -214,13 +215,13 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
           {canBetOnProp() && user && (
             <button
               onClick={() => inCombo ? removeFromCombo(prop.id) : addToCombo(prop, adjustedOdds, activePlayer?.puuid, activePlayer?.displayName, betMatchId || undefined)}
-              disabled={!inCombo && selections.length >= 4}
+              disabled={!inCombo && (selections.length >= 4 || !canAddToCombo)}
               className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 inCombo
                   ? 'bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30'
                   : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed'
               }`}
-              title={inCombo ? 'Retirer du combiné' : 'Ajouter au combiné'}
+              title={inCombo ? 'Retirer du combiné' : !canAddToCombo ? 'Combiné sur un autre joueur' : 'Ajouter au combiné'}
             >
               {inCombo ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
