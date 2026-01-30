@@ -1023,6 +1023,46 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
   const teammates = match.info.participants.filter(p => p.teamId === stats.teamId && p.puuid !== stats.puuid);
   const lowestTeammateGold = teammates.length > 0 ? Math.min(...teammates.map(p => p.goldEarned)) : Infinity;
 
+  // Handle Dragon Score bets (format: dragon_score_X_Y)
+  if (propId.startsWith('dragon_score_')) {
+    const parts = propId.split('_');
+    const predictedTeam = parseInt(parts[2], 10);
+    const predictedEnemy = parseInt(parts[3], 10);
+
+    const playerTeam = match.info.teams.find(t => t.teamId === stats.teamId);
+    const enemyTeam = match.info.teams.find(t => t.teamId !== stats.teamId);
+    const actualTeam = playerTeam?.objectives.dragon.kills || 0;
+    const actualEnemy = enemyTeam?.objectives.dragon.kills || 0;
+
+    return predictedTeam === actualTeam && predictedEnemy === actualEnemy;
+  }
+
+  // Handle Exact KDA bets (format: exact_kda_K_D_A)
+  if (propId.startsWith('exact_kda_')) {
+    const parts = propId.replace('exact_kda_', '').split('_');
+    const predictedKills = parseInt(parts[0], 10);
+    const predictedDeaths = parseInt(parts[1], 10);
+    const predictedAssists = parseInt(parts[2], 10);
+
+    return stats.kills === predictedKills &&
+           stats.deaths === predictedDeaths &&
+           stats.assists === predictedAssists;
+  }
+
+  // Handle Exact Damage bets (format: exact_damage_Xk or exact_damage_40k+)
+  if (propId.startsWith('exact_damage_')) {
+    const damageStr = propId.replace('exact_damage_', '');
+    const actualK = Math.floor(stats.totalDamageDealtToChampions / 1000);
+
+    // Handle 40k+ case
+    if (damageStr === '40k+') {
+      return actualK >= 40;
+    }
+
+    const predictedK = parseInt(damageStr.replace('k', ''), 10);
+    return actualK === predictedK;
+  }
+
   switch (propId) {
     // ========== EARLY GAME ==========
     case 'early1': // First Blood victime
@@ -1043,18 +1083,22 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
       return kda < 0.5;
     case 'kda4': // 0 Kill toute la game
       return stats.kills === 0;
-    case 'kda5': // Johnny fait un kill (at least 1)
-      return stats.kills >= 1;
-    case 'kda6': // KDA positif (≥1.0)
+    case 'kda5': // 0 Assist toute la game
+      return stats.assists === 0;
+    case 'kda6': // KDA >= 1
       return kda >= 1.0;
+    case 'kda9': // KDA >= 2
+      return kda >= 2.0;
     case 'kda7': // Double kill ou plus
       return (stats.doubleKills || 0) >= 1;
+    case 'kda8': // Triple kill ou plus
+      return (stats.tripleKills || 0) >= 1;
 
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte (<4/min)
       return csPerMin < 4;
-    case 'gp7': // CS > 6.5/min
-      return csPerMin > 6.5;
+    case 'gp7': // CS > 9.5/min
+      return csPerMin > 9.5;
     case 'gp2': // 0 Vision Score
       return stats.visionScore === 0;
     case 'gp3': // Vision < 5
@@ -1084,8 +1128,6 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
     case 'sp3': // Le Carry Mystique (top damage de l'équipe)
       const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
       return stats.totalDamageDealtToChampions === maxTeamDamage;
-    case 'sp4': // Victoire + KDA > 2
-      return stats.win && kda > 2;
     case 'sp5': // L'Invisible (<5k dégâts + <10% KP)
       return stats.totalDamageDealtToChampions < 5000 && killParticipation < 10;
     case 'sp6': // Le Pentakill
@@ -1110,6 +1152,26 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
   const teammates = match.info.participants.filter(p => p.teamId === stats.teamId && p.puuid !== stats.puuid);
   const lowestTeammateGold = teammates.length > 0 ? Math.min(...teammates.map(p => p.goldEarned)) : 0;
 
+  // Handle Dragon Score bets
+  if (propId.startsWith('dragon_score_')) {
+    const playerTeam = match.info.teams.find(t => t.teamId === stats.teamId);
+    const enemyTeam = match.info.teams.find(t => t.teamId !== stats.teamId);
+    const teamDragons = playerTeam?.objectives.dragon.kills || 0;
+    const enemyDragons = enemyTeam?.objectives.dragon.kills || 0;
+    return `🐉 Dragons: ${teamDragons} - ${enemyDragons}`;
+  }
+
+  // Handle Exact KDA bets
+  if (propId.startsWith('exact_kda_')) {
+    return `🎯 K/D/A: ${stats.kills}/${stats.deaths}/${stats.assists}`;
+  }
+
+  // Handle Exact Damage bets
+  if (propId.startsWith('exact_damage_')) {
+    const damageK = Math.floor(stats.totalDamageDealtToChampions / 1000);
+    return `⚔️ Dégâts: ${damageK}k`;
+  }
+
   switch (propId) {
     case 'early1': return stats.firstBloodVictim ? '🩸 First Blood victime' : '✓ Pas First Blood victime';
     case 'early5': return stats.firstBloodKill ? '🗡️ First Blood kill' : '✗ Pas First Blood';
@@ -1119,9 +1181,11 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
     case 'kda2': return `${stats.deaths} morts`;
     case 'kda3': return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
     case 'kda4': return `${stats.kills} kills`;
-    case 'kda5': return `${stats.kills} kills`;
+    case 'kda5': return `${stats.assists} assists`;
     case 'kda6': return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
+    case 'kda9': return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
     case 'kda7': return `${stats.doubleKills || 0} double kills`;
+    case 'kda8': return `${stats.tripleKills || 0} triple kills`;
     case 'gp1': return `${csPerMin.toFixed(1)} CS/min`;
     case 'gp7': return `${csPerMin.toFixed(1)} CS/min`;
     case 'gp2': return `Vision: ${stats.visionScore}`;
@@ -1139,7 +1203,6 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
       const maxDmg = Math.max(...team.map(p => p.totalDamageDealtToChampions));
       return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg (max: ${(maxDmg / 1000).toFixed(1)}k)`;
     }
-    case 'sp4': return `${stats.win ? 'Win' : 'Défaite'}, KDA: ${kda.toFixed(2)}`;
     case 'sp5': return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg, ${killParticipation.toFixed(0)}% KP`;
     case 'sp6': return `${stats.pentaKills || 0} pentakill${(stats.pentaKills || 0) > 1 ? 's' : ''}`;
     default: return `${stats.kills}/${stats.deaths}/${stats.assists}`;
