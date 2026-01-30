@@ -630,11 +630,15 @@ async function syncGamesForPlayer(playerId: string): Promise<{ success: boolean;
   }
 
   console.log(`  📋 Found ${matchIds.length} matches for ${player.display_name}`);
+  console.log(`  📊 Already have ${existingIds.size} matches for this player`);
 
   const newMatches: unknown[] = [];
+  let skippedCount = 0;
+  let errorCount = 0;
 
   for (const matchId of matchIds) {
     if (existingIds.has(matchId)) {
+      skippedCount++;
       continue;
     }
 
@@ -707,9 +711,11 @@ async function syncGamesForPlayer(playerId: string): Promise<{ success: boolean;
 
     if (error) {
       if (error.code === '23505') {
-        console.log(`  ✓ Match already exists`);
+        console.log(`  ⚠️ Match ${matchId} déjà en base (duplicate key - migration pas appliquée?)`);
+        errorCount++;
       } else {
-        console.error(`  ❌ Error saving match:`, error);
+        console.error(`  ❌ Error saving match ${matchId}:`, error);
+        errorCount++;
       }
     } else {
       console.log(`  ✅ Synced: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
@@ -720,8 +726,18 @@ async function syncGamesForPlayer(playerId: string): Promise<{ success: boolean;
     await new Promise(r => setTimeout(r, 300));
   }
 
+  console.log(`  📈 Summary: ${newMatches.length} added, ${skippedCount} skipped (already had), ${errorCount} errors`);
+
+  if (errorCount > 0 && newMatches.length === 0) {
+    return {
+      success: false,
+      message: `${player.display_name}: ${errorCount} erreurs - exécutez database/migration-fix-matches-pk.sql`,
+      matches: []
+    };
+  }
+
   if (newMatches.length === 0) {
-    return { success: true, message: `${player.display_name}: déjà à jour`, matches: [] };
+    return { success: true, message: `${player.display_name}: déjà à jour (${skippedCount} games)`, matches: [] };
   }
 
   return {
