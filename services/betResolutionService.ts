@@ -59,7 +59,7 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
       return `${stats.kills} kills`;
     case 'kda5': // 0 Assist toute la game
       return `${stats.assists} assists`;
-    case 'kda6': // KDA positif
+    case 'kda9': // KDA >= 2
       return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
     case 'kda7': // Double kill ou plus
       return `${stats.doubleKills} double kills`;
@@ -100,8 +100,6 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
     case 'sp3': // Le Carry Mystique
       const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
       return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg (max: ${(maxTeamDamage / 1000).toFixed(1)}k)`;
-    case 'sp4': // Victoire + KDA > 2
-      return `${stats.win ? 'Win' : 'Défaite'}, KDA: ${kda.toFixed(2)}`;
     case 'sp5': // L'Invisible
       return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg, ${killParticipation.toFixed(0)}% KP`;
     case 'sp6': // Le Pentakill
@@ -170,8 +168,8 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'kda5': // 0 Assist toute la game
       return stats.assists === 0;
 
-    case 'kda6': // KDA positif (≥1.0)
-      return kda >= 1.0;
+    case 'kda9': // KDA >= 2
+      return kda >= 2.0;
 
     case 'kda7': // Double kill ou plus
       return stats.doubleKills >= 1;
@@ -224,9 +222,6 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'sp3': // Le Carry Mystique (top damage de l'équipe)
       const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
       return stats.totalDamageDealtToChampions === maxTeamDamage;
-
-    case 'sp4': // Victoire + KDA > 2
-      return stats.win && kda > 2;
 
     case 'sp5': // L'Invisible (<5k dégâts + <10% KP)
       return stats.totalDamageDealtToChampions < 5000 && killParticipation < 10;

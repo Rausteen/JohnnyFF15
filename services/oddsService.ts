@@ -27,16 +27,18 @@ const PROP_TYPES: Record<string, PropType> = {
   'sp5': 'NEGATIVE',       // L'Invisible
 
   // POSITIVE props (good things - skilled players more likely)
-  'gp7': 'POSITIVE',       // CS > 6.5/min
-  'kda6': 'POSITIVE',      // KDA positif (>=1.0)
-  'out3': 'POSITIVE',      // VICTOIRE
-  'sp4': 'POSITIVE',       // Victoire + KDA > 2
+  'gp7': 'POSITIVE',       // CS > 9.5/min
+  'kda9': 'POSITIVE',      // KDA >= 2
   'kda7': 'POSITIVE',      // Double kill ou plus
   'kda8': 'POSITIVE',      // Triple kill ou plus
   'early5': 'POSITIVE',    // First Blood kill
   'sp2': 'POSITIVE',       // Le Miracle KDA (KDA > 3.0)
   'sp3': 'POSITIVE',       // Le Carry Mystique (top damage)
   'sp6': 'POSITIVE',       // Le Pentakill
+
+  // NEUTRAL props (don't change based on skill)
+  'out2': 'NEUTRAL',       // Defaite - pure win/loss
+  'out3': 'NEUTRAL',       // VICTOIRE - pure win/loss
 };
 
 // Limits for adjusted odds

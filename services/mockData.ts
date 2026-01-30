@@ -32,7 +32,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'gp7',
     title: "CS > 9.5/min",
     description: "Plus de 9.5 CS par minute. Farm de Challenger.",
-    odds: 12.0,
+    odds: 5.0,
     category: 'GAMEPLAY'
   },
   {
@@ -126,13 +126,6 @@ export const MOCK_PROPS: Prop[] = [
 
   // ========== MIRACLES ==========
   {
-    id: 'kda6',
-    title: "KDA positif (≥1.0)",
-    description: "Plus de participation que de morts.",
-    odds: 1.6,
-    category: 'KDA'
-  },
-  {
     id: 'out3',
     title: "VICTOIRE",
     description: "{player} gagne.",
@@ -140,11 +133,11 @@ export const MOCK_PROPS: Prop[] = [
     category: 'LATE'
   },
   {
-    id: 'sp4',
-    title: "Victoire + KDA > 2",
-    description: "{player} gagne ET joue très bien.",
-    odds: 4.0,
-    category: 'LATE'
+    id: 'kda9',
+    title: "KDA ≥ 2",
+    description: "{player} termine avec un KDA supérieur ou égal à 2.",
+    odds: 3.5,
+    category: 'KDA'
   },
 
   // ========== LÉGENDES ABSOLUES ==========
