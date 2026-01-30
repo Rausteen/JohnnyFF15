@@ -28,6 +28,7 @@ const PROP_TYPES: Record<string, PropType> = {
 
   // POSITIVE props (good things - skilled players more likely)
   'gp7': 'POSITIVE',       // CS > 9.5/min
+  'kda6': 'POSITIVE',      // KDA >= 1
   'kda9': 'POSITIVE',      // KDA >= 2
   'kda7': 'POSITIVE',      // Double kill ou plus
   'kda8': 'POSITIVE',      // Triple kill ou plus

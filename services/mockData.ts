@@ -23,7 +23,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'gp1',
     title: "CS de la honte (<4/min)",
     description: "Moins de 4 CS par minute.",
-    odds: 1.7,
+    odds: 3.0,
     category: 'GAMEPLAY'
   },
 
@@ -131,6 +131,13 @@ export const MOCK_PROPS: Prop[] = [
     description: "{player} gagne.",
     odds: 1.6,
     category: 'LATE'
+  },
+  {
+    id: 'kda6',
+    title: "KDA ≥ 1",
+    description: "{player} termine avec un KDA supérieur ou égal à 1.",
+    odds: 1.35,
+    category: 'KDA'
   },
   {
     id: 'kda9',

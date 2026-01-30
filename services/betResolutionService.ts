@@ -59,6 +59,8 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
       return `${stats.kills} kills`;
     case 'kda5': // 0 Assist toute la game
       return `${stats.assists} assists`;
+    case 'kda6': // KDA >= 1
+      return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
     case 'kda9': // KDA >= 2
       return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
     case 'kda7': // Double kill ou plus
@@ -167,6 +169,9 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
 
     case 'kda5': // 0 Assist toute la game
       return stats.assists === 0;
+
+    case 'kda6': // KDA >= 1
+      return kda >= 1.0;
 
     case 'kda9': // KDA >= 2
       return kda >= 2.0;
