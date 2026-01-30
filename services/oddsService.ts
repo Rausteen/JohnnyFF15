@@ -101,8 +101,10 @@ export function getAdjustedOdds(
   const modifier = calculateSkillModifier(skillRating.odverall, propType);
   let adjustedOdds = prop.odds * modifier;
 
-  // Clamp to min/max
-  adjustedOdds = Math.max(MIN_ODDS, Math.min(MAX_ODDS, adjustedOdds));
+  // Clamp to min/max only for non-NEUTRAL props
+  if (propType !== 'NEUTRAL') {
+    adjustedOdds = Math.max(MIN_ODDS, Math.min(MAX_ODDS, adjustedOdds));
+  }
 
   // Round to 2 decimal places
   adjustedOdds = Math.round(adjustedOdds * 100) / 100;
