@@ -10,11 +10,15 @@ import {
   Trophy,
   Target,
   Eye,
-  Crosshair
+  Crosshair,
+  Crown,
+  ChevronDown
 } from 'lucide-react';
 import { useGameStore } from '../services/gameStore';
+import { useCreditsStore } from '../services/creditsStore';
 import { calculateMultiplePlayerSkillRatings, getSkillTier } from '../services/playerStatsService';
 import { balanceTeams, quickBalance } from '../services/teamBalancerService';
+import { updatePlayerRank } from '../services/playersService';
 import {
   TrackedPlayer,
   PlayerWithSkill,
@@ -23,11 +27,18 @@ import {
   ROLE_LABELS,
   ROLE_ICONS,
   RANK_LABELS,
-  RANK_COLORS
+  RANK_COLORS,
+  RANK_TIERS,
+  RankTier,
+  RankDivision
 } from '../types';
+
+// Admin users
+const ADMIN_USERS = ['Rausteen'];
 
 const TeamBalancer = () => {
   const { trackedPlayers, loadTrackedPlayers } = useGameStore();
+  const { profile } = useCreditsStore();
 
   const [playersWithSkill, setPlayersWithSkill] = useState<PlayerWithSkill[]>([]);
   const [selectedPlayers, setSelectedPlayers] = useState<Set<string>>(new Set());
@@ -35,6 +46,13 @@ const TeamBalancer = () => {
   const [loading, setLoading] = useState(true);
   const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Admin rank editing
+  const isAdmin = profile && ADMIN_USERS.includes(profile.pseudo);
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [editRankTier, setEditRankTier] = useState<RankTier | ''>('');
+  const [editRankDivision, setEditRankDivision] = useState<RankDivision>('IV');
+  const [savingRank, setSavingRank] = useState(false);
 
   // Load players and calculate skill ratings
   useEffect(() => {
@@ -118,6 +136,38 @@ const TeamBalancer = () => {
     setBalancedTeams(result);
   };
 
+  // Save manual rank (admin only)
+  const handleSaveRank = async () => {
+    if (!editingPlayerId || !editRankTier) return;
+
+    setSavingRank(true);
+    try {
+      const success = await updatePlayerRank(editingPlayerId, editRankTier, editRankDivision);
+      if (success) {
+        // Update local state
+        setPlayersWithSkill(prev => prev.map(p =>
+          p.id === editingPlayerId
+            ? { ...p, soloTier: editRankTier, soloDivision: editRankDivision }
+            : p
+        ));
+        setEditingPlayerId(null);
+        setEditRankTier('');
+        setEditRankDivision('IV');
+      }
+    } catch (err) {
+      console.error('Error saving rank:', err);
+    } finally {
+      setSavingRank(false);
+    }
+  };
+
+  // Open rank editor for a player
+  const openRankEditor = (player: PlayerWithSkill) => {
+    setEditingPlayerId(player.id);
+    setEditRankTier(player.soloTier || '');
+    setEditRankDivision(player.soloDivision || 'IV');
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -185,6 +235,8 @@ const TeamBalancer = () => {
                   isSelected={selectedPlayers.has(player.id)}
                   onToggle={() => togglePlayer(player.id)}
                   disabled={!selectedPlayers.has(player.id) && selectedPlayers.size >= 10}
+                  isAdmin={isAdmin || false}
+                  onEditRank={() => openRankEditor(player)}
                 />
               ))}
 
@@ -283,6 +335,71 @@ const TeamBalancer = () => {
           ))}
         </div>
       </div>
+
+      {/* Rank Editor Modal (Admin only) */}
+      {editingPlayerId && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => setEditingPlayerId(null)}>
+          <div className="bg-zinc-900 rounded-2xl border border-zinc-700 p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-4">
+              <Crown className="w-5 h-5 text-yellow-500" />
+              <h3 className="text-lg font-bold text-white">Definir le rang</h3>
+            </div>
+
+            <p className="text-zinc-400 text-sm mb-4">
+              {playersWithSkill.find(p => p.id === editingPlayerId)?.displayName}
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-zinc-400 mb-2">Tier</label>
+                <select
+                  value={editRankTier}
+                  onChange={e => setEditRankTier(e.target.value as RankTier | '')}
+                  className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white"
+                >
+                  <option value="">Pas de rang</option>
+                  {RANK_TIERS.map(tier => (
+                    <option key={tier} value={tier}>{RANK_LABELS[tier]}</option>
+                  ))}
+                </select>
+              </div>
+
+              {editRankTier && !['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(editRankTier) && (
+                <div>
+                  <label className="block text-sm text-zinc-400 mb-2">Division</label>
+                  <select
+                    value={editRankDivision}
+                    onChange={e => setEditRankDivision(e.target.value as RankDivision)}
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white"
+                  >
+                    <option value="IV">IV</option>
+                    <option value="III">III</option>
+                    <option value="II">II</option>
+                    <option value="I">I</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setEditingPlayerId(null)}
+                  className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleSaveRank}
+                  disabled={savingRank}
+                  className="flex-1 px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {savingRank ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -293,36 +410,51 @@ const PlayerSelectCard: React.FC<{
   isSelected: boolean;
   onToggle: () => void;
   disabled: boolean;
-}> = ({ player, isSelected, onToggle, disabled }) => {
+  isAdmin: boolean;
+  onEditRank: () => void;
+}> = ({ player, isSelected, onToggle, disabled, isAdmin, onEditRank }) => {
   const tier = getSkillTier(player.skillRating.odverall);
 
   return (
-    <button
-      onClick={onToggle}
-      disabled={disabled}
-      className={`w-full p-3 rounded-xl border transition-all flex items-center gap-3 ${
-        isSelected
-          ? 'bg-primary/20 border-primary'
-          : disabled
-          ? 'bg-zinc-800/50 border-zinc-800 opacity-50 cursor-not-allowed'
-          : 'bg-zinc-800/50 border-zinc-800 hover:border-zinc-600'
-      }`}
-    >
-      {/* Selection indicator */}
-      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-        isSelected ? 'border-primary bg-primary' : 'border-zinc-600'
-      }`}>
+    <div className={`w-full p-3 rounded-xl border transition-all flex items-center gap-3 ${
+      isSelected
+        ? 'bg-primary/20 border-primary'
+        : disabled
+        ? 'bg-zinc-800/50 border-zinc-800 opacity-50'
+        : 'bg-zinc-800/50 border-zinc-800 hover:border-zinc-600'
+    }`}>
+      {/* Selection button */}
+      <button
+        onClick={onToggle}
+        disabled={disabled}
+        className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+          isSelected ? 'border-primary bg-primary' : 'border-zinc-600'
+        } ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+      >
         {isSelected && <Check className="w-4 h-4 text-white" />}
-      </div>
+      </button>
 
       {/* Player info */}
-      <div className="flex-1 text-left">
+      <button
+        onClick={onToggle}
+        disabled={disabled}
+        className={`flex-1 text-left ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+      >
         <div className="flex items-center gap-2">
           <span className="font-bold text-white">{player.displayName}</span>
-          {player.soloTier && (
+          {player.soloTier ? (
             <span className={`text-xs font-medium ${RANK_COLORS[player.soloTier]}`}>
               {RANK_LABELS[player.soloTier]} {player.soloDivision || ''}
             </span>
+          ) : isAdmin ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEditRank(); }}
+              className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 transition-colors"
+            >
+              + Rank
+            </button>
+          ) : (
+            <span className="text-xs text-zinc-500">Unranked</span>
           )}
           {!player.isActive && (
             <span className="text-xs px-2 py-0.5 rounded bg-zinc-700 text-zinc-400">inactif</span>
@@ -339,7 +471,7 @@ const PlayerSelectCard: React.FC<{
             <span className="text-zinc-600">Pas de role defini</span>
           )}
         </div>
-      </div>
+      </button>
 
       {/* Skill rating */}
       <div className="text-right">
@@ -366,7 +498,18 @@ const PlayerSelectCard: React.FC<{
           {player.skillRating.gamesPlayed}
         </div>
       </div>
-    </button>
+
+      {/* Admin edit rank button (for players with rank) */}
+      {isAdmin && player.soloTier && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onEditRank(); }}
+          className="p-1.5 rounded-lg bg-zinc-700/50 hover:bg-zinc-600 text-zinc-400 hover:text-white transition-colors"
+          title="Modifier le rang"
+        >
+          <Crown className="w-3 h-3" />
+        </button>
+      )}
+    </div>
   );
 };
 

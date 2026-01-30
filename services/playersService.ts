@@ -240,6 +240,9 @@ export async function updateTrackedPlayer(
     userId: string | null;
     primaryRole: PlayerRole | null;
     secondaryRole: PlayerRole | null;
+    soloTier: RankTier | null;
+    soloDivision: RankDivision | null;
+    soloLp: number | null;
   }>
 ): Promise<boolean> {
   try {
@@ -254,6 +257,9 @@ export async function updateTrackedPlayer(
     if (updates.userId !== undefined) dbUpdates.user_id = updates.userId;
     if (updates.primaryRole !== undefined) dbUpdates.primary_role = updates.primaryRole;
     if (updates.secondaryRole !== undefined) dbUpdates.secondary_role = updates.secondaryRole;
+    if (updates.soloTier !== undefined) dbUpdates.solo_tier = updates.soloTier;
+    if (updates.soloDivision !== undefined) dbUpdates.solo_division = updates.soloDivision;
+    if (updates.soloLp !== undefined) dbUpdates.solo_lp = updates.soloLp;
 
     const { error } = await supabase
       .from('tracked_players')
@@ -430,4 +436,13 @@ export async function updatePlayerRoles(
   secondaryRole: PlayerRole | null
 ): Promise<boolean> {
   return updateTrackedPlayer(playerId, { primaryRole, secondaryRole });
+}
+
+// Update player rank manually (admin function)
+export async function updatePlayerRank(
+  playerId: string,
+  soloTier: RankTier | null,
+  soloDivision: RankDivision | null
+): Promise<boolean> {
+  return updateTrackedPlayer(playerId, { soloTier, soloDivision, soloLp: null });
 }
