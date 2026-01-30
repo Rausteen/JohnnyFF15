@@ -741,6 +741,7 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
   }
 
   let updated = 0;
+  let columnsExist = true;
 
   for (const player of players) {
     if (!player.puuid) {
@@ -748,10 +749,15 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
       continue;
     }
 
+    // Skip rank sync if columns don't exist
+    if (!columnsExist) {
+      continue;
+    }
+
     const rankInfo = await getRankedInfo(player.puuid, player.region);
 
     if (rankInfo) {
-      // Try with rank_updated_at first, fallback without it if column doesn't exist
+      // Try with all columns first
       let { error } = await supabase
         .from('tracked_players')
         .update({
@@ -762,17 +768,12 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
         })
         .eq('id', player.id);
 
-      // If column doesn't exist, try without rank_updated_at
+      // If any column doesn't exist (PGRST204), mark and skip
       if (error?.code === 'PGRST204') {
-        const result = await supabase
-          .from('tracked_players')
-          .update({
-            solo_tier: rankInfo.tier,
-            solo_division: rankInfo.division,
-            solo_lp: rankInfo.lp
-          })
-          .eq('id', player.id);
-        error = result.error;
+        console.error('  ❌ Colonnes de rank manquantes. Exécutez la migration SQL:');
+        console.error('     database/migration-player-ranks.sql');
+        columnsExist = false;
+        continue;
       }
 
       if (error) {
@@ -783,7 +784,7 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
       }
     } else {
       // Player is unranked - clear rank info
-      let { error } = await supabase
+      const { error } = await supabase
         .from('tracked_players')
         .update({
           solo_tier: null,
@@ -793,17 +794,12 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
         })
         .eq('id', player.id);
 
-      // If column doesn't exist, try without rank_updated_at
+      // If any column doesn't exist (PGRST204), mark and skip
       if (error?.code === 'PGRST204') {
-        const result = await supabase
-          .from('tracked_players')
-          .update({
-            solo_tier: null,
-            solo_division: null,
-            solo_lp: null
-          })
-          .eq('id', player.id);
-        error = result.error;
+        console.error('  ❌ Colonnes de rank manquantes. Exécutez la migration SQL:');
+        console.error('     database/migration-player-ranks.sql');
+        columnsExist = false;
+        continue;
       }
 
       if (!error) {
@@ -814,6 +810,14 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
 
     // Small delay to avoid rate limiting
     await new Promise(r => setTimeout(r, 300));
+  }
+
+  if (!columnsExist) {
+    return {
+      success: false,
+      message: 'Colonnes de rank manquantes. Exécutez database/migration-player-ranks.sql dans Supabase.',
+      updated: 0
+    };
   }
 
   return {
