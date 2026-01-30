@@ -21,8 +21,8 @@ const TopBar = () => {
     { path: '/my-bets', label: 'Mes Paris', icon: Coins },
     { path: '/history', label: 'Musée', icon: History },
     { path: '/leaderboard', label: 'Classement', icon: Trophy },
+    { path: '/team-balancer', label: '5v5', icon: Swords },
     ...(isAdmin ? [
-      { path: '/team-balancer', label: '5v5', icon: Swords },
       { path: '/admin', label: 'Admin', icon: ShieldAlert }
     ] : []),
   ];
