@@ -134,3 +134,10 @@ export async function getMatch(
 ): Promise<CommandResult & { matchData?: unknown }> {
   return executeCommand('get_match', { matchId, region }, 30000) as Promise<CommandResult & { matchData?: unknown }>;
 }
+
+/**
+ * Sync ranks for all players
+ */
+export async function syncRanks(): Promise<CommandResult & { updated?: number }> {
+  return executeCommand('sync_ranks', {}, 120000) as Promise<CommandResult & { updated?: number }>;
+}

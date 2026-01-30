@@ -1,9 +1,19 @@
 // Service to calculate player skill ratings based on match history
 import { supabase } from './supabase';
-import { TrackedPlayer, PlayerSkillRating, PlayerWithSkill } from '../types';
+import { TrackedPlayer, PlayerSkillRating, PlayerWithSkill, RankTier, RankDivision, RANK_SKILL_POINTS, DIVISION_BONUS } from '../types';
 import { JohnnyMatch } from './matchHistoryStore';
 
-// Weights for skill rating calculation
+// Weights for skill rating calculation (when rank is available)
+const WEIGHTS_WITH_RANK = {
+  rank: 0.50,         // 50% - Rank is the most reliable indicator
+  winRate: 0.20,      // 20% - Win rate
+  kda: 0.15,          // 15% - KDA reflects individual performance
+  csPerMin: 0.05,     // 5% - Farm efficiency
+  damage: 0.05,       // 5% - Damage contribution
+  vision: 0.05        // 5% - Vision game
+};
+
+// Weights for skill rating calculation (when no rank is available)
 const WEIGHTS = {
   winRate: 0.35,      // 35% - Win rate is important
   kda: 0.25,          // 25% - KDA reflects individual performance
@@ -11,6 +21,18 @@ const WEIGHTS = {
   damage: 0.15,       // 15% - Damage contribution
   vision: 0.10        // 10% - Vision game
 };
+
+/**
+ * Calculate skill points from rank tier and division
+ */
+function getRankSkillPoints(tier: RankTier | null, division: RankDivision | null): number | null {
+  if (!tier) return null;
+
+  const basePoints = RANK_SKILL_POINTS[tier];
+  const divisionBonus = division ? DIVISION_BONUS[division] : 0;
+
+  return basePoints + divisionBonus;
+}
 
 // Normalization constants (based on typical LoL values)
 const NORMS = {
@@ -45,7 +67,7 @@ export async function calculatePlayerSkillRating(player: TrackedPlayer): Promise
       return getDefaultSkillRating();
     }
 
-    return computeSkillFromMatches(matches as JohnnyMatch[]);
+    return computeSkillFromMatches(matches as JohnnyMatch[], player.soloTier, player.soloDivision);
   } catch (err) {
     console.error(`Error calculating skill for ${player.displayName}:`, err);
     return getDefaultSkillRating();
@@ -101,9 +123,8 @@ export async function calculateMultiplePlayerSkillRatings(
   // Calculate skill for each player
   for (const player of players) {
     const playerMatches = player.puuid ? matchesByPuuid[player.puuid] || [] : [];
-    const skillRating = playerMatches.length > 0
-      ? computeSkillFromMatches(playerMatches)
-      : getDefaultSkillRating();
+    // Pass rank info even if no matches - rank alone can provide a rating
+    const skillRating = computeSkillFromMatches(playerMatches, player.soloTier, player.soloDivision);
 
     playersWithSkill.push({
       ...player,
@@ -115,12 +136,19 @@ export async function calculateMultiplePlayerSkillRatings(
 }
 
 /**
- * Compute skill rating from a list of matches
+ * Compute skill rating from a list of matches and optionally rank info
  */
-function computeSkillFromMatches(matches: JohnnyMatch[]): PlayerSkillRating {
+function computeSkillFromMatches(
+  matches: JohnnyMatch[],
+  rankTier?: RankTier | null,
+  rankDivision?: RankDivision | null
+): PlayerSkillRating {
   const gamesPlayed = matches.length;
+  const rankPoints = getRankSkillPoints(rankTier || null, rankDivision || null);
+  const hasRank = rankPoints !== null;
 
-  if (gamesPlayed === 0) {
+  // If no games and no rank, return default
+  if (gamesPlayed === 0 && !hasRank) {
     return getDefaultSkillRating();
   }
 
@@ -157,12 +185,12 @@ function computeSkillFromMatches(matches: JohnnyMatch[]): PlayerSkillRating {
     weightedVision += match.vision_score * weight;
   });
 
-  // Calculate weighted averages
-  const winRate = (weightedWins / totalWeight) * 100;
-  const avgKDA = weightedKDA / totalWeight;
-  const avgCSPerMin = weightedCSPerMin / totalWeight;
-  const avgDamage = weightedDamage / totalWeight;
-  const avgVisionScore = weightedVision / totalWeight;
+  // Calculate weighted averages (default to 50% if no games)
+  const winRate = gamesPlayed > 0 ? (weightedWins / totalWeight) * 100 : 50;
+  const avgKDA = gamesPlayed > 0 ? weightedKDA / totalWeight : 2.0;
+  const avgCSPerMin = gamesPlayed > 0 ? weightedCSPerMin / totalWeight : 5.0;
+  const avgDamage = gamesPlayed > 0 ? weightedDamage / totalWeight : 15000;
+  const avgVisionScore = gamesPlayed > 0 ? weightedVision / totalWeight : 15;
 
   // Normalize each stat to 0-100 scale
   const normalizedWinRate = winRate; // Already 0-100
@@ -172,13 +200,28 @@ function computeSkillFromMatches(matches: JohnnyMatch[]): PlayerSkillRating {
   const normalizedVision = normalize(avgVisionScore, NORMS.vision.min, NORMS.vision.max);
 
   // Calculate overall skill rating
-  const overall = Math.round(
-    normalizedWinRate * WEIGHTS.winRate +
-    normalizedKDA * WEIGHTS.kda +
-    normalizedCS * WEIGHTS.csPerMin +
-    normalizedDamage * WEIGHTS.damage +
-    normalizedVision * WEIGHTS.vision
-  );
+  let overall: number;
+
+  if (hasRank) {
+    // Use rank-weighted formula
+    overall = Math.round(
+      rankPoints * WEIGHTS_WITH_RANK.rank +
+      normalizedWinRate * WEIGHTS_WITH_RANK.winRate +
+      normalizedKDA * WEIGHTS_WITH_RANK.kda +
+      normalizedCS * WEIGHTS_WITH_RANK.csPerMin +
+      normalizedDamage * WEIGHTS_WITH_RANK.damage +
+      normalizedVision * WEIGHTS_WITH_RANK.vision
+    );
+  } else {
+    // Use stats-only formula
+    overall = Math.round(
+      normalizedWinRate * WEIGHTS.winRate +
+      normalizedKDA * WEIGHTS.kda +
+      normalizedCS * WEIGHTS.csPerMin +
+      normalizedDamage * WEIGHTS.damage +
+      normalizedVision * WEIGHTS.vision
+    );
+  }
 
   return {
     odverall: Math.min(100, Math.max(0, overall)),

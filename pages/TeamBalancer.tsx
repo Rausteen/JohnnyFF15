@@ -21,7 +21,9 @@ import {
   BalancedTeamsResult,
   PlayerRole,
   ROLE_LABELS,
-  ROLE_ICONS
+  ROLE_ICONS,
+  RANK_LABELS,
+  RANK_COLORS
 } from '../types';
 
 const TeamBalancer = () => {
@@ -317,6 +319,11 @@ const PlayerSelectCard: React.FC<{
       <div className="flex-1 text-left">
         <div className="flex items-center gap-2">
           <span className="font-bold text-white">{player.displayName}</span>
+          {player.soloTier && (
+            <span className={`text-xs font-medium ${RANK_COLORS[player.soloTier]}`}>
+              {RANK_LABELS[player.soloTier]} {player.soloDivision || ''}
+            </span>
+          )}
           {!player.isActive && (
             <span className="text-xs px-2 py-0.5 rounded bg-zinc-700 text-zinc-400">inactif</span>
           )}
@@ -398,6 +405,11 @@ const TeamCard: React.FC<{
               <span className="flex-1 font-medium text-white text-sm truncate">
                 {player.displayName}
               </span>
+              {player.soloTier && (
+                <span className={`text-[10px] ${RANK_COLORS[player.soloTier]}`} title={`${RANK_LABELS[player.soloTier]} ${player.soloDivision || ''}`}>
+                  {player.soloTier.slice(0, 3)}{player.soloDivision ? player.soloDivision : ''}
+                </span>
+              )}
               {!isPreferredRole && player.primaryRole && (
                 <span className="text-xs text-yellow-500" title="Role non prefere">
                   !

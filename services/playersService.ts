@@ -1,6 +1,6 @@
 // Service to manage tracked players in Supabase
 import { supabase } from './supabase';
-import { TrackedPlayer, PlayerRole } from '../types';
+import { TrackedPlayer, PlayerRole, RankTier, RankDivision } from '../types';
 
 export interface SupabaseTrackedPlayer {
   id: string;
@@ -15,6 +15,11 @@ export interface SupabaseTrackedPlayer {
   user_id: string | null; // Linked Supabase user ID
   primary_role: string | null; // Preferred primary role
   secondary_role: string | null; // Preferred secondary role
+  // Rank Solo/Duo
+  solo_tier: string | null;
+  solo_division: string | null;
+  solo_lp: number | null;
+  rank_updated_at: string | null;
 }
 
 // Convert Supabase player to local format
@@ -30,7 +35,11 @@ export function supabasePlayerToLocal(sp: SupabaseTrackedPlayer): TrackedPlayer 
     createdAt: sp.created_at,
     userId: sp.user_id,
     primaryRole: sp.primary_role as PlayerRole | null,
-    secondaryRole: sp.secondary_role as PlayerRole | null
+    secondaryRole: sp.secondary_role as PlayerRole | null,
+    soloTier: sp.solo_tier as RankTier | null,
+    soloDivision: sp.solo_division as RankDivision | null,
+    soloLp: sp.solo_lp,
+    rankUpdatedAt: sp.rank_updated_at
   };
 }
 

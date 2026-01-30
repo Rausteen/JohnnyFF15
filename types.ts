@@ -28,6 +28,60 @@ export const ROLE_ICONS: Record<PlayerRole, string> = {
   FILL: '🎲'
 };
 
+// Rank Types
+export type RankTier = 'IRON' | 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'EMERALD' | 'DIAMOND' | 'MASTER' | 'GRANDMASTER' | 'CHALLENGER';
+export type RankDivision = 'I' | 'II' | 'III' | 'IV';
+
+export const RANK_TIERS: RankTier[] = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER'];
+
+export const RANK_LABELS: Record<RankTier, string> = {
+  IRON: 'Fer',
+  BRONZE: 'Bronze',
+  SILVER: 'Argent',
+  GOLD: 'Or',
+  PLATINUM: 'Platine',
+  EMERALD: 'Emeraude',
+  DIAMOND: 'Diamant',
+  MASTER: 'Master',
+  GRANDMASTER: 'GrandMaster',
+  CHALLENGER: 'Challenger'
+};
+
+export const RANK_COLORS: Record<RankTier, string> = {
+  IRON: 'text-zinc-400',
+  BRONZE: 'text-amber-700',
+  SILVER: 'text-zinc-300',
+  GOLD: 'text-yellow-500',
+  PLATINUM: 'text-cyan-400',
+  EMERALD: 'text-emerald-400',
+  DIAMOND: 'text-blue-400',
+  MASTER: 'text-purple-400',
+  GRANDMASTER: 'text-red-400',
+  CHALLENGER: 'text-yellow-300'
+};
+
+// Points de skill par rang (pour le calcul du rating)
+export const RANK_SKILL_POINTS: Record<RankTier, number> = {
+  IRON: 10,
+  BRONZE: 20,
+  SILVER: 35,
+  GOLD: 50,
+  PLATINUM: 62,
+  EMERALD: 72,
+  DIAMOND: 82,
+  MASTER: 90,
+  GRANDMASTER: 95,
+  CHALLENGER: 100
+};
+
+// Points bonus par division (IV=0, III=1, II=2, I=3)
+export const DIVISION_BONUS: Record<RankDivision, number> = {
+  IV: 0,
+  III: 2,
+  II: 4,
+  I: 6
+};
+
 export interface PlayerSkillRating {
   odverall: number; // 0-100 overall skill score
   winRate: number; // 0-100
@@ -51,6 +105,11 @@ export interface TrackedPlayer {
   userId?: string | null; // Linked Supabase user ID (prevents self-betting)
   primaryRole?: PlayerRole | null; // Preferred primary role
   secondaryRole?: PlayerRole | null; // Preferred secondary role
+  // Rank Solo/Duo
+  soloTier?: RankTier | null;
+  soloDivision?: RankDivision | null;
+  soloLp?: number | null;
+  rankUpdatedAt?: string | null;
 }
 
 // Team Balancer - Player with calculated skill rating

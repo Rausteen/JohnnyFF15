@@ -546,6 +546,121 @@ async function getPuuidFromRiotId(
   }
 }
 
+// Get ranked info for a player by PUUID
+async function getRankedInfo(puuid: string, region: string): Promise<{
+  tier: string;
+  division: string;
+  lp: number;
+} | null> {
+  const platformMap: Record<string, string> = {
+    EUW: 'euw1',
+    EUNE: 'eun1',
+    NA: 'na1',
+    KR: 'kr',
+  };
+
+  const platform = platformMap[region] || 'euw1';
+  const url = `https://${platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`;
+
+  try {
+    const response = await fetch(url, {
+      headers: { 'X-Riot-Token': RIOT_API_KEY }
+    });
+
+    if (!response.ok) {
+      console.error(`Ranked API error: ${response.status}`);
+      return null;
+    }
+
+    const entries = await response.json() as Array<{
+      queueType: string;
+      tier: string;
+      rank: string;
+      leaguePoints: number;
+    }>;
+
+    // Find Solo/Duo queue entry
+    const soloEntry = entries.find(e => e.queueType === 'RANKED_SOLO_5x5');
+    if (!soloEntry) {
+      return null; // Player is unranked in Solo/Duo
+    }
+
+    return {
+      tier: soloEntry.tier,
+      division: soloEntry.rank,
+      lp: soloEntry.leaguePoints
+    };
+  } catch (error) {
+    console.error('Error fetching ranked info:', error);
+    return null;
+  }
+}
+
+// Sync ranks for all tracked players
+async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: string; updated: number }> {
+  console.log('🏆 Syncing ranks for all players...');
+
+  const players = await getTrackedPlayers();
+  if (players.length === 0) {
+    return { success: false, message: 'Aucun joueur configuré', updated: 0 };
+  }
+
+  let updated = 0;
+
+  for (const player of players) {
+    if (!player.puuid) {
+      console.log(`  ⚠️ No PUUID for ${player.display_name}`);
+      continue;
+    }
+
+    const rankInfo = await getRankedInfo(player.puuid, player.region);
+
+    if (rankInfo) {
+      const { error } = await supabase
+        .from('tracked_players')
+        .update({
+          solo_tier: rankInfo.tier,
+          solo_division: rankInfo.division,
+          solo_lp: rankInfo.lp,
+          rank_updated_at: new Date().toISOString()
+        })
+        .eq('id', player.id);
+
+      if (error) {
+        console.error(`  ❌ Error updating rank for ${player.display_name}:`, error);
+      } else {
+        console.log(`  ✅ ${player.display_name}: ${rankInfo.tier} ${rankInfo.division} (${rankInfo.lp} LP)`);
+        updated++;
+      }
+    } else {
+      // Player is unranked - clear rank info
+      const { error } = await supabase
+        .from('tracked_players')
+        .update({
+          solo_tier: null,
+          solo_division: null,
+          solo_lp: null,
+          rank_updated_at: new Date().toISOString()
+        })
+        .eq('id', player.id);
+
+      if (!error) {
+        console.log(`  ⚠️ ${player.display_name}: Unranked`);
+        updated++;
+      }
+    }
+
+    // Small delay to avoid rate limiting
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  return {
+    success: true,
+    message: `${updated} joueur(s) mis à jour`,
+    updated
+  };
+}
+
 // Execute a command
 async function executeCommand(command: AdminCommand): Promise<void> {
   console.log(`\n⚡ Executing command: ${command.command}`);
@@ -562,6 +677,10 @@ async function executeCommand(command: AdminCommand): Promise<void> {
       case 'check_status':
         await checkAllPlayers();
         result = { success: true, message: 'Status vérifié' };
+        break;
+
+      case 'sync_ranks':
+        result = await syncRanksForAllPlayers();
         break;
 
       case 'get_puuid': {

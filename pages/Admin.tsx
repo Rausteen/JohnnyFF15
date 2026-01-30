@@ -14,7 +14,7 @@ import { supabase } from '../services/supabase';
 import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers, linkUserToPlayer, unlinkUserFromPlayer, updatePlayerRoles } from '../services/playersService';
 import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight, Link2, Unlink } from 'lucide-react';
 import { sendTestNotification } from '../services/discordWebhook';
-import { syncLastGame as syncLastGameCommand, checkPlayersStatus } from '../services/adminCommands';
+import { syncLastGame as syncLastGameCommand, checkPlayersStatus, syncRanks as syncRanksCommand } from '../services/adminCommands';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -81,6 +81,8 @@ const Admin = () => {
   const [resolvingBetId, setResolvingBetId] = useState<string | null>(null);
   const [forceSyncLoading, setForceSyncLoading] = useState(false);
   const [forceSyncResult, setForceSyncResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [syncRanksLoading, setSyncRanksLoading] = useState(false);
+  const [syncRanksResult, setSyncRanksResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Note: bets are now Supabase-only (no local storage)
 
@@ -411,6 +413,26 @@ const Admin = () => {
 
     setForceSyncLoading(false);
     setTimeout(() => setForceSyncResult(null), 5000);
+  };
+
+  const handleSyncRanks = async () => {
+    setSyncRanksLoading(true);
+    setSyncRanksResult(null);
+
+    const result = await syncRanksCommand();
+
+    setSyncRanksResult({
+      success: result.success,
+      message: result.message
+    });
+
+    // Reload players to get updated ranks
+    if (result.success) {
+      await loadTrackedPlayers();
+    }
+
+    setSyncRanksLoading(false);
+    setTimeout(() => setSyncRanksResult(null), 5000);
   };
 
   // Manually resolve a single bet (works with Supabase bets from all users)
@@ -1494,6 +1516,53 @@ const Admin = () => {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Team Balancer */}
+          <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-5 h-5 text-purple-500" />
+                <h3 className="font-bold text-white">Team Balancer</h3>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={handleSyncRanks}
+                disabled={syncRanksLoading || trackedPlayers.length === 0}
+                className="w-full py-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 disabled:opacity-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              >
+                {syncRanksLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Récupération des rangs...
+                  </>
+                ) : (
+                  <>
+                    <TrendingUp className="w-4 h-4" />
+                    Sync rangs Solo/Duo
+                  </>
+                )}
+              </button>
+
+              {syncRanksResult && (
+                <div className={`p-3 rounded-xl text-sm ${
+                  syncRanksResult.success
+                    ? 'bg-green-500/10 border border-green-500/30 text-green-400'
+                    : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {syncRanksResult.success ? (
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    )}
+                    <span className="text-xs">{syncRanksResult.message}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Manual Bet Resolution */}
