@@ -1,10 +1,10 @@
 import React from 'react';
 import { useStore } from '../services/store';
 import { MatchStatus } from '../types';
-import { Power, Dices, RotateCcw } from 'lucide-react';
+import { Power, Dices, RotateCcw, RefreshCw } from 'lucide-react';
 
 const Admin = () => {
-  const { gameState, toggleMatchStatus, simulateGameEnd, addFunds } = useStore();
+  const { gameState, toggleMatchStatus, simulateGameEnd, addFunds, syncGames, isSyncing } = useStore();
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
@@ -70,6 +70,22 @@ const Admin = () => {
              >
                 <RotateCcw className="w-4 h-4" />
                 S'injecter 1000 crédits
+             </button>
+          </div>
+
+          {/* Sync Games */}
+          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+             <div className="mb-4">
+                <h3 className="font-bold text-white mb-1">Synchronisation des games</h3>
+                <p className="text-sm text-slate-500">Récupère les 20 dernières games de chaque joueur.</p>
+             </div>
+             <button
+                onClick={syncGames}
+                disabled={isSyncing}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+             >
+                <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Synchronisation...' : 'Sync toutes les games'}
              </button>
           </div>
         </div>

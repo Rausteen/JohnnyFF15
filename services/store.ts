@@ -8,15 +8,17 @@ interface StoreState {
   gameState: GameState;
   bets: Bet[];
   history: MatchHistoryItem[];
-  
+  isSyncing: boolean;
+
   // Actions
   addFunds: (amount: number) => void;
   placeBet: (propId: string, propTitle: string, odds: number, amount: number) => void;
   cancelBet: (betId: string) => void;
-  
+
   // Admin Actions
   toggleMatchStatus: (status: MatchStatus) => void;
   simulateGameEnd: () => void;
+  syncGames: () => Promise<void>;
 }
 
 export const useStore = create<StoreState>()(
@@ -31,6 +33,7 @@ export const useStore = create<StoreState>()(
       },
       bets: [],
       history: MOCK_HISTORY,
+      isSyncing: false,
 
       addFunds: (amount) => set((state) => ({ balance: state.balance + amount })),
 
@@ -122,6 +125,62 @@ export const useStore = create<StoreState>()(
           bets: updatedBets,
           balance: state.balance + winnings,
           history: [newHistoryItem, ...state.history]
+        }));
+      },
+
+      syncGames: async () => {
+        set({ isSyncing: true });
+
+        // Liste des joueurs à synchroniser
+        const players = ['Johnny'];
+        const gamesPerPlayer = 20;
+
+        // Simulation d'un appel API avec délai
+        await new Promise(resolve => setTimeout(resolve, 1500));
+
+        const champions = ['Yasuo', 'Yone', 'Zed', 'Vayne', 'Riven', 'Lee Sin', 'Akali', 'Katarina', 'Irelia', 'Fiora'];
+        const funFacts = [
+          "A blame le jungler 12 fois.",
+          "S'est fait dive 3 fois niveau 2.",
+          "A ragequit le vocal.",
+          "A été honoré par l'équipe adverse.",
+          "A flash dans le mur... deux fois.",
+          "A écrit 'gg ez' après avoir été 0/8.",
+          "Le support a demandé à changer de lane.",
+          "A perdu un 1v1 contre un minion.",
+        ];
+
+        const newGames: MatchHistoryItem[] = [];
+
+        for (const player of players) {
+          for (let i = 0; i < gamesPerPlayer; i++) {
+            const kills = Math.floor(Math.random() * 12);
+            const deaths = Math.floor(Math.random() * 15) + 1;
+            const assists = Math.floor(Math.random() * 15);
+            const result = Math.random() > 0.6 ? 'DEFEAT' : (Math.random() > 0.1 ? 'VICTORY' : 'REMAKE');
+            const daysAgo = i;
+            const date = new Date();
+            date.setDate(date.getDate() - daysAgo);
+
+            newGames.push({
+              id: `m_sync_${player}_${Date.now()}_${i}`,
+              date: date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
+              description: `Game ${i + 1} de ${player}`,
+              stats: {
+                champion: champions[Math.floor(Math.random() * champions.length)],
+                kda: `${kills}/${deaths}/${assists}`,
+                cs: Math.floor(Math.random() * 200) + 50,
+                duration: `${Math.floor(Math.random() * 20) + 15}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
+                result: result as 'VICTORY' | 'DEFEAT' | 'REMAKE',
+                funFact: funFacts[Math.floor(Math.random() * funFacts.length)]
+              }
+            });
+          }
+        }
+
+        set((state) => ({
+          isSyncing: false,
+          history: [...newGames, ...state.history]
         }));
       }
     }),
