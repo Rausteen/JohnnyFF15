@@ -397,102 +397,105 @@ async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message:
   for (const player of players) {
     if (!player.puuid) continue;
 
-    const matchIds = await getMatchHistory(player.puuid, player.region, 1);
+    const matchIds = await getMatchHistory(player.puuid, player.region, 20);
     if (!matchIds || matchIds.length === 0) {
       console.log(`  ⚠️ No matches found for ${player.display_name}`);
       continue;
     }
 
-    const latestMatchId = matchIds[0];
-    const matchKey = `${latestMatchId}_${player.puuid}`;
+    console.log(`  📋 Found ${matchIds.length} matches for ${player.display_name}`);
 
-    if (existingKeys.has(matchKey)) {
-      console.log(`  ✓ Match already synced for ${player.display_name}`);
-      continue;
-    }
+    for (const matchId of matchIds) {
+      const matchKey = `${matchId}_${player.puuid}`;
 
-    const matchData = await getMatchDetails(latestMatchId, player.region) as {
-      metadata: { matchId: string };
-      info: {
-        gameCreation: number;
-        gameDuration: number;
-        gameMode: string;
-        queueId: number;
-        gameEndedInSurrender?: boolean;
-        participants: Array<{
-          puuid: string;
-          championId: number;
-          championName: string;
-          kills: number;
-          deaths: number;
-          assists: number;
-          totalMinionsKilled: number;
-          neutralMinionsKilled: number;
-          visionScore: number;
-          goldEarned: number;
-          totalDamageDealtToChampions: number;
-          win: boolean;
-          firstBloodVictim?: boolean;
-          teamEarlySurrendered?: boolean;
-          teamId: number;
-        }>;
-      };
-    } | null;
-    if (!matchData) {
-      console.log(`  ⚠️ Could not fetch match for ${player.display_name}`);
-      continue;
-    }
-
-    const playerStats = matchData.info.participants.find((p: { puuid: string }) => p.puuid === player.puuid);
-    if (!playerStats) continue;
-
-    const team = matchData.info.participants.filter((p: { teamId: number }) => p.teamId === playerStats.teamId);
-    const teamKills = team.reduce((sum: number, p: { kills: number }) => sum + p.kills, 0);
-
-    const johnnyMatch = {
-      id: matchData.metadata.matchId,
-      puuid: player.puuid,
-      player_name: player.display_name,
-      game_creation: matchData.info.gameCreation,
-      game_duration: matchData.info.gameDuration,
-      game_mode: matchData.info.gameMode,
-      queue_id: matchData.info.queueId,
-      champion_id: playerStats.championId,
-      champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
-      kills: playerStats.kills,
-      deaths: playerStats.deaths,
-      assists: playerStats.assists,
-      cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
-      vision_score: playerStats.visionScore,
-      gold_earned: playerStats.goldEarned,
-      damage_dealt: playerStats.totalDamageDealtToChampions,
-      win: playerStats.win,
-      first_blood_victim: playerStats.firstBloodVictim === true,
-      game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
-      team_kills: teamKills,
-      created_at: new Date().toISOString()
-    };
-
-    // Use insert instead of upsert to allow same match_id for different players
-    const { error } = await supabase
-      .from('johnny_matches')
-      .insert([johnnyMatch]);
-
-    if (error) {
-      // If duplicate key error, it means match already exists for this player
-      if (error.code === '23505') {
-        console.log(`  ✓ Match already exists for ${player.display_name}`);
-      } else {
-        console.error(`  ❌ Error saving match for ${player.display_name}:`, error);
+      if (existingKeys.has(matchKey)) {
+        continue;
       }
-    } else {
-      console.log(`  ✅ Synced match for ${player.display_name}: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
-      newMatches.push(johnnyMatch);
-      existingKeys.add(matchKey);
-    }
 
-    // Small delay between players
-    await new Promise(r => setTimeout(r, 300));
+      const matchData = await getMatchDetails(matchId, player.region) as {
+        metadata: { matchId: string };
+        info: {
+          gameCreation: number;
+          gameDuration: number;
+          gameMode: string;
+          queueId: number;
+          gameEndedInSurrender?: boolean;
+          participants: Array<{
+            puuid: string;
+            championId: number;
+            championName: string;
+            kills: number;
+            deaths: number;
+            assists: number;
+            totalMinionsKilled: number;
+            neutralMinionsKilled: number;
+            visionScore: number;
+            goldEarned: number;
+            totalDamageDealtToChampions: number;
+            win: boolean;
+            firstBloodVictim?: boolean;
+            teamEarlySurrendered?: boolean;
+            teamId: number;
+          }>;
+        };
+      } | null;
+
+      if (!matchData) {
+        console.log(`  ⚠️ Could not fetch match for ${player.display_name}`);
+        continue;
+      }
+
+      const playerStats = matchData.info.participants.find((p: { puuid: string }) => p.puuid === player.puuid);
+      if (!playerStats) continue;
+
+      const team = matchData.info.participants.filter((p: { teamId: number }) => p.teamId === playerStats.teamId);
+      const teamKills = team.reduce((sum: number, p: { kills: number }) => sum + p.kills, 0);
+
+      const johnnyMatch = {
+        id: matchData.metadata.matchId,
+        puuid: player.puuid,
+        player_name: player.display_name,
+        game_creation: matchData.info.gameCreation,
+        game_duration: matchData.info.gameDuration,
+        game_mode: matchData.info.gameMode,
+        queue_id: matchData.info.queueId,
+        champion_id: playerStats.championId,
+        champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
+        kills: playerStats.kills,
+        deaths: playerStats.deaths,
+        assists: playerStats.assists,
+        cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
+        vision_score: playerStats.visionScore,
+        gold_earned: playerStats.goldEarned,
+        damage_dealt: playerStats.totalDamageDealtToChampions,
+        win: playerStats.win,
+        first_blood_victim: playerStats.firstBloodVictim === true,
+        game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
+        team_kills: teamKills,
+        created_at: new Date().toISOString()
+      };
+
+      // Use insert instead of upsert to allow same match_id for different players
+      const { error } = await supabase
+        .from('johnny_matches')
+        .insert([johnnyMatch]);
+
+      if (error) {
+        // If duplicate key error, it means match already exists for this player
+        if (error.code === '23505') {
+          console.log(`  ✓ Match already exists for ${player.display_name}`);
+        } else {
+          console.error(`  ❌ Error saving match for ${player.display_name}:`, error);
+        }
+      } else {
+        console.log(`  ✅ Synced match for ${player.display_name}: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
+        newMatches.push(johnnyMatch);
+        existingKeys.add(matchKey);
+      }
+
+      // Small delay between API calls
+      await new Promise(r => setTimeout(r, 300));
+    }
   }
 
   if (newMatches.length === 0) {
