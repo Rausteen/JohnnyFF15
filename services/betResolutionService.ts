@@ -37,6 +37,17 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
     return `🐉 Dragons: ${teamDragons} - ${enemyDragons}`;
   }
 
+  // Handle Exact KDA bets (format: exact_kda_X.X-Y.Y or exact_kda_X.X+)
+  if (propId.startsWith('exact_kda_')) {
+    return `🎯 KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
+  }
+
+  // Handle Exact Damage bets (format: exact_damage_X-Y or exact_damage_X+)
+  if (propId.startsWith('exact_damage_')) {
+    const damageK = stats.totalDamageDealtToChampions / 1000;
+    return `⚔️ Dégâts: ${damageK.toFixed(1)}k`;
+  }
+
   switch (propId) {
     // ========== EARLY GAME ==========
     case 'early1': // First Blood victime
@@ -138,6 +149,37 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     const actualEnemy = enemyTeam?.objectives.dragon.kills || 0;
 
     return predictedTeam === actualTeam && predictedEnemy === actualEnemy;
+  }
+
+  // Handle Exact KDA bets (format: exact_kda_X.X-Y.Y or exact_kda_X.X+)
+  if (propId.startsWith('exact_kda_')) {
+    const range = propId.replace('exact_kda_', '');
+
+    if (range.endsWith('+')) {
+      const min = parseFloat(range.replace('+', ''));
+      return kda >= min;
+    }
+
+    const [minStr, maxStr] = range.split('-');
+    const min = parseFloat(minStr);
+    const max = parseFloat(maxStr);
+    return kda >= min && kda < max;
+  }
+
+  // Handle Exact Damage bets (format: exact_damage_X-Y or exact_damage_X+)
+  if (propId.startsWith('exact_damage_')) {
+    const range = propId.replace('exact_damage_', '');
+    const damageK = stats.totalDamageDealtToChampions / 1000;
+
+    if (range.endsWith('+')) {
+      const min = parseFloat(range.replace('+', ''));
+      return damageK >= min;
+    }
+
+    const [minStr, maxStr] = range.split('-');
+    const min = parseFloat(minStr);
+    const max = parseFloat(maxStr);
+    return damageK >= min && damageK < max;
   }
 
   switch (propId) {

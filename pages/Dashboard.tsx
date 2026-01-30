@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import PropCard from '../components/PropCard';
 import ComboBetSlip from '../components/ComboBetSlip';
 import DragonScoreBet from '../components/DragonScoreBet';
+import ExactStatsBet from '../components/ExactStatsBet';
 import { usePropsStore } from '../services/propsStore';
 import { useStore } from '../services/store';
 import { useGameStore, PlayerGameState } from '../services/gameStore';
@@ -656,10 +657,11 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* Dragon Score Bet - Prestige Bet */}
+          {/* Special Bets - Dragon Score & Exact Stats */}
           {isInGame && (
-            <div className="mb-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
               <DragonScoreBet player={activePlayer} />
+              <ExactStatsBet player={activePlayer} />
             </div>
           )}
 
