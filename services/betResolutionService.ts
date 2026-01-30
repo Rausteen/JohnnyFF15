@@ -69,7 +69,7 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte
       return `${csPerMin.toFixed(1)} CS/min`;
-    case 'gp7': // CS > 6.5/min
+    case 'gp7': // CS > 9.5/min
       return `${csPerMin.toFixed(1)} CS/min`;
     case 'gp2': // 0 Vision Score (legacy)
       return `Vision: ${stats.visionScore}`;
@@ -183,8 +183,8 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'gp1': // CS de la honte (<4/min)
       return csPerMin < 4;
 
-    case 'gp7': // CS > 6.5/min
-      return csPerMin > 6.5;
+    case 'gp7': // CS > 9.5/min
+      return csPerMin > 9.5;
 
     case 'gp2': // 0 Vision Score (legacy)
       return stats.visionScore === 0;

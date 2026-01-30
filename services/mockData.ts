@@ -30,9 +30,9 @@ export const MOCK_PROPS: Prop[] = [
   // ========== MEDIUM RISK ==========
   {
     id: 'gp7',
-    title: "CS > 6.5/min",
-    description: "Plus de 6.5 CS par minute. Miracle agricole.",
-    odds: 3.0,
+    title: "CS > 9.5/min",
+    description: "Plus de 9.5 CS par minute. Farm de Challenger.",
+    odds: 12.0,
     category: 'GAMEPLAY'
   },
   {

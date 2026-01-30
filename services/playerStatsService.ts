@@ -4,13 +4,14 @@ import { TrackedPlayer, PlayerSkillRating, PlayerWithSkill, RankTier, RankDivisi
 import { JohnnyMatch } from './matchHistoryStore';
 
 // Weights for skill rating calculation (when rank is available)
+// Rank is the PRIMARY indicator - everything else is minor adjustment
 const WEIGHTS_WITH_RANK = {
-  rank: 0.50,         // 50% - Rank is the most reliable indicator
-  winRate: 0.20,      // 20% - Win rate
-  kda: 0.15,          // 15% - KDA reflects individual performance
-  csPerMin: 0.05,     // 5% - Farm efficiency
-  damage: 0.05,       // 5% - Damage contribution
-  vision: 0.05        // 5% - Vision game
+  rank: 0.80,         // 80% - Rank is by far the most reliable indicator
+  winRate: 0.10,      // 10% - Win rate
+  kda: 0.05,          // 5% - KDA reflects individual performance
+  csPerMin: 0.02,     // 2% - Farm efficiency
+  damage: 0.02,       // 2% - Damage contribution
+  vision: 0.01        // 1% - Vision game
 };
 
 // Weights for skill rating calculation (when no rank is available)
