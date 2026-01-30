@@ -61,6 +61,7 @@ export const TRANSFER_LIMITS = {
 
 const DAILY_BONUS_AMOUNT = 1000;
 const DAILY_BONUS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+const DAILY_BONUS_MAX_CREDITS = 15000; // Can't claim if you have more than this
 
 export const useCreditsStore = create<CreditsState>((set, get) => ({
   profile: null,
@@ -232,6 +233,8 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
   canClaimDailyBonus: () => {
     const { profile } = get();
     if (!profile) return false;
+    // Can't claim if you have too many credits
+    if (profile.credits >= DAILY_BONUS_MAX_CREDITS) return false;
     if (!profile.last_daily_bonus) return true;
 
     const lastBonus = new Date(profile.last_daily_bonus).getTime();
@@ -257,8 +260,11 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
 
   claimDailyBonus: async () => {
     const { profile, canClaimDailyBonus } = get();
-    if (!profile) return { success: false, error: 'Non connecté' };
-    if (!canClaimDailyBonus()) return { success: false, error: 'Bonus déjà réclamé aujourd\'hui' };
+    if (!profile) return { success: false, error: 'Non connecte' };
+    if (profile.credits >= DAILY_BONUS_MAX_CREDITS) {
+      return { success: false, error: `Trop riche! Max ${DAILY_BONUS_MAX_CREDITS.toLocaleString('fr-FR')} JC pour reclamer` };
+    }
+    if (!canClaimDailyBonus()) return { success: false, error: 'Bonus deja reclame aujourd\'hui' };
 
     try {
       const newCredits = profile.credits + DAILY_BONUS_AMOUNT;
