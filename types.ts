@@ -4,6 +4,40 @@ export enum MatchStatus {
   FINISHED = 'FINISHED'
 }
 
+// Team Balancer Types
+export type PlayerRole = 'TOP' | 'JUNGLE' | 'MID' | 'ADC' | 'SUPPORT' | 'FILL';
+
+export const ROLES: PlayerRole[] = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT'];
+export const ALL_ROLES: PlayerRole[] = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPPORT', 'FILL'];
+
+export const ROLE_LABELS: Record<PlayerRole, string> = {
+  TOP: 'Top',
+  JUNGLE: 'Jungle',
+  MID: 'Mid',
+  ADC: 'ADC',
+  SUPPORT: 'Support',
+  FILL: 'Fill'
+};
+
+export const ROLE_ICONS: Record<PlayerRole, string> = {
+  TOP: '🛡️',
+  JUNGLE: '🌲',
+  MID: '⚡',
+  ADC: '🏹',
+  SUPPORT: '💚',
+  FILL: '🎲'
+};
+
+export interface PlayerSkillRating {
+  odverall: number; // 0-100 overall skill score
+  winRate: number; // 0-100
+  avgKDA: number;
+  avgCSPerMin: number;
+  avgDamage: number;
+  avgVisionScore: number;
+  gamesPlayed: number;
+}
+
 // Tracked player (someone we can bet on)
 export interface TrackedPlayer {
   id: string;
@@ -15,6 +49,28 @@ export interface TrackedPlayer {
   isActive: boolean;
   createdAt?: string;
   userId?: string | null; // Linked Supabase user ID (prevents self-betting)
+  primaryRole?: PlayerRole | null; // Preferred primary role
+  secondaryRole?: PlayerRole | null; // Preferred secondary role
+}
+
+// Team Balancer - Player with calculated skill rating
+export interface PlayerWithSkill extends TrackedPlayer {
+  skillRating: PlayerSkillRating;
+}
+
+// Team Balancer - Balanced team result
+export interface BalancedTeam {
+  players: Array<{
+    player: PlayerWithSkill;
+    assignedRole: PlayerRole;
+  }>;
+  totalSkill: number;
+}
+
+export interface BalancedTeamsResult {
+  team1: BalancedTeam;
+  team2: BalancedTeam;
+  skillDifference: number;
 }
 
 export enum BetStatus {

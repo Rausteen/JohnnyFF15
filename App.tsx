@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Profile from './pages/Profile';
 import Leaderboard from './pages/Leaderboard';
 import PublicProfile from './pages/PublicProfile';
+import TeamBalancer from './pages/TeamBalancer';
 import { useAuthStore } from './services/authStore';
 import { useMatchHistoryStore } from './services/matchHistoryStore';
 import { useGameStore } from './services/gameStore';
@@ -68,6 +69,7 @@ const App = () => {
           <Route path="login" element={<Login />} />
           <Route path="profile" element={<Profile />} />
           <Route path="leaderboard" element={<Leaderboard />} />
+          <Route path="team-balancer" element={<TeamBalancer />} />
           <Route path="user/:userId" element={<PublicProfile />} />
         </Route>
       </Routes>

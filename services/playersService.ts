@@ -1,6 +1,6 @@
 // Service to manage tracked players in Supabase
 import { supabase } from './supabase';
-import { TrackedPlayer } from '../types';
+import { TrackedPlayer, PlayerRole } from '../types';
 
 export interface SupabaseTrackedPlayer {
   id: string;
@@ -13,6 +13,8 @@ export interface SupabaseTrackedPlayer {
   last_match_id: string | null;
   created_at: string;
   user_id: string | null; // Linked Supabase user ID
+  primary_role: string | null; // Preferred primary role
+  secondary_role: string | null; // Preferred secondary role
 }
 
 // Convert Supabase player to local format
@@ -26,7 +28,9 @@ export function supabasePlayerToLocal(sp: SupabaseTrackedPlayer): TrackedPlayer 
     displayName: sp.display_name,
     isActive: sp.is_active,
     createdAt: sp.created_at,
-    userId: sp.user_id
+    userId: sp.user_id,
+    primaryRole: sp.primary_role as PlayerRole | null,
+    secondaryRole: sp.secondary_role as PlayerRole | null
   };
 }
 
@@ -225,6 +229,8 @@ export async function updateTrackedPlayer(
     isActive: boolean;
     lastMatchId: string | null;
     userId: string | null;
+    primaryRole: PlayerRole | null;
+    secondaryRole: PlayerRole | null;
   }>
 ): Promise<boolean> {
   try {
@@ -237,6 +243,8 @@ export async function updateTrackedPlayer(
     if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
     if (updates.lastMatchId !== undefined) dbUpdates.last_match_id = updates.lastMatchId;
     if (updates.userId !== undefined) dbUpdates.user_id = updates.userId;
+    if (updates.primaryRole !== undefined) dbUpdates.primary_role = updates.primaryRole;
+    if (updates.secondaryRole !== undefined) dbUpdates.secondary_role = updates.secondaryRole;
 
     const { error } = await supabase
       .from('tracked_players')
@@ -404,4 +412,13 @@ export async function unlinkUserFromPlayer(playerId: string): Promise<boolean> {
 export function isUserThePlayer(player: TrackedPlayer | undefined, userId: string | undefined): boolean {
   if (!player || !userId) return false;
   return player.userId === userId;
+}
+
+// Update player roles
+export async function updatePlayerRoles(
+  playerId: string,
+  primaryRole: PlayerRole | null,
+  secondaryRole: PlayerRole | null
+): Promise<boolean> {
+  return updateTrackedPlayer(playerId, { primaryRole, secondaryRole });
 }

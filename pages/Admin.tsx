@@ -7,11 +7,11 @@ import { useMatchHistoryStore } from '../services/matchHistoryStore';
 import { Region, riotApi, getQueueName } from '../services/riotApi';
 import { resolveBets } from '../services/betResolutionService';
 import { getAllPendingBets, updateBetStatus, deleteUserBets } from '../services/betsService';
-import { Bet, TrackedPlayer } from '../types';
+import { Bet, TrackedPlayer, PlayerRole, ALL_ROLES, ROLE_LABELS, ROLE_ICONS } from '../types';
 import { usePropsStore } from '../services/propsStore';
 import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
-import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers, linkUserToPlayer, unlinkUserFromPlayer } from '../services/playersService';
+import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers, linkUserToPlayer, unlinkUserFromPlayer, updatePlayerRoles } from '../services/playersService';
 import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight, Link2, Unlink } from 'lucide-react';
 import { sendTestNotification } from '../services/discordWebhook';
 import { syncLastGame as syncLastGameCommand, checkPlayersStatus } from '../services/adminCommands';
@@ -68,6 +68,8 @@ const Admin = () => {
   const [editTagLine, setEditTagLine] = useState('');
   const [editRegion, setEditRegion] = useState<Region>('EUW');
   const [editDisplayName, setEditDisplayName] = useState('');
+  const [editPrimaryRole, setEditPrimaryRole] = useState<PlayerRole | ''>('');
+  const [editSecondaryRole, setEditSecondaryRole] = useState<PlayerRole | ''>('');
   const [editPlayerLoading, setEditPlayerLoading] = useState(false);
   const [apiTestResult, setApiTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [apiTestLoading, setApiTestLoading] = useState(false);
@@ -231,6 +233,8 @@ const Admin = () => {
     setEditTagLine(player.tagLine);
     setEditRegion(player.region as Region);
     setEditDisplayName(player.displayName);
+    setEditPrimaryRole(player.primaryRole || '');
+    setEditSecondaryRole(player.secondaryRole || '');
   };
 
   // Handler to save player edits
@@ -258,7 +262,9 @@ const Admin = () => {
         tagLine: editTagLine,
         puuid,
         region: editRegion,
-        displayName: editDisplayName
+        displayName: editDisplayName,
+        primaryRole: editPrimaryRole || null,
+        secondaryRole: editSecondaryRole || null
       });
 
       if (success) {
@@ -941,6 +947,28 @@ const Admin = () => {
                             className="p-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm focus:border-primary focus:outline-none"
                           />
                         </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <select
+                            value={editPrimaryRole}
+                            onChange={(e) => setEditPrimaryRole(e.target.value as PlayerRole | '')}
+                            className="p-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm focus:border-primary focus:outline-none"
+                          >
+                            <option value="">Role principal</option>
+                            {ALL_ROLES.map((role) => (
+                              <option key={role} value={role}>{ROLE_ICONS[role]} {ROLE_LABELS[role]}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={editSecondaryRole}
+                            onChange={(e) => setEditSecondaryRole(e.target.value as PlayerRole | '')}
+                            className="p-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm focus:border-primary focus:outline-none"
+                          >
+                            <option value="">Role secondaire</option>
+                            {ALL_ROLES.map((role) => (
+                              <option key={role} value={role}>{ROLE_ICONS[role]} {ROLE_LABELS[role]}</option>
+                            ))}
+                          </select>
+                        </div>
                         <div className="flex gap-2">
                           <button
                             onClick={handleSaveEdit}
@@ -983,7 +1011,15 @@ const Admin = () => {
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-zinc-500 truncate">{player.gameName}#{player.tagLine} • {player.region}</div>
+                          <div className="text-xs text-zinc-500 truncate">
+                            {player.gameName}#{player.tagLine} • {player.region}
+                            {(player.primaryRole || player.secondaryRole) && (
+                              <span className="ml-2">
+                                {player.primaryRole && ROLE_ICONS[player.primaryRole]}
+                                {player.secondaryRole && <span className="text-zinc-600">/{ROLE_ICONS[player.secondaryRole]}</span>}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
