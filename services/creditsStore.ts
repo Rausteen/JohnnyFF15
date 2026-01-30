@@ -355,7 +355,7 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
       // Find recipient by pseudo
       const { data: recipient, error: findError } = await supabase
         .from('profiles')
-        .select('id, pseudo, credits')
+        .select('id, pseudo')
         .ilike('pseudo', recipientPseudo)
         .single();
 
@@ -366,37 +366,37 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
       const now = new Date().toISOString();
       const newDailyTotal = (profile.daily_transfer_date === today ? dailyTotal : 0) + amount;
 
-      // Subtract from sender (amount + fee) and update transfer tracking
-      const { error: senderError } = await supabase
+      // Use atomic transfer function to prevent race conditions
+      const { data: transferResult, error: transferError } = await supabase
+        .rpc('transfer_credits', {
+          sender_id: profile.id,
+          recipient_id: recipient.id,
+          transfer_amount: amount,
+          fee_amount: fee
+        });
+
+      if (transferError) {
+        console.error('Transfer RPC error:', transferError);
+        throw transferError;
+      }
+
+      if (transferResult && !transferResult.success) {
+        return { success: false, error: transferResult.error || 'Erreur lors du transfert' };
+      }
+
+      // Update transfer tracking columns
+      const { error: trackingError } = await supabase
         .from('profiles')
         .update({
-          credits: profile.credits - totalDeducted,
           last_transfer_at: now,
           daily_transfer_total: newDailyTotal,
           daily_transfer_date: today
         })
         .eq('id', profile.id);
 
-      if (senderError) throw senderError;
-
-      // Add to recipient (amount only, fee is burned)
-      const { error: recipientError } = await supabase
-        .from('profiles')
-        .update({ credits: recipient.credits + amount })
-        .eq('id', recipient.id);
-
-      if (recipientError) {
-        // Rollback sender's credits
-        await supabase
-          .from('profiles')
-          .update({
-            credits: profile.credits,
-            last_transfer_at: profile.last_transfer_at,
-            daily_transfer_total: profile.daily_transfer_total,
-            daily_transfer_date: profile.daily_transfer_date
-          })
-          .eq('id', profile.id);
-        throw recipientError;
+      if (trackingError) {
+        console.error('Transfer tracking update error:', trackingError);
+        // Don't fail the transfer, credits were already moved
       }
 
       // Update local state
