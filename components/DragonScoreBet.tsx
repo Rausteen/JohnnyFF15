@@ -13,45 +13,46 @@ interface DragonScoreBetProps {
 
 // Fixed odds for dragon scores (team dragons - enemy dragons)
 // Format: "teamDragons-enemyDragons" -> { odds, category }
+// All odds are TRIPLED for higher payouts
 const DRAGON_SCORE_ODDS: Record<string, { odds: number; category: 'probable' | 'moyen' | 'rare' | 'legendaire' | 'edge' }> = {
-  // 🟢 Scores "probables" (bas payout)
-  '2-1': { odds: 1.6, category: 'probable' },
-  '1-2': { odds: 1.65, category: 'probable' },
-  '2-2': { odds: 1.5, category: 'probable' },
-  '3-2': { odds: 1.7, category: 'probable' },
-  '2-3': { odds: 1.75, category: 'probable' },
+  // 🟢 Scores "probables"
+  '2-1': { odds: 4.8, category: 'probable' },
+  '1-2': { odds: 4.95, category: 'probable' },
+  '2-2': { odds: 4.5, category: 'probable' },
+  '3-2': { odds: 5.1, category: 'probable' },
+  '2-3': { odds: 5.25, category: 'probable' },
 
   // 🟡 Scores "moyens"
-  '3-1': { odds: 1.9, category: 'moyen' },
-  '1-3': { odds: 1.95, category: 'moyen' },
-  '4-2': { odds: 2.3, category: 'moyen' },
-  '2-4': { odds: 2.25, category: 'moyen' },
-  '4-1': { odds: 2.5, category: 'moyen' },
-  '1-4': { odds: 2.45, category: 'moyen' },
+  '3-1': { odds: 5.7, category: 'moyen' },
+  '1-3': { odds: 5.85, category: 'moyen' },
+  '4-2': { odds: 6.9, category: 'moyen' },
+  '2-4': { odds: 6.75, category: 'moyen' },
+  '4-1': { odds: 7.5, category: 'moyen' },
+  '1-4': { odds: 7.35, category: 'moyen' },
 
   // 🔴 Scores "rares"
-  '4-3': { odds: 4.05, category: 'rare' },
-  '3-4': { odds: 4.0, category: 'rare' },
-  '5-2': { odds: 5.0, category: 'rare' },
-  '2-5': { odds: 5.05, category: 'rare' },
-  '5-1': { odds: 4.55, category: 'rare' },
-  '1-5': { odds: 4.5, category: 'rare' },
-  '4-0': { odds: 4.0, category: 'rare' },
-  '0-4': { odds: 4.0, category: 'rare' },
+  '4-3': { odds: 12.15, category: 'rare' },
+  '3-4': { odds: 12.0, category: 'rare' },
+  '5-2': { odds: 15.0, category: 'rare' },
+  '2-5': { odds: 15.15, category: 'rare' },
+  '5-1': { odds: 13.65, category: 'rare' },
+  '1-5': { odds: 13.5, category: 'rare' },
+  '4-0': { odds: 12.0, category: 'rare' },
+  '0-4': { odds: 12.0, category: 'rare' },
 
   // 🏆 Scores "légendaires"
-  '5-3': { odds: 5.25, category: 'legendaire' },
-  '3-5': { odds: 5.2, category: 'legendaire' },
-  '5-0': { odds: 6.25, category: 'legendaire' },
-  '0-5': { odds: 6.2, category: 'legendaire' },
+  '5-3': { odds: 15.75, category: 'legendaire' },
+  '3-5': { odds: 15.6, category: 'legendaire' },
+  '5-0': { odds: 18.75, category: 'legendaire' },
+  '0-5': { odds: 18.6, category: 'legendaire' },
 
   // ⚠️ Scores très rares / edge cases
-  '0-0': { odds: 30.0, category: 'edge' },
-  '1-0': { odds: 15.0, category: 'edge' },
-  '0-1': { odds: 15.0, category: 'edge' },
-  '1-1': { odds: 8.0, category: 'edge' },
-  '3-3': { odds: 12.0, category: 'edge' },
-  '4-4': { odds: 25.0, category: 'edge' },
+  '0-0': { odds: 90.0, category: 'edge' },
+  '1-0': { odds: 45.0, category: 'edge' },
+  '0-1': { odds: 45.0, category: 'edge' },
+  '1-1': { odds: 24.0, category: 'edge' },
+  '3-3': { odds: 36.0, category: 'edge' },
+  '4-4': { odds: 75.0, category: 'edge' },
 };
 
 // Get odds for a score, with fallback calculation for undefined scores
@@ -61,11 +62,11 @@ function getDragonScoreOdds(teamDragons: number, enemyDragons: number): number {
     return DRAGON_SCORE_ODDS[key].odds;
   }
 
-  // Fallback: calculate odds for scores not in the table
+  // Fallback: calculate odds for scores not in the table (also tripled)
   const total = teamDragons + enemyDragons;
   const diff = Math.abs(teamDragons - enemyDragons);
 
-  let baseOdds = 3.0;
+  let baseOdds = 9.0; // 3.0 * 3 = 9.0 (tripled)
 
   // High scoring games are rarer
   if (total >= 10) baseOdds *= 2.5;
@@ -79,7 +80,7 @@ function getDragonScoreOdds(teamDragons: number, enemyDragons: number): number {
   // Very low scores are rare
   if (total <= 2) baseOdds *= 3.0;
 
-  return Math.min(50, Math.max(2.0, Math.round(baseOdds * 10) / 10));
+  return Math.min(150, Math.max(6.0, Math.round(baseOdds * 10) / 10)); // Min 6.0, max 150 (tripled limits)
 }
 
 // Get category info for display
