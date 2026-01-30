@@ -141,3 +141,10 @@ export async function getMatch(
 export async function syncRanks(): Promise<CommandResult & { updated?: number }> {
   return executeCommand('sync_ranks', {}, 120000) as Promise<CommandResult & { updated?: number }>;
 }
+
+/**
+ * Sync games for a specific player (20 last games)
+ */
+export async function syncPlayerGames(playerId: string): Promise<CommandResult> {
+  return executeCommand('sync_player_games', { playerId }, 120000);
+}

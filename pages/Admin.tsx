@@ -14,7 +14,7 @@ import { supabase } from '../services/supabase';
 import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers, linkUserToPlayer, unlinkUserFromPlayer, updatePlayerRoles } from '../services/playersService';
 import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight, Link2, Unlink } from 'lucide-react';
 import { sendTestNotification } from '../services/discordWebhook';
-import { syncLastGame as syncLastGameCommand, checkPlayersStatus, syncRanks as syncRanksCommand } from '../services/adminCommands';
+import { syncLastGame as syncLastGameCommand, checkPlayersStatus, syncRanks as syncRanksCommand, syncPlayerGames as syncPlayerGamesCommand } from '../services/adminCommands';
 
 const REGIONS: { value: Region; label: string }[] = [
   { value: 'EUW', label: 'Europe West (EUW)' },
@@ -83,6 +83,8 @@ const Admin = () => {
   const [forceSyncResult, setForceSyncResult] = useState<{ success: boolean; message: string } | null>(null);
   const [syncRanksLoading, setSyncRanksLoading] = useState(false);
   const [syncRanksResult, setSyncRanksResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [syncingPlayerId, setSyncingPlayerId] = useState<string | null>(null);
+  const [syncPlayerResult, setSyncPlayerResult] = useState<{ playerId: string; success: boolean; message: string } | null>(null);
 
   // Note: bets are now Supabase-only (no local storage)
 
@@ -433,6 +435,27 @@ const Admin = () => {
 
     setSyncRanksLoading(false);
     setTimeout(() => setSyncRanksResult(null), 5000);
+  };
+
+  const handleSyncPlayerGames = async (playerId: string) => {
+    setSyncingPlayerId(playerId);
+    setSyncPlayerResult(null);
+
+    const result = await syncPlayerGamesCommand(playerId);
+
+    setSyncPlayerResult({
+      playerId,
+      success: result.success,
+      message: result.message
+    });
+
+    // Reload matches
+    if (result.success) {
+      await loadMatches();
+    }
+
+    setSyncingPlayerId(null);
+    setTimeout(() => setSyncPlayerResult(null), 5000);
   };
 
   // Manually resolve a single bet (works with Supabase bets from all users)
@@ -1013,7 +1036,7 @@ const Admin = () => {
                   }
 
                   return (
-                    <div key={player.id} className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
+                    <div key={player.id} className={`p-3 rounded-xl border flex items-center justify-between gap-3 relative ${
                       isPlayerInGame
                         ? 'bg-green-500/10 border-green-500/30'
                         : player.isActive
@@ -1108,6 +1131,18 @@ const Admin = () => {
                           )}
                         </div>
                         <button
+                          onClick={() => handleSyncPlayerGames(player.id)}
+                          disabled={syncingPlayerId === player.id || !player.puuid}
+                          className="p-1.5 text-zinc-400 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors disabled:opacity-50"
+                          title="Sync 20 dernières games"
+                        >
+                          {syncingPlayerId === player.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                        </button>
+                        <button
                           onClick={() => handleStartEdit(player)}
                           className="p-1.5 text-zinc-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                           title="Modifier"
@@ -1122,6 +1157,13 @@ const Admin = () => {
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
+                      {syncPlayerResult?.playerId === player.id && (
+                        <div className={`absolute -bottom-6 left-0 right-0 text-[10px] px-2 py-0.5 rounded ${
+                          syncPlayerResult.success ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {syncPlayerResult.message}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

@@ -596,6 +596,141 @@ async function getRankedInfo(puuid: string, region: string): Promise<{
   }
 }
 
+// Sync games for a specific player by ID
+async function syncGamesForPlayer(playerId: string): Promise<{ success: boolean; message: string; matches: unknown[] }> {
+  console.log(`📥 Syncing games for player ${playerId}...`);
+
+  // Get the player
+  const { data: playerData, error: playerError } = await supabase
+    .from('tracked_players')
+    .select('*')
+    .eq('id', playerId)
+    .single();
+
+  if (playerError || !playerData) {
+    return { success: false, message: 'Joueur non trouvé', matches: [] };
+  }
+
+  const player = playerData as TrackedPlayer;
+
+  if (!player.puuid) {
+    return { success: false, message: `${player.display_name} n'a pas de PUUID`, matches: [] };
+  }
+
+  // Get existing matches for this player
+  const { data: existingMatches } = await supabase
+    .from('johnny_matches')
+    .select('id')
+    .eq('puuid', player.puuid);
+  const existingIds = new Set((existingMatches || []).map((m: { id: string }) => m.id));
+
+  const matchIds = await getMatchHistory(player.puuid, player.region, 20);
+  if (!matchIds || matchIds.length === 0) {
+    return { success: true, message: `Aucun match trouvé pour ${player.display_name}`, matches: [] };
+  }
+
+  console.log(`  📋 Found ${matchIds.length} matches for ${player.display_name}`);
+
+  const newMatches: unknown[] = [];
+
+  for (const matchId of matchIds) {
+    if (existingIds.has(matchId)) {
+      continue;
+    }
+
+    const matchData = await getMatchDetails(matchId, player.region) as {
+      metadata: { matchId: string };
+      info: {
+        gameCreation: number;
+        gameDuration: number;
+        gameMode: string;
+        queueId: number;
+        gameEndedInSurrender?: boolean;
+        participants: Array<{
+          puuid: string;
+          championId: number;
+          championName: string;
+          kills: number;
+          deaths: number;
+          assists: number;
+          totalMinionsKilled: number;
+          neutralMinionsKilled: number;
+          visionScore: number;
+          goldEarned: number;
+          totalDamageDealtToChampions: number;
+          win: boolean;
+          firstBloodVictim?: boolean;
+          teamEarlySurrendered?: boolean;
+          teamId: number;
+        }>;
+      };
+    } | null;
+
+    if (!matchData) {
+      console.log(`  ⚠️ Could not fetch match ${matchId}`);
+      continue;
+    }
+
+    const playerStats = matchData.info.participants.find((p: { puuid: string }) => p.puuid === player.puuid);
+    if (!playerStats) continue;
+
+    const team = matchData.info.participants.filter((p: { teamId: number }) => p.teamId === playerStats.teamId);
+    const teamKills = team.reduce((sum: number, p: { kills: number }) => sum + p.kills, 0);
+
+    const johnnyMatch = {
+      id: matchData.metadata.matchId,
+      puuid: player.puuid,
+      player_name: player.display_name,
+      game_creation: matchData.info.gameCreation,
+      game_duration: matchData.info.gameDuration,
+      game_mode: matchData.info.gameMode,
+      queue_id: matchData.info.queueId,
+      champion_id: playerStats.championId,
+      champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
+      kills: playerStats.kills,
+      deaths: playerStats.deaths,
+      assists: playerStats.assists,
+      cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
+      vision_score: playerStats.visionScore,
+      gold_earned: playerStats.goldEarned,
+      damage_dealt: playerStats.totalDamageDealtToChampions,
+      win: playerStats.win,
+      first_blood_victim: playerStats.firstBloodVictim === true,
+      game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
+      team_kills: teamKills,
+      created_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from('johnny_matches')
+      .insert([johnnyMatch]);
+
+    if (error) {
+      if (error.code === '23505') {
+        console.log(`  ✓ Match already exists`);
+      } else {
+        console.error(`  ❌ Error saving match:`, error);
+      }
+    } else {
+      console.log(`  ✅ Synced: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
+      newMatches.push(johnnyMatch);
+      existingIds.add(matchId);
+    }
+
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  if (newMatches.length === 0) {
+    return { success: true, message: `${player.display_name}: déjà à jour`, matches: [] };
+  }
+
+  return {
+    success: true,
+    message: `${player.display_name}: ${newMatches.length} game(s) synchronisée(s)`,
+    matches: newMatches
+  };
+}
+
 // Sync ranks for all tracked players
 async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: string; updated: number }> {
   console.log('🏆 Syncing ranks for all players...');
@@ -682,6 +817,16 @@ async function executeCommand(command: AdminCommand): Promise<void> {
       case 'sync_ranks':
         result = await syncRanksForAllPlayers();
         break;
+
+      case 'sync_player_games': {
+        const { playerId } = command.params as { playerId: string };
+        if (!playerId) {
+          result = { success: false, message: 'Paramètre manquant: playerId' };
+        } else {
+          result = await syncGamesForPlayer(playerId);
+        }
+        break;
+      }
 
       case 'get_puuid': {
         const { gameName, tagLine, region } = command.params as { gameName: string; tagLine: string; region: string };
