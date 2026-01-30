@@ -5,8 +5,9 @@ import { useMatchHistoryStore } from './matchHistoryStore';
 import { resolveBets } from './betResolutionService';
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { notifyGameStarted, notifyGameEnded } from './discordWebhook';
-import { TrackedPlayer } from '../types';
+import { TrackedPlayer, PlayerSkillRating } from '../types';
 import { getActiveTrackedPlayers, updateTrackedPlayer } from './playersService';
+import { calculateMultiplePlayerSkillRatings } from './playerStatsService';
 
 // Browser ID is no longer used - all status updates come from game-watcher
 // const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -127,6 +128,9 @@ export interface GameState {
   // Per-player game states
   playerStates: Map<string, PlayerGameState>; // keyed by puuid
 
+  // Player skill ratings (for dynamic odds)
+  playerSkillRatings: Map<string, PlayerSkillRating>; // keyed by puuid
+
   // Test mode (for betting on historical games)
   testMode: boolean;
   testMatchId: string | null;
@@ -168,12 +172,14 @@ export interface GameState {
   getPlayerState: (puuid: string) => PlayerGameState | undefined;
   getPlayersInGame: () => PlayerGameState[];
   isAnyPlayerInGame: () => boolean;
+  getPlayerSkillRating: (puuid: string) => PlayerSkillRating | null;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
   trackedPlayers: [],
   selectedPlayer: null,
   playerStates: new Map(),
+  playerSkillRatings: new Map(),
   testMode: false,
   testMatchId: null,
   testMatchData: null,
@@ -223,6 +229,20 @@ export const useGameStore = create<GameState>((set, get) => ({
         : players[0] || null;
 
       set({ trackedPlayers: players, playerStates, selectedPlayer, loading: false });
+
+      // Calculate skill ratings for all players (async, doesn't block UI)
+      calculateMultiplePlayerSkillRatings(players).then(playersWithSkill => {
+        const skillRatings = new Map<string, PlayerSkillRating>();
+        for (const p of playersWithSkill) {
+          if (p.puuid) {
+            skillRatings.set(p.puuid, p.skillRating);
+          }
+        }
+        set({ playerSkillRatings: skillRatings });
+        console.log(`Loaded skill ratings for ${skillRatings.size} players`);
+      }).catch(err => {
+        console.error('Error calculating skill ratings:', err);
+      });
 
       // Auto-subscribe to realtime updates (no polling needed, game-watcher handles checks)
       get().subscribeToAllPlayers();
@@ -611,6 +631,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     const { testMode } = get();
     if (testMode) return true;
     return get().getPlayersInGame().length > 0;
+  },
+
+  getPlayerSkillRating: (puuid: string) => {
+    return get().playerSkillRatings.get(puuid) || null;
   }
 }));
 

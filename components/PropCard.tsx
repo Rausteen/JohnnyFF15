@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { TrendingUp, AlertCircle, CheckCircle, Loader2, Plus, Check, Layers, UserX } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { TrendingUp, TrendingDown, AlertCircle, CheckCircle, Loader2, Plus, Check, Layers, UserX } from 'lucide-react';
 import { Prop, TrackedPlayer } from '../types';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
@@ -7,6 +7,7 @@ import { useAuthStore } from '../services/authStore';
 import { useGameStore } from '../services/gameStore';
 import { useComboStore } from '../services/comboStore';
 import { isUserThePlayer } from '../services/playersService';
+import { getAdjustedOdds, getOddsAdjustmentInfo } from '../services/oddsService';
 
 interface PropCardProps {
   prop: Prop;
@@ -23,7 +24,8 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
     testMatchId,
     testMatchData,
     testPlayer,
-    playerStates
+    playerStates,
+    getPlayerSkillRating
   } = useGameStore();
   const { addToCombo, removeFromCombo, isInCombo, selections } = useComboStore();
 
@@ -37,6 +39,17 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
 
   // Get the match ID for the current bet (live game ID or test mode ID)
   const betMatchId = testMode ? testMatchId : playerState?.currentGameId;
+
+  // Get player skill rating and calculate adjusted odds
+  const skillRating = activePlayer?.puuid ? getPlayerSkillRating(activePlayer.puuid) : null;
+  const { adjustedOdds, propType } = useMemo(
+    () => getAdjustedOdds(prop, skillRating),
+    [prop, skillRating]
+  );
+  const oddsInfo = useMemo(
+    () => getOddsAdjustmentInfo(prop.odds, adjustedOdds, propType),
+    [prop.odds, adjustedOdds, propType]
+  );
 
   const [amount, setAmount] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -137,10 +150,11 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
       }
 
       // Place bet in Supabase with match ID, user ID, champion, and player info
+      // Use adjusted odds based on player skill rating
       const bet = await placeBet(
         prop.id,
         prop.title,
-        prop.odds,
+        adjustedOdds,
         val,
         betMatchId || undefined,
         undefined,
@@ -199,7 +213,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
           {/* Add to combo button */}
           {canBetOnProp() && user && (
             <button
-              onClick={() => inCombo ? removeFromCombo(prop.id) : addToCombo(prop, activePlayer?.puuid, activePlayer?.displayName, betMatchId || undefined)}
+              onClick={() => inCombo ? removeFromCombo(prop.id) : addToCombo(prop, adjustedOdds, activePlayer?.puuid, activePlayer?.displayName, betMatchId || undefined)}
               disabled={!inCombo && selections.length >= 4}
               className={`p-1.5 sm:p-2 rounded-lg transition-all ${
                 inCombo
@@ -211,10 +225,23 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
               {inCombo ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
           )}
-          {/* Odds badge */}
+          {/* Odds badge with skill adjustment indicator */}
           <div className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-400 font-mono font-bold text-xs sm:text-sm">
-            <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            x{prop.odds.toFixed(1)}
+            {oddsInfo.direction === 'up' ? (
+              <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-400" />
+            ) : oddsInfo.direction === 'down' ? (
+              <TrendingDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-red-400" />
+            ) : (
+              <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            )}
+            <span className={oddsInfo.direction === 'up' ? 'text-green-400' : oddsInfo.direction === 'down' ? 'text-red-400' : ''}>
+              x{adjustedOdds.toFixed(2)}
+            </span>
+            {oddsInfo.direction !== 'none' && (
+              <span className={`text-[10px] ${oddsInfo.direction === 'up' ? 'text-green-500' : 'text-red-500'}`}>
+                ({oddsInfo.direction === 'up' ? '+' : '-'}{oddsInfo.percentChange}%)
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -266,7 +293,7 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
           <div className="flex justify-between text-xs sm:text-sm px-1">
             <span className="text-zinc-500">Gain:</span>
             <span className="text-gold font-bold font-mono">
-              {Math.floor(parseInt(amount) * prop.odds)} JC
+              {Math.floor(parseInt(amount) * adjustedOdds)} JC
             </span>
           </div>
         )}

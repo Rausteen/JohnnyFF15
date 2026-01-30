@@ -206,7 +206,15 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-white truncate">{sel.prop.title}</div>
-                    <div className="text-xs text-zinc-500">x{sel.prop.odds.toFixed(1)}</div>
+                    <div className="text-xs text-zinc-500">
+                      x{sel.adjustedOdds.toFixed(2)}
+                      {sel.adjustedOdds !== sel.prop.odds && (
+                        <span className={`ml-1 ${sel.adjustedOdds > sel.prop.odds ? 'text-green-500' : 'text-red-500'}`}>
+                          ({sel.adjustedOdds > sel.prop.odds ? '+' : ''}{Math.round((sel.adjustedOdds - sel.prop.odds) / sel.prop.odds * 100)}%)
+                        </span>
+                      )}
+                      {sel.playerName && <span className="ml-1 text-zinc-600">({sel.playerName})</span>}
+                    </div>
                   </div>
                   <button
                     onClick={() => removeFromCombo(sel.prop.id)}

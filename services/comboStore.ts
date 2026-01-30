@@ -3,6 +3,7 @@ import { Prop } from '../types';
 
 export interface ComboSelection {
   prop: Prop;
+  adjustedOdds: number;  // Skill-adjusted odds at time of adding
   addedAt: number;
   playerPuuid?: string;  // The player this bet is for
   playerName?: string;   // Display name of the player
@@ -16,7 +17,7 @@ interface ComboState {
   totalOdds: () => number;
 
   // Actions
-  addToCombo: (prop: Prop, playerPuuid?: string, playerName?: string, gameId?: string) => void;
+  addToCombo: (prop: Prop, adjustedOdds: number, playerPuuid?: string, playerName?: string, gameId?: string) => void;
   removeFromCombo: (propId: string) => void;
   clearCombo: () => void;
   isInCombo: (propId: string) => boolean;
@@ -32,11 +33,11 @@ export const useComboStore = create<ComboState>((set, get) => ({
     // 1er pari: 100%, 2ème: 90%, 3ème: 81%, 4ème: 72.9%
     return selections.reduce((acc, sel, index) => {
       const discountFactor = Math.pow(0.9, index);
-      return acc * sel.prop.odds * discountFactor;
+      return acc * sel.adjustedOdds * discountFactor;
     }, 1);
   },
 
-  addToCombo: (prop: Prop, playerPuuid?: string, playerName?: string, gameId?: string) => {
+  addToCombo: (prop: Prop, adjustedOdds: number, playerPuuid?: string, playerName?: string, gameId?: string) => {
     const { selections, isInCombo } = get();
 
     // Max 4 selections in a combo (anti-abuse measure)
@@ -46,7 +47,7 @@ export const useComboStore = create<ComboState>((set, get) => ({
     if (isInCombo(prop.id)) return;
 
     set({
-      selections: [...selections, { prop, addedAt: Date.now(), playerPuuid, playerName, gameId }]
+      selections: [...selections, { prop, adjustedOdds, addedAt: Date.now(), playerPuuid, playerName, gameId }]
     });
   },
 
