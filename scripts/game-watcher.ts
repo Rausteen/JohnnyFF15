@@ -64,11 +64,19 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
+// Data caches
 const matchDetailsCache = new Map<string, CacheEntry<unknown>>();
 const matchTimelineCache = new Map<string, CacheEntry<{
   participants: Array<{ participantId: number; puuid: string }>;
   killEvents: TimelineKillEvent[];
 }>>();
+
+// In-flight request deduplication (prevents duplicate API calls when multiple players finish same game)
+const matchDetailsInFlight = new Map<string, Promise<unknown | null>>();
+const matchTimelineInFlight = new Map<string, Promise<{
+  participants: Array<{ participantId: number; puuid: string }>;
+  killEvents: TimelineKillEvent[];
+} | null>>();
 
 // Clean expired cache entries every 10 minutes
 setInterval(() => {
@@ -398,7 +406,7 @@ async function getMatchHistory(puuid: string, region: string, count: number = 1)
   }
 }
 
-// Get match details from Riot API (with cache)
+// Get match details from Riot API (with cache + in-flight deduplication)
 async function getMatchDetails(matchId: string, region: string): Promise<unknown | null> {
   // Check cache first
   const cached = matchDetailsCache.get(matchId);
@@ -407,43 +415,61 @@ async function getMatchDetails(matchId: string, region: string): Promise<unknown
     return cached.data;
   }
 
-  const routingMap: Record<string, string> = {
-    EUW: 'europe',
-    EUNE: 'europe',
-    NA: 'americas',
-    KR: 'asia',
-  };
-
-  const routing = routingMap[region] || 'europe';
-  const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
-
-  try {
-    const response = await fetch(url, {
-      headers: { 'X-Riot-Token': RIOT_API_KEY }
-    });
-
-    if (!response.ok) {
-      console.error(`Match details API error: ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-
-    // Store in cache
-    matchDetailsCache.set(matchId, {
-      data,
-      timestamp: Date.now()
-    });
-    console.log(`  💾 Match details cached: ${matchId}`);
-
-    return data;
-  } catch (error) {
-    console.error('Error fetching match details:', error);
-    return null;
+  // Check if request is already in-flight (another player from same game)
+  const inFlight = matchDetailsInFlight.get(matchId);
+  if (inFlight) {
+    console.log(`  ⏳ Match details waiting for in-flight request: ${matchId}`);
+    return inFlight;
   }
+
+  // Make the API call and store promise for deduplication
+  const fetchPromise = (async () => {
+    const routingMap: Record<string, string> = {
+      EUW: 'europe',
+      EUNE: 'europe',
+      NA: 'americas',
+      KR: 'asia',
+    };
+
+    const routing = routingMap[region] || 'europe';
+    const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
+
+    try {
+      const response = await fetch(url, {
+        headers: { 'X-Riot-Token': RIOT_API_KEY }
+      });
+
+      if (!response.ok) {
+        console.error(`Match details API error: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+
+      // Store in cache
+      matchDetailsCache.set(matchId, {
+        data,
+        timestamp: Date.now()
+      });
+      console.log(`  💾 Match details cached: ${matchId}`);
+
+      return data;
+    } catch (error) {
+      console.error('Error fetching match details:', error);
+      return null;
+    } finally {
+      // Remove from in-flight when done
+      matchDetailsInFlight.delete(matchId);
+    }
+  })();
+
+  // Store in-flight promise for other concurrent requests
+  matchDetailsInFlight.set(matchId, fetchPromise);
+
+  return fetchPromise;
 }
 
-// Get match timeline from Riot API (with cache)
+// Get match timeline from Riot API (with cache + in-flight deduplication)
 async function getMatchTimeline(matchId: string, region: string): Promise<{
   participants: Array<{ participantId: number; puuid: string }>;
   killEvents: TimelineKillEvent[];
@@ -455,61 +481,79 @@ async function getMatchTimeline(matchId: string, region: string): Promise<{
     return cached.data;
   }
 
-  const routingMap: Record<string, string> = {
-    EUW: 'europe',
-    EUNE: 'europe',
-    NA: 'americas',
-    KR: 'asia',
-  };
+  // Check if request is already in-flight (another player from same game)
+  const inFlight = matchTimelineInFlight.get(matchId);
+  if (inFlight) {
+    console.log(`  ⏳ Match timeline waiting for in-flight request: ${matchId}`);
+    return inFlight;
+  }
 
-  const routing = routingMap[region] || 'europe';
-  const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}/timeline`;
-
-  try {
-    const response = await fetch(url, {
-      headers: { 'X-Riot-Token': RIOT_API_KEY }
-    });
-
-    if (!response.ok) {
-      console.error(`Match timeline API error: ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-
-    // Extract kill events from all frames
-    const killEvents: TimelineKillEvent[] = [];
-    for (const frame of data.info.frames || []) {
-      for (const event of frame.events || []) {
-        if (event.type === 'CHAMPION_KILL') {
-          killEvents.push({
-            type: event.type,
-            timestamp: event.timestamp,
-            killerId: event.killerId,
-            victimId: event.victimId,
-            assistingParticipantIds: event.assistingParticipantIds || [],
-          });
-        }
-      }
-    }
-
-    const result = {
-      participants: data.info.participants || [],
-      killEvents,
+  // Make the API call and store promise for deduplication
+  const fetchPromise = (async () => {
+    const routingMap: Record<string, string> = {
+      EUW: 'europe',
+      EUNE: 'europe',
+      NA: 'americas',
+      KR: 'asia',
     };
 
-    // Store in cache
-    matchTimelineCache.set(matchId, {
-      data: result,
-      timestamp: Date.now()
-    });
-    console.log(`  💾 Match timeline cached: ${matchId}`);
+    const routing = routingMap[region] || 'europe';
+    const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}/timeline`;
 
-    return result;
-  } catch (error) {
-    console.error('Error fetching match timeline:', error);
-    return null;
-  }
+    try {
+      const response = await fetch(url, {
+        headers: { 'X-Riot-Token': RIOT_API_KEY }
+      });
+
+      if (!response.ok) {
+        console.error(`Match timeline API error: ${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+
+      // Extract kill events from all frames
+      const killEvents: TimelineKillEvent[] = [];
+      for (const frame of data.info.frames || []) {
+        for (const event of frame.events || []) {
+          if (event.type === 'CHAMPION_KILL') {
+            killEvents.push({
+              type: event.type,
+              timestamp: event.timestamp,
+              killerId: event.killerId,
+              victimId: event.victimId,
+              assistingParticipantIds: event.assistingParticipantIds || [],
+            });
+          }
+        }
+      }
+
+      const result = {
+        participants: data.info.participants || [],
+        killEvents,
+      };
+
+      // Store in cache
+      matchTimelineCache.set(matchId, {
+        data: result,
+        timestamp: Date.now()
+      });
+      console.log(`  💾 Match timeline cached: ${matchId}`);
+
+      return result;
+    } catch (error) {
+      console.error('Error fetching match timeline:', error);
+      return null;
+    } finally {
+      // Remove from in-flight when done
+      matchTimelineInFlight.delete(matchId);
+    }
+  })();
+
+  // Store in-flight promise for other concurrent requests
+  matchTimelineInFlight.set(matchId, fetchPromise);
+
+  return fetchPromise;
 }
 
 // Count solo deaths for a player from timeline data
