@@ -16,16 +16,18 @@ const TopBar = () => {
   // Check if user is admin (Rausteen)
   const isAdmin = profile?.pseudo === 'Rausteen';
 
-  const navLinks = [
-    { path: '/dashboard', label: 'Le Salon', icon: Skull },
-    { path: '/my-bets', label: 'Mes Paris', icon: Coins },
-    { path: '/history', label: 'Musée', icon: History },
-    { path: '/leaderboard', label: 'Classement', icon: Trophy },
-    { path: '/team-balancer', label: '5v5', icon: Swords },
-    ...(isAdmin ? [
-      { path: '/admin', label: 'Admin', icon: ShieldAlert }
-    ] : []),
-  ];
+const navLinks = [
+  { path: '/dashboard', label: 'Le Salon', icon: Skull },
+  { path: '/my-bets', label: 'Mes Paris', icon: Coins },
+  { path: '/history', label: 'Musée', icon: History },
+  { path: '/leaderboard', label: 'Classement', icon: Trophy },
+  { path: '/team-balancer', label: '5v5', icon: Swords },
+  { path: '/stats', label: 'Stats', icon: Sparkles }, // <-- Nouveau lien Stats
+  ...(isAdmin ? [
+    { path: '/admin', label: 'Admin', icon: ShieldAlert }
+  ] : []),
+];
+
 
   const handleSignOut = async () => {
     await signOut();
