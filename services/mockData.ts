@@ -123,14 +123,6 @@ export const MOCK_PROPS: Prop[] = [
     odds: 7.0,
     category: 'KDA'
   },
-  {
-    id: 'sp5',
-    title: "L'Invisible",
-    description: "Moins de 5000 dégâts + moins de 10% KP.",
-    odds: 10.0,
-    category: 'GAMEPLAY'
-  },
-
   // ========== MIRACLES ==========
   {
     id: 'out3',

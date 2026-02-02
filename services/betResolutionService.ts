@@ -123,8 +123,6 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
     case 'sp3': // Le Carry Mystique
       const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
       return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg (max: ${(maxTeamDamage / 1000).toFixed(1)}k)`;
-    case 'sp5': // L'Invisible
-      return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg, ${killParticipation.toFixed(0)}% KP`;
     case 'sp6': // Le Pentakill
       return `${stats.pentaKills} pentakill${stats.pentaKills > 1 ? 's' : ''}`;
 
@@ -288,9 +286,6 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'sp3': // Le Carry Mystique (top damage de l'équipe)
       const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
       return stats.totalDamageDealtToChampions === maxTeamDamage;
-
-    case 'sp5': // L'Invisible (<5k dégâts + <10% KP)
-      return stats.totalDamageDealtToChampions < 5000 && killParticipation < 10;
 
     case 'sp6': // Le Pentakill
       return stats.pentaKills >= 1;

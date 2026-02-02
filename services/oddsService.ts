@@ -24,7 +24,6 @@ const PROP_TYPES: Record<string, PropType> = {
   'gp5': 'NEGATIVE',       // Moins d'or que le support
   'kda2': 'NEGATIVE',      // Le 0/15 Legendaire
   'sp1': 'NEGATIVE',       // Le Perfect Int
-  'sp5': 'NEGATIVE',       // L'Invisible
 
   // POSITIVE props (good things - skilled players more likely)
   'early6': 'POSITIVE',    // 4 morts ou moins
