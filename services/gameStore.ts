@@ -131,6 +131,9 @@ export interface GameState {
   // Player skill ratings (for dynamic odds)
   playerSkillRatings: Map<string, PlayerSkillRating>; // keyed by puuid
 
+  // Admin settings
+  bettingLimitEnabled: boolean; // 4-minute betting window limit
+
   // Test mode (for betting on historical games)
   testMode: boolean;
   testMatchId: string | null;
@@ -173,6 +176,30 @@ export interface GameState {
   getPlayersInGame: () => PlayerGameState[];
   isAnyPlayerInGame: () => boolean;
   getPlayerSkillRating: (puuid: string) => PlayerSkillRating | null;
+
+  // Admin settings
+  toggleBettingLimit: () => void;
+}
+
+// Read betting limit setting from localStorage (default: enabled)
+function getBettingLimitEnabled(): boolean {
+  try {
+    const stored = localStorage.getItem('johnnyff_betting_limit_enabled');
+    if (stored !== null) {
+      return stored === 'true';
+    }
+  } catch (e) {
+    console.error('Error reading betting limit setting:', e);
+  }
+  return true; // Default: enabled
+}
+
+function setBettingLimitEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem('johnnyff_betting_limit_enabled', enabled ? 'true' : 'false');
+  } catch (e) {
+    console.error('Error saving betting limit setting:', e);
+  }
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -180,6 +207,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectedPlayer: null,
   playerStates: new Map(),
   playerSkillRatings: new Map(),
+  bettingLimitEnabled: getBettingLimitEnabled(),
   testMode: false,
   testMatchId: null,
   testMatchData: null,
@@ -635,6 +663,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   getPlayerSkillRating: (puuid: string) => {
     return get().playerSkillRatings.get(puuid) || null;
+  },
+
+  toggleBettingLimit: () => {
+    const current = get().bettingLimitEnabled;
+    const newValue = !current;
+    setBettingLimitEnabled(newValue);
+    set({ bettingLimitEnabled: newValue });
+    console.log(`Betting limit ${newValue ? 'enabled' : 'disabled'}`);
   }
 }));
 

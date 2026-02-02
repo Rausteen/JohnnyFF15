@@ -48,7 +48,9 @@ const Admin = () => {
     startTestMode,
     endTestMode,
     isAnyPlayerInGame,
-    getPlayersInGame
+    getPlayersInGame,
+    bettingLimitEnabled,
+    toggleBettingLimit
   } = useGameStore();
 
   const { addCredits } = useCreditsStore();
@@ -1715,6 +1717,43 @@ const Admin = () => {
                 Aucun pari en attente à résoudre
               </div>
             )}
+          </div>
+
+          {/* Admin Settings */}
+          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 p-6 rounded-2xl border border-zinc-700">
+            <div className="flex items-center gap-3 mb-4">
+              <Settings className="w-5 h-5 text-zinc-400" />
+              <h3 className="font-bold text-white">Paramètres</h3>
+            </div>
+
+            <div className="space-y-4">
+              {/* Betting Limit Toggle */}
+              <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-xl border border-zinc-700">
+                <div>
+                  <p className="font-semibold text-white">Limite de 4 minutes</p>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    {bettingLimitEnabled
+                      ? "Les paris sont bloqués après 4 min de jeu"
+                      : "⚠️ Paris autorisés toute la game"
+                    }
+                  </p>
+                </div>
+                <button
+                  onClick={toggleBettingLimit}
+                  className={`p-2 rounded-lg transition-all ${
+                    bettingLimitEnabled
+                      ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                      : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                  }`}
+                >
+                  {bettingLimitEnabled ? (
+                    <ToggleRight className="w-6 h-6" />
+                  ) : (
+                    <ToggleLeft className="w-6 h-6" />
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Test Mode */}

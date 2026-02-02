@@ -25,7 +25,8 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
     testMatchData,
     testPlayer,
     playerStates,
-    getPlayerSkillRating
+    getPlayerSkillRating,
+    bettingLimitEnabled
   } = useGameStore();
   const { addToCombo, removeFromCombo, isInCombo, selections, canAddPlayer } = useComboStore();
 
@@ -74,16 +75,16 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
     // Prevent self-betting
     if (isSelfBetting) return false;
 
-    // Global betting window: only allow bets in the first 4 minutes
-    if (gameTimeMinutes >= 4) {
+    // Global betting window: only allow bets in the first 4 minutes (if enabled)
+    if (bettingLimitEnabled && gameTimeMinutes >= 4) {
       return false;
     }
 
     return true;
   };
 
-  // Check if betting window is closed (4 minutes)
-  const isBettingWindowClosed = isInGame && gameTimeMinutes >= 4;
+  // Check if betting window is closed (4 minutes) - only if limit is enabled
+  const isBettingWindowClosed = bettingLimitEnabled && isInGame && gameTimeMinutes >= 4;
 
   const handleBet = async () => {
     setError(null);
