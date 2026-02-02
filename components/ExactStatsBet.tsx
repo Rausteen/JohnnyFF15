@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Target, Swords, Skull, Heart, ChevronUp, ChevronDown, Trophy, Loader2, AlertCircle, CheckCircle, UserX } from 'lucide-react';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useGameStore } from '../services/gameStore';
-import { TrackedPlayer } from '../types';
+import { TrackedPlayer, Bet } from '../types';
 import { isUserThePlayer } from '../services/playersService';
+import { getUserPendingBets } from '../services/betsService';
 
 interface ExactStatsBetProps {
   player?: TrackedPlayer;
@@ -13,65 +14,12 @@ interface ExactStatsBetProps {
 
 type BetType = 'kda' | 'damage';
 
-// Calculate odds for exact K/D/A
-// Base odds are high because exact stats are rare
-function calculateKdaOdds(kills: number, deaths: number, assists: number): number {
-  // Base odds for exact K/D/A prediction
-  let baseOdds = 15.0;
+// Fixed odds
+const EXACT_KDA_ODDS = 100;
+const EXACT_DAMAGE_ODDS = 15;
 
-  // Common kill ranges (2-8) are more predictable
-  if (kills >= 2 && kills <= 8) {
-    baseOdds *= 0.8;
-  } else if (kills === 0) {
-    baseOdds *= 1.3; // 0 kills is specific
-  } else if (kills >= 10) {
-    baseOdds *= 1.5; // 10+ kills is rare
-  }
-
-  // Common death ranges (3-7) are more predictable
-  if (deaths >= 3 && deaths <= 7) {
-    baseOdds *= 0.8;
-  } else if (deaths === 0) {
-    baseOdds *= 2.0; // 0 deaths is very rare
-  } else if (deaths >= 10) {
-    baseOdds *= 1.2; // 10+ deaths happens in bad games
-  }
-
-  // Common assist ranges (4-12) are more predictable
-  if (assists >= 4 && assists <= 12) {
-    baseOdds *= 0.85;
-  } else if (assists === 0) {
-    baseOdds *= 1.4; // 0 assists is rare
-  } else if (assists >= 15) {
-    baseOdds *= 1.3; // High assists is good support play
-  }
-
-  // Round to 1 decimal
-  return Math.round(Math.max(8.0, Math.min(50.0, baseOdds)) * 10) / 10;
-}
-
-// Calculate odds for exact damage (within 1k range)
-function calculateDamageOdds(damageK: number): number {
-  // Base odds for damage prediction (1k precision)
-  let baseOdds = 12.0;
-
-  // Very low damage (support/tank/feeder)
-  if (damageK < 5) {
-    baseOdds *= 1.5;
-  } else if (damageK >= 5 && damageK < 10) {
-    baseOdds *= 1.2;
-  } else if (damageK >= 10 && damageK < 18) {
-    // Most common damage range
-    baseOdds *= 0.9;
-  } else if (damageK >= 18 && damageK < 25) {
-    baseOdds *= 1.1;
-  } else if (damageK >= 25) {
-    // High damage carry
-    baseOdds *= 1.4;
-  }
-
-  return Math.round(Math.max(6.0, Math.min(25.0, baseOdds)) * 10) / 10;
-}
+// Max bets per game
+const MAX_DAMAGE_BETS = 3;
 
 function getCategoryFromOdds(odds: number): { label: string; bg: string; text: string; border: string } {
   if (odds < 10) return { label: 'MOYEN', bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/30' };
@@ -107,16 +55,40 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [damageBetsCount, setDamageBetsCount] = useState(0);
 
   const credits = profile?.credits || 0;
 
-  const odds = useMemo(() => {
-    if (betType === 'kda') {
-      return calculateKdaOdds(kills, deaths, assists);
-    } else {
-      return calculateDamageOdds(damageK);
-    }
-  }, [betType, kills, deaths, assists, damageK]);
+  // Count existing damage bets for this game
+  useEffect(() => {
+    const countDamageBets = async () => {
+      if (!user || !betMatchId) {
+        setDamageBetsCount(0);
+        return;
+      }
+      try {
+        const pendingBets = await getUserPendingBets(user.id);
+        const count = pendingBets.filter(
+          bet => bet.matchId === betMatchId && bet.propId.startsWith('exact_damage_')
+        ).length;
+        setDamageBetsCount(count);
+      } catch (err) {
+        console.error('Error counting damage bets:', err);
+      }
+    };
+    countDamageBets();
+
+    // Listen for bet placed events to refresh count
+    const handleBetPlaced = () => countDamageBets();
+    window.addEventListener('betPlaced', handleBetPlaced);
+    return () => window.removeEventListener('betPlaced', handleBetPlaced);
+  }, [user, betMatchId]);
+
+  // Fixed odds
+  const odds = betType === 'kda' ? EXACT_KDA_ODDS : EXACT_DAMAGE_ODDS;
+
+  // Check if max damage bets reached
+  const maxDamageBetsReached = damageBetsCount >= MAX_DAMAGE_BETS;
 
   const potentialGain = amount ? Math.floor(parseInt(amount) * odds) : 0;
   const categoryStyle = getCategoryFromOdds(odds);
@@ -155,6 +127,12 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
 
     if (!isInGame || !activePlayer) {
       setError("Aucune game en cours");
+      return;
+    }
+
+    // Check max damage bets limit
+    if (betType === 'damage' && maxDamageBetsReached) {
+      setError(`Max ${MAX_DAMAGE_BETS} paris dégâts par game !`);
       return;
     }
 
@@ -441,6 +419,14 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
                 </button>
               </div>
             </div>
+
+            {/* Damage bets remaining */}
+            <div className={`text-center text-xs font-bold ${maxDamageBetsReached ? 'text-red-400' : 'text-zinc-400'}`}>
+              {maxDamageBetsReached
+                ? `⚠️ Maximum ${MAX_DAMAGE_BETS} paris dégâts atteint !`
+                : `${MAX_DAMAGE_BETS - damageBetsCount} paris dégâts restants`
+              }
+            </div>
           </>
         )}
 
@@ -448,7 +434,7 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
         <div className="flex items-center justify-center gap-2 py-2">
           <Trophy className="w-4 h-4 text-gold" />
           <span className="text-zinc-400 text-sm">Cote:</span>
-          <span className="text-2xl font-mono font-black text-gold">x{odds.toFixed(1)}</span>
+          <span className="text-2xl font-mono font-black text-gold">x{odds}</span>
         </div>
 
         {/* Quick Bet Buttons */}
@@ -510,7 +496,7 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
         {/* Place Bet Button */}
         <button
           onClick={handlePlaceBet}
-          disabled={!isInGame || !amount || loading || !user || isSelfBetting}
+          disabled={!isInGame || !amount || loading || !user || isSelfBetting || (betType === 'damage' && maxDamageBetsReached)}
           className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 hover:opacity-90 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
