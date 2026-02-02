@@ -989,10 +989,20 @@ interface MatchParticipant {
   firstBloodVictim?: boolean;
   firstBloodKill?: boolean;
   doubleKills?: number;
+  tripleKills?: number;
   pentaKills?: number;
   gameEndedInSurrender?: boolean;
   teamEarlySurrendered?: boolean;
   teamId: number;
+  // Challenges object from Riot API (advanced stats)
+  challenges?: {
+    soloKills?: number;
+    killParticipation?: number;
+    teamDamagePercentage?: number;
+    damagePerMinute?: number;
+    goldPerMinute?: number;
+    visionScorePerMinute?: number;
+  };
 }
 
 // Type for match data
@@ -1096,6 +1106,14 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
     case 'kda8': // Triple kill ou plus
       return (stats.tripleKills || 0) >= 1;
 
+    // ========== SOLO KILLS ==========
+    case 'sk1': // 3 Solo Kills ou plus
+      return (stats.challenges?.soloKills || 0) >= 3;
+    case 'sk2': // 5 Solo Kills ou plus
+      return (stats.challenges?.soloKills || 0) >= 5;
+    case 'sk3': // 0 Solo Kill
+      return (stats.challenges?.soloKills || 0) === 0;
+
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte (<4/min)
       return csPerMin < 4;
@@ -1189,6 +1207,9 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
     case 'kda9': return `KDA: ${kda.toFixed(2)} (${stats.kills}/${stats.deaths}/${stats.assists})`;
     case 'kda7': return `${stats.doubleKills || 0} double kills`;
     case 'kda8': return `${stats.tripleKills || 0} triple kills`;
+    case 'sk1': return `${stats.challenges?.soloKills || 0} solo kills`;
+    case 'sk2': return `${stats.challenges?.soloKills || 0} solo kills`;
+    case 'sk3': return `${stats.challenges?.soloKills || 0} solo kills`;
     case 'gp1': return `${csPerMin.toFixed(1)} CS/min`;
     case 'gp7': return `${csPerMin.toFixed(1)} CS/min`;
     case 'gp2': return `Vision: ${stats.visionScore}`;

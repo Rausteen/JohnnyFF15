@@ -81,6 +81,14 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
     case 'kda8': // Triple kill ou plus
       return `${stats.tripleKills} triple kills`;
 
+    // ========== SOLO KILLS ==========
+    case 'sk1': // 3 Solo Kills ou plus
+      return `${stats.challenges?.soloKills || 0} solo kills`;
+    case 'sk2': // 5 Solo Kills ou plus
+      return `${stats.challenges?.soloKills || 0} solo kills`;
+    case 'sk3': // 0 Solo Kill
+      return `${stats.challenges?.soloKills || 0} solo kills`;
+
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte
       return `${csPerMin.toFixed(1)} CS/min`;
@@ -224,6 +232,16 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
 
     case 'kda8': // Triple kill ou plus
       return stats.tripleKills >= 1;
+
+    // ========== SOLO KILLS ==========
+    case 'sk1': // 3 Solo Kills ou plus
+      return (stats.challenges?.soloKills || 0) >= 3;
+
+    case 'sk2': // 5 Solo Kills ou plus
+      return (stats.challenges?.soloKills || 0) >= 5;
+
+    case 'sk3': // 0 Solo Kill
+      return (stats.challenges?.soloKills || 0) === 0;
 
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte (<4/min)

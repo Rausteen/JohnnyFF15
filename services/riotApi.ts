@@ -200,6 +200,16 @@ export interface MatchParticipant {
   gameEndedInEarlySurrender: boolean;
   gameEndedInSurrender: boolean;
   teamEarlySurrendered: boolean;
+  // Challenges object from Riot API (advanced stats)
+  challenges?: {
+    soloKills?: number;
+    // Other challenge stats can be added as needed
+    killParticipation?: number;
+    teamDamagePercentage?: number;
+    damagePerMinute?: number;
+    goldPerMinute?: number;
+    visionScorePerMinute?: number;
+  };
 }
 
 export interface TeamDto {

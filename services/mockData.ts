@@ -154,6 +154,29 @@ export const MOCK_PROPS: Prop[] = [
     category: 'KDA'
   },
 
+  // ========== SOLO KILLS ==========
+  {
+    id: 'sk1',
+    title: "3 Solo Kills ou plus",
+    description: "{player} fait 3 solo kills ou plus.",
+    odds: 3.0,
+    category: 'KDA'
+  },
+  {
+    id: 'sk2',
+    title: "5 Solo Kills ou plus",
+    description: "{player} fait 5 solo kills ou plus.",
+    odds: 6.0,
+    category: 'KDA'
+  },
+  {
+    id: 'sk3',
+    title: "0 Solo Kill",
+    description: "{player} ne fait aucun solo kill.",
+    odds: 1.8,
+    category: 'KDA'
+  },
+
   // ========== LÉGENDES ABSOLUES ==========
   {
     id: 'kda7',
