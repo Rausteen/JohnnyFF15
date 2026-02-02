@@ -1071,6 +1071,8 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
       return stats.firstBloodKill === true;
     case 'early3': // 5 morts ou plus
       return stats.deaths >= 5;
+    case 'early6': // 4 morts ou moins
+      return stats.deaths <= 4;
     case 'early4': // 0 mort toute la game
       return stats.deaths === 0;
 
@@ -1107,8 +1109,8 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
       return stats.totalDamageDealtToChampions < 8000;
     case 'gp5': // Moins d'or que le support
       return stats.goldEarned < lowestTeammateGold;
-    case 'gp6': // Participation < 15%
-      return killParticipation < 15;
+    case 'gp6': // Participation < 25%
+      return killParticipation < 25;
 
     // ========== RÉSULTAT ==========
     case 'out1': // FF avant 20 min
@@ -1176,6 +1178,7 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
     case 'early1': return stats.firstBloodVictim ? '🩸 First Blood victime' : '✓ Pas First Blood victime';
     case 'early5': return stats.firstBloodKill ? '🗡️ First Blood kill' : '✗ Pas First Blood';
     case 'early3': return `${stats.deaths} morts`;
+    case 'early6': return `${stats.deaths} morts`;
     case 'early4': return `${stats.deaths} morts`;
     case 'kda1': return `${stats.deaths} morts`;
     case 'kda2': return `${stats.deaths} morts`;

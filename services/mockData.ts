@@ -20,6 +20,13 @@ export const MOCK_PROPS: Prop[] = [
     category: 'EARLY'
   },
   {
+    id: 'early6',
+    title: "4 morts ou moins",
+    description: "{player} meurt 4 fois ou moins.",
+    odds: 2.0,
+    category: 'EARLY'
+  },
+  {
     id: 'gp1',
     title: "CS de la honte (<4/min)",
     description: "Moins de 4 CS par minute.",
@@ -58,8 +65,8 @@ export const MOCK_PROPS: Prop[] = [
   },
   {
     id: 'gp6',
-    title: "Participation < 15%",
-    description: "Participe à moins de 15% des kills.",
+    title: "Participation < 25%",
+    description: "Participe à moins de 25% des kills.",
     odds: 2.5,
     category: 'GAMEPLAY'
   },

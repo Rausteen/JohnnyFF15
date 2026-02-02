@@ -42,10 +42,12 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
   const betMatchId = testMode ? testMatchId : playerState?.currentGameId;
 
   // Get player skill rating and calculate adjusted odds
+  // Pass queueId to enable Flex mode odds (440 = Flex, 420 = Solo/Duo)
   const skillRating = activePlayer?.puuid ? getPlayerSkillRating(activePlayer.puuid) : null;
+  const queueId = currentGame?.gameQueueConfigId;
   const { adjustedOdds, propType } = useMemo(
-    () => getAdjustedOdds(prop, skillRating),
-    [prop, skillRating]
+    () => getAdjustedOdds(prop, skillRating, queueId),
+    [prop, skillRating, queueId]
   );
   const oddsInfo = useMemo(
     () => getOddsAdjustmentInfo(prop.odds, adjustedOdds, propType),
