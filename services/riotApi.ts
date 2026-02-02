@@ -210,6 +210,8 @@ export interface MatchParticipant {
     goldPerMinute?: number;
     visionScorePerMinute?: number;
   };
+  // Calculated from Timeline API
+  soloDeaths?: number;
 }
 
 export interface TeamDto {
@@ -229,6 +231,52 @@ export interface TeamDto {
 export interface ObjectiveDto {
   first: boolean;
   kills: number;
+}
+
+// ========== MATCH TIMELINE API TYPES ==========
+export interface MatchTimelineDto {
+  metadata: {
+    dataVersion: string;
+    matchId: string;
+    participants: string[];
+  };
+  info: {
+    frameInterval: number;
+    frames: TimelineFrameDto[];
+    participants: TimelineParticipantDto[];
+  };
+}
+
+export interface TimelineFrameDto {
+  events: TimelineEventDto[];
+  participantFrames: Record<string, ParticipantFrameDto>;
+  timestamp: number;
+}
+
+export interface TimelineEventDto {
+  type: string;
+  timestamp: number;
+  killerId?: number;
+  victimId?: number;
+  assistingParticipantIds?: number[];
+  position?: { x: number; y: number };
+  // Other event properties as needed
+}
+
+export interface ParticipantFrameDto {
+  participantId: number;
+  level: number;
+  currentGold: number;
+  totalGold: number;
+  xp: number;
+  minionsKilled: number;
+  jungleMinionsKilled: number;
+  position: { x: number; y: number };
+}
+
+export interface TimelineParticipantDto {
+  participantId: number;
+  puuid: string;
 }
 
 // ========== CLASH API TYPES ==========

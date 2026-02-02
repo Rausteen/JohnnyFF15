@@ -377,6 +377,85 @@ async function getMatchDetails(matchId: string, region: string): Promise<unknown
   }
 }
 
+// Timeline event type for kill events
+interface TimelineKillEvent {
+  type: string;
+  timestamp: number;
+  killerId: number;
+  victimId: number;
+  assistingParticipantIds: number[];
+}
+
+// Get match timeline from Riot API
+async function getMatchTimeline(matchId: string, region: string): Promise<{
+  participants: Array<{ participantId: number; puuid: string }>;
+  killEvents: TimelineKillEvent[];
+} | null> {
+  const routingMap: Record<string, string> = {
+    EUW: 'europe',
+    EUNE: 'europe',
+    NA: 'americas',
+    KR: 'asia',
+  };
+
+  const routing = routingMap[region] || 'europe';
+  const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}/timeline`;
+
+  try {
+    const response = await fetch(url, {
+      headers: { 'X-Riot-Token': RIOT_API_KEY }
+    });
+
+    if (!response.ok) {
+      console.error(`Match timeline API error: ${response.status}`);
+      return null;
+    }
+
+    const data = await response.json();
+
+    // Extract kill events from all frames
+    const killEvents: TimelineKillEvent[] = [];
+    for (const frame of data.info.frames || []) {
+      for (const event of frame.events || []) {
+        if (event.type === 'CHAMPION_KILL') {
+          killEvents.push({
+            type: event.type,
+            timestamp: event.timestamp,
+            killerId: event.killerId,
+            victimId: event.victimId,
+            assistingParticipantIds: event.assistingParticipantIds || [],
+          });
+        }
+      }
+    }
+
+    return {
+      participants: data.info.participants || [],
+      killEvents,
+    };
+  } catch (error) {
+    console.error('Error fetching match timeline:', error);
+    return null;
+  }
+}
+
+// Count solo deaths for a player from timeline data
+function countSoloDeaths(
+  timeline: { participants: Array<{ participantId: number; puuid: string }>; killEvents: TimelineKillEvent[] },
+  playerPuuid: string
+): number {
+  // Find player's participantId
+  const participant = timeline.participants.find(p => p.puuid === playerPuuid);
+  if (!participant) return 0;
+
+  const participantId = participant.participantId;
+
+  // Count deaths where player is victim and no assists (solo kill)
+  return timeline.killEvents.filter(
+    event => event.victimId === participantId && event.assistingParticipantIds.length === 0
+  ).length;
+}
+
 // Sync last game for all players
 async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message: string; matches: unknown[] }> {
   console.log('📥 Syncing last game for all players...');
@@ -1003,6 +1082,8 @@ interface MatchParticipant {
     goldPerMinute?: number;
     visionScorePerMinute?: number;
   };
+  // Calculated from Timeline API
+  soloDeaths?: number;
 }
 
 // Type for match data
@@ -1114,6 +1195,14 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
     case 'sk3': // 0 Solo Kill
       return (stats.challenges?.soloKills || 0) === 0;
 
+    // ========== SOLO DEATHS (Timeline API) ==========
+    case 'sd1': // 0 Solo Death
+      return (stats.soloDeaths || 0) === 0;
+    case 'sd2': // 3+ Solo Deaths
+      return (stats.soloDeaths || 0) >= 3;
+    case 'sd3': // 5+ Solo Deaths
+      return (stats.soloDeaths || 0) >= 5;
+
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte (<4/min)
       return csPerMin < 4;
@@ -1208,6 +1297,9 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
     case 'sk1': return `${stats.challenges?.soloKills || 0} solo kills`;
     case 'sk2': return `${stats.challenges?.soloKills || 0} solo kills`;
     case 'sk3': return `${stats.challenges?.soloKills || 0} solo kills`;
+    case 'sd1': return `${stats.soloDeaths || 0} solo deaths`;
+    case 'sd2': return `${stats.soloDeaths || 0} solo deaths`;
+    case 'sd3': return `${stats.soloDeaths || 0} solo deaths`;
     case 'gp1': return `${csPerMin.toFixed(1)} CS/min`;
     case 'gp7': return `${csPerMin.toFixed(1)} CS/min`;
     case 'gp2': return `Vision: ${stats.visionScore}`;
@@ -1475,6 +1567,18 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
   if (!playerStats) {
     console.error(`  ❌ Player not found in match participants`);
     return;
+  }
+
+  // Fetch timeline for solo deaths calculation
+  console.log('  📊 Fetching timeline for solo deaths...');
+  const timeline = await getMatchTimeline(matchId, player.region);
+  if (timeline) {
+    const soloDeaths = countSoloDeaths(timeline, player.puuid);
+    (playerStats as MatchParticipant).soloDeaths = soloDeaths;
+    console.log(`  💀 Solo deaths: ${soloDeaths}`);
+  } else {
+    console.log('  ⚠️ Could not fetch timeline, solo deaths will be 0');
+    (playerStats as MatchParticipant).soloDeaths = 0;
   }
 
   // Save match to johnny_matches

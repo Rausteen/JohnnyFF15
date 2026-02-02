@@ -89,6 +89,14 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
     case 'sk3': // 0 Solo Kill
       return `${stats.challenges?.soloKills || 0} solo kills`;
 
+    // ========== SOLO DEATHS (Timeline API) ==========
+    case 'sd1': // 0 Solo Death
+      return `${stats.soloDeaths || 0} solo deaths`;
+    case 'sd2': // 3+ Solo Deaths
+      return `${stats.soloDeaths || 0} solo deaths`;
+    case 'sd3': // 5+ Solo Deaths
+      return `${stats.soloDeaths || 0} solo deaths`;
+
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte
       return `${csPerMin.toFixed(1)} CS/min`;
@@ -240,6 +248,16 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
 
     case 'sk3': // 0 Solo Kill
       return (stats.challenges?.soloKills || 0) === 0;
+
+    // ========== SOLO DEATHS (Timeline API) ==========
+    case 'sd1': // 0 Solo Death
+      return (stats.soloDeaths || 0) === 0;
+
+    case 'sd2': // 3+ Solo Deaths
+      return (stats.soloDeaths || 0) >= 3;
+
+    case 'sd3': // 5+ Solo Deaths
+      return (stats.soloDeaths || 0) >= 5;
 
     // ========== GAMEPLAY ==========
     case 'gp1': // CS de la honte (<4/min)

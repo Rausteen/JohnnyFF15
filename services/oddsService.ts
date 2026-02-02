@@ -38,6 +38,9 @@ const PROP_TYPES: Record<string, PropType> = {
   'sk1': 'POSITIVE',       // 3 Solo Kills ou plus
   'sk2': 'POSITIVE',       // 5 Solo Kills ou plus
   'sk3': 'NEGATIVE',       // 0 Solo Kill
+  'sd1': 'POSITIVE',       // 0 Solo Death
+  'sd2': 'NEGATIVE',       // 3+ Solo Deaths
+  'sd3': 'NEGATIVE',       // 5+ Solo Deaths
 
   // NEUTRAL props (don't change based on skill)
   'out2': 'NEUTRAL',       // Defaite - pure win/loss
@@ -77,6 +80,11 @@ const FLEX_ODDS_OVERRIDES: Record<string, FlexOddsOverride> = {
   'sk1': { low: 5.00, high: 1.80 },      // 3 Solo Kills ou plus
   'sk2': { low: 12.00, high: 3.30 },     // 5 Solo Kills ou plus
   'sk3': { low: 1.40, high: 4.00 },      // 0 Solo Kill
+
+  // Solo deaths props (Timeline API)
+  'sd1': { low: 4.50, high: 1.60 },      // 0 Solo Death
+  'sd2': { low: 1.60, high: 5.00 },      // 3+ Solo Deaths
+  'sd3': { low: 3.00, high: 12.00 },     // 5+ Solo Deaths
 };
 
 // Limits for adjusted odds

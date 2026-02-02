@@ -169,6 +169,29 @@ export const MOCK_PROPS: Prop[] = [
     category: 'KDA'
   },
 
+  // ========== SOLO DEATHS (Timeline API) ==========
+  {
+    id: 'sd1',
+    title: "0 Solo Death",
+    description: "{player} ne se fait jamais solo kill.",
+    odds: 2.5,
+    category: 'KDA'
+  },
+  {
+    id: 'sd2',
+    title: "3+ Solo Deaths",
+    description: "{player} se fait solo kill 3 fois ou plus.",
+    odds: 2.5,
+    category: 'KDA'
+  },
+  {
+    id: 'sd3',
+    title: "5+ Solo Deaths",
+    description: "{player} se fait solo kill 5 fois ou plus.",
+    odds: 5.0,
+    category: 'KDA'
+  },
+
   // ========== LÉGENDES ABSOLUES ==========
   {
     id: 'kda7',
