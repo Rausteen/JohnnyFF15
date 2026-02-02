@@ -9,7 +9,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'out2',
     title: "Défaite",
     description: "{player} perd la game.",
-    odds: 1.7,
+    odds: 2.0,
     category: 'LATE'
   },
   {
@@ -136,7 +136,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'out3',
     title: "VICTOIRE",
     description: "{player} gagne.",
-    odds: 1.6,
+    odds: 2.0,
     category: 'LATE'
   },
   {
