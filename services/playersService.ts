@@ -429,15 +429,6 @@ export function isUserThePlayer(player: TrackedPlayer | undefined, userId: strin
   return player.userId === userId;
 }
 
-// Update player roles
-export async function updatePlayerRoles(
-  playerId: string,
-  primaryRole: PlayerRole | null,
-  secondaryRole: PlayerRole | null
-): Promise<boolean> {
-  return updateTrackedPlayer(playerId, { primaryRole, secondaryRole });
-}
-
 // Update player rank manually (admin function)
 export async function updatePlayerRank(
   playerId: string,

@@ -1,26 +1,8 @@
 // Discord Webhook Service for game notifications
 
-const WEBHOOK_STORAGE_KEY = 'johnny_discord_webhook_url';
-
-// Get webhook URL from localStorage or env
+// Get webhook URL from env
 function getWebhookUrl(): string {
-  const storedUrl = localStorage.getItem(WEBHOOK_STORAGE_KEY);
-  if (storedUrl) return storedUrl;
   return import.meta.env.VITE_DISCORD_WEBHOOK_URL || '';
-}
-
-// Set webhook URL in localStorage
-export function setWebhookUrl(url: string): void {
-  if (url) {
-    localStorage.setItem(WEBHOOK_STORAGE_KEY, url);
-  } else {
-    localStorage.removeItem(WEBHOOK_STORAGE_KEY);
-  }
-}
-
-// Get current webhook URL (for display)
-export function getStoredWebhookUrl(): string {
-  return localStorage.getItem(WEBHOOK_STORAGE_KEY) || '';
 }
 
 interface DiscordEmbed {
@@ -222,21 +204,6 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
   });
 }
 
-export async function notifyBettingClosed(gameId: number): Promise<boolean> {
-  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
-
-  return sendDiscordNotification({
-    embeds: [{
-      title: '🔒 Paris fermés',
-      description: `La fenêtre de paris est terminée.\nLa game est en cours, résultats bientôt !`,
-      color: COLORS.GOLD,
-      footer: {
-        text: 'JohnnyFF15',
-      },
-    }],
-  });
-}
-
 export async function notifyGameEnded(won: boolean, kills: number, deaths: number, assists: number, championName: string, playerName: string = 'Johnny', matchId?: string): Promise<boolean> {
   // Avoid duplicate notifications for the same game end
   const dedupeKey = `${playerName}_${matchId || `${championName}_${kills}_${deaths}_${assists}`}`;
@@ -282,9 +249,4 @@ export async function notifyGameEnded(won: boolean, kills: number, deaths: numbe
       timestamp: new Date().toISOString(),
     }],
   });
-}
-
-// Reset the last notified game (useful for testing)
-export function resetLastNotifiedGame(): void {
-  lastNotifiedGameId = null;
 }

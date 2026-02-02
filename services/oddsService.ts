@@ -10,7 +10,6 @@ type PropType = 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL';
 
 const PROP_TYPES: Record<string, PropType> = {
   // NEGATIVE props (bad things happening - skilled players less likely)
-  'out2': 'NEGATIVE',      // Defaite
   'early3': 'NEGATIVE',    // 5 morts ou plus
   'gp1': 'NEGATIVE',       // CS de la honte (<4/min)
   'kda1': 'NEGATIVE',      // 10 morts ou plus
@@ -220,11 +219,4 @@ export function getOddsAdjustmentInfo(
   }
 
   return { percentChange: Math.abs(percentChange), direction, reason };
-}
-
-/**
- * Get prop type for a given prop ID
- */
-export function getPropType(propId: string): PropType {
-  return PROP_TYPES[propId] || 'NEUTRAL';
 }

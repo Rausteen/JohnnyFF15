@@ -180,33 +180,6 @@ function evaluateBalance(result: BalancedTeamsResult): number {
 }
 
 /**
- * Alternative: Captain mode - let 2 captains pick alternately
- */
-export function generateCaptainDraft(
-  players: PlayerWithSkill[],
-  captain1Id: string,
-  captain2Id: string
-): { captain1: PlayerWithSkill; captain2: PlayerWithSkill; draftPool: PlayerWithSkill[] } {
-  const captain1 = players.find(p => p.id === captain1Id);
-  const captain2 = players.find(p => p.id === captain2Id);
-
-  if (!captain1 || !captain2) {
-    throw new Error('Invalid captain IDs');
-  }
-
-  const draftPool = players.filter(p => p.id !== captain1Id && p.id !== captain2Id);
-
-  // Sort by skill for easier picking
-  draftPool.sort((a, b) => b.skillRating.odverall - a.skillRating.odverall);
-
-  return {
-    captain1,
-    captain2,
-    draftPool
-  };
-}
-
-/**
  * Quick balance - simpler algorithm for testing
  */
 export function quickBalance(players: PlayerWithSkill[]): BalancedTeamsResult {
