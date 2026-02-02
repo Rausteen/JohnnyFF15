@@ -45,6 +45,56 @@ const notifiedGames = new Set<string>();
 // Track previous game state for each player (to detect game end)
 const previousGameState = new Map<string, { isInGame: boolean; gameId: string | null }>();
 
+// ============================================
+// CACHE FOR MATCH DETAILS AND TIMELINE
+// ============================================
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Timeline event type for kill events (needed for cache type)
+interface TimelineKillEvent {
+  type: string;
+  timestamp: number;
+  killerId: number;
+  victimId: number;
+  assistingParticipantIds: number[];
+}
+
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const matchDetailsCache = new Map<string, CacheEntry<unknown>>();
+const matchTimelineCache = new Map<string, CacheEntry<{
+  participants: Array<{ participantId: number; puuid: string }>;
+  killEvents: TimelineKillEvent[];
+}>>();
+
+// Clean expired cache entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  let detailsCleaned = 0;
+  let timelineCleaned = 0;
+
+  for (const [key, value] of matchDetailsCache) {
+    if (now - value.timestamp > CACHE_TTL) {
+      matchDetailsCache.delete(key);
+      detailsCleaned++;
+    }
+  }
+
+  for (const [key, value] of matchTimelineCache) {
+    if (now - value.timestamp > CACHE_TTL) {
+      matchTimelineCache.delete(key);
+      timelineCleaned++;
+    }
+  }
+
+  if (detailsCleaned > 0 || timelineCleaned > 0) {
+    console.log(`🧹 Cache cleanup: ${detailsCleaned} details, ${timelineCleaned} timelines removed`);
+  }
+}, 10 * 60 * 1000);
+
 // Command polling interval (5 seconds)
 const COMMAND_CHECK_INTERVAL = 5000;
 
@@ -348,8 +398,15 @@ async function getMatchHistory(puuid: string, region: string, count: number = 1)
   }
 }
 
-// Get match details from Riot API
+// Get match details from Riot API (with cache)
 async function getMatchDetails(matchId: string, region: string): Promise<unknown | null> {
+  // Check cache first
+  const cached = matchDetailsCache.get(matchId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`  📦 Match details from cache: ${matchId}`);
+    return cached.data;
+  }
+
   const routingMap: Record<string, string> = {
     EUW: 'europe',
     EUNE: 'europe',
@@ -370,27 +427,34 @@ async function getMatchDetails(matchId: string, region: string): Promise<unknown
       return null;
     }
 
-    return await response.json();
+    const data = await response.json();
+
+    // Store in cache
+    matchDetailsCache.set(matchId, {
+      data,
+      timestamp: Date.now()
+    });
+    console.log(`  💾 Match details cached: ${matchId}`);
+
+    return data;
   } catch (error) {
     console.error('Error fetching match details:', error);
     return null;
   }
 }
 
-// Timeline event type for kill events
-interface TimelineKillEvent {
-  type: string;
-  timestamp: number;
-  killerId: number;
-  victimId: number;
-  assistingParticipantIds: number[];
-}
-
-// Get match timeline from Riot API
+// Get match timeline from Riot API (with cache)
 async function getMatchTimeline(matchId: string, region: string): Promise<{
   participants: Array<{ participantId: number; puuid: string }>;
   killEvents: TimelineKillEvent[];
 } | null> {
+  // Check cache first
+  const cached = matchTimelineCache.get(matchId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    console.log(`  📦 Match timeline from cache: ${matchId}`);
+    return cached.data;
+  }
+
   const routingMap: Record<string, string> = {
     EUW: 'europe',
     EUNE: 'europe',
@@ -429,10 +493,19 @@ async function getMatchTimeline(matchId: string, region: string): Promise<{
       }
     }
 
-    return {
+    const result = {
       participants: data.info.participants || [],
       killEvents,
     };
+
+    // Store in cache
+    matchTimelineCache.set(matchId, {
+      data: result,
+      timestamp: Date.now()
+    });
+    console.log(`  💾 Match timeline cached: ${matchId}`);
+
+    return result;
   } catch (error) {
     console.error('Error fetching match timeline:', error);
     return null;
