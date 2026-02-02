@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Medal, Sparkles, TrendingUp, TrendingDown, Target, Loader2, Crown, Award } from 'lucide-react';
+import { Trophy, Medal, Sparkles, TrendingUp, TrendingDown, Crown, Award, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../services/authStore';
+import PlayerBalanceGraph from '../components/PlayerBalanceGraph';
 
 interface LeaderboardUser {
   id: string;
@@ -21,6 +22,8 @@ const Leaderboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user: currentUser } = useAuthStore();
+
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string>(currentUser?.id || '');
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
@@ -43,7 +46,7 @@ const Leaderboard = () => {
 
     fetchLeaderboard();
 
-    // Real-time subscription for instant updates
+    // Real-time subscription
     const subscription = supabase
       .channel('leaderboard-changes')
       .on(
@@ -53,17 +56,11 @@ const Leaderboard = () => {
           schema: 'public',
           table: 'profiles'
         },
-        (payload) => {
-          console.log('Leaderboard update:', payload);
-          // Refetch the full leaderboard to ensure correct order
-          fetchLeaderboard();
-        }
+        () => fetchLeaderboard()
       )
       .subscribe();
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   if (loading) {
@@ -97,15 +94,12 @@ const Leaderboard = () => {
       {/* Top 3 Podium */}
       {users.length >= 3 && (
         <div className="grid grid-cols-3 gap-4 mb-10">
-          {/* 2nd Place */}
           <div className="order-1 pt-8">
             <PodiumCard user={users[1]} rank={2} isCurrentUser={currentUser?.id === users[1].id} />
           </div>
-          {/* 1st Place */}
           <div className="order-2">
             <PodiumCard user={users[0]} rank={1} isCurrentUser={currentUser?.id === users[0].id} />
           </div>
-          {/* 3rd Place */}
           <div className="order-3 pt-12">
             <PodiumCard user={users[2]} rank={3} isCurrentUser={currentUser?.id === users[2].id} />
           </div>
@@ -113,7 +107,7 @@ const Leaderboard = () => {
       )}
 
       {/* Rest of the leaderboard */}
-      <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden mb-10">
         <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-zinc-800/50 text-sm font-bold text-zinc-400 uppercase tracking-wide">
           <div className="col-span-1 text-center">#</div>
           <div className="col-span-4">Joueur</div>
@@ -139,37 +133,44 @@ const Leaderboard = () => {
           </div>
         )}
       </div>
+
+      {/* Bloc Graphique joueur sélectionné */}
+      <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800">
+        <h2 className="text-xl font-bold text-white mb-4">Évolution du portefeuille</h2>
+
+        {/* Select joueur */}
+        <div className="mb-4">
+          <select
+            value={selectedPlayerId}
+            onChange={(e) => setSelectedPlayerId(e.target.value)}
+            className="p-2 rounded-md bg-zinc-800 text-white border border-white/20"
+          >
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.pseudo}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Graphique */}
+        {selectedPlayerId && (
+          <PlayerBalanceGraph userId={selectedPlayerId} initialBalance={10000} />
+        )}
+      </div>
     </div>
   );
 };
 
-// Podium Card for Top 3
+// Podium Card
 const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank: number; isCurrentUser: boolean }) => {
   const winRate = user.total_bets > 0 ? Math.round((user.bets_won / user.total_bets) * 100) : 0;
-
   const rankStyles = {
-    1: {
-      bg: 'bg-gradient-to-b from-gold/20 via-amber-900/10 to-zinc-900',
-      border: 'border-gold/50',
-      icon: <Crown className="w-8 h-8 text-gold" />,
-      text: 'text-gold'
-    },
-    2: {
-      bg: 'bg-gradient-to-b from-zinc-400/20 via-zinc-600/10 to-zinc-900',
-      border: 'border-zinc-400/50',
-      icon: <Medal className="w-7 h-7 text-zinc-300" />,
-      text: 'text-zinc-300'
-    },
-    3: {
-      bg: 'bg-gradient-to-b from-amber-700/20 via-amber-900/10 to-zinc-900',
-      border: 'border-amber-700/50',
-      icon: <Award className="w-6 h-6 text-amber-600" />,
-      text: 'text-amber-600'
-    }
+    1: { bg: 'bg-gradient-to-b from-gold/20 via-amber-900/10 to-zinc-900', border: 'border-gold/50', icon: <Crown className="w-8 h-8 text-gold" />, text: 'text-gold' },
+    2: { bg: 'bg-gradient-to-b from-zinc-400/20 via-zinc-600/10 to-zinc-900', border: 'border-zinc-400/50', icon: <Medal className="w-7 h-7 text-zinc-300" />, text: 'text-zinc-300' },
+    3: { bg: 'bg-gradient-to-b from-amber-700/20 via-amber-900/10 to-zinc-900', border: 'border-amber-700/50', icon: <Award className="w-6 h-6 text-amber-600" />, text: 'text-amber-600' }
   };
-
   const style = rankStyles[rank as keyof typeof rankStyles];
-
   return (
     <Link
       to={`/user/${user.id}`}
@@ -193,19 +194,15 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
   );
 };
 
-// Leaderboard Row for ranks 4+
+// Leaderboard Row
 const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentUser: boolean }> = ({ user, rank, isCurrentUser }) => {
   const winRate = user.total_bets > 0 ? Math.round((user.bets_won / user.total_bets) * 100) : 0;
-  const netGain = user.jc_won - user.jc_lost;
-
   return (
     <Link
       to={`/user/${user.id}`}
       className={`grid grid-cols-12 gap-4 px-6 py-4 hover:bg-zinc-800/50 transition-colors ${isCurrentUser ? 'bg-primary/10 border-l-4 border-primary' : ''}`}
     >
-      <div className="col-span-1 text-center font-bold text-zinc-500">
-        {rank}
-      </div>
+      <div className="col-span-1 text-center font-bold text-zinc-500">{rank}</div>
       <div className="col-span-4 flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center flex-shrink-0">
           <span className="font-bold text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
@@ -219,9 +216,7 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
       </div>
       <div className="col-span-2 text-center">
         <span className="text-white font-bold">{user.total_bets}</span>
-        <span className="text-zinc-500 text-sm ml-1">
-          ({user.bets_won}W/{user.bets_lost}L)
-        </span>
+        <span className="text-zinc-500 text-sm ml-1">({user.bets_won}W/{user.bets_lost}L)</span>
       </div>
       <div className="col-span-2 flex items-center justify-center">
         {winRate >= 50 ? (
