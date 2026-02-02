@@ -35,6 +35,9 @@ const PROP_TYPES: Record<string, PropType> = {
   'early5': 'POSITIVE',    // First Blood kill
   'sp2': 'POSITIVE',       // Le Miracle KDA (KDA > 3.0)
   'sp3': 'POSITIVE',       // Le Carry Mystique (top damage)
+  'sk1': 'POSITIVE',       // 3 Solo Kills ou plus
+  'sk2': 'POSITIVE',       // 5 Solo Kills ou plus
+  'sk3': 'NEGATIVE',       // 0 Solo Kill
 
   // NEUTRAL props (don't change based on skill)
   'out2': 'NEUTRAL',       // Defaite - pure win/loss
@@ -69,6 +72,11 @@ const FLEX_ODDS_OVERRIDES: Record<string, FlexOddsOverride> = {
   'kda3': { low: 1.65, high: 10.00 },    // KDA < 0.5
   'gp6': { low: 1.50, high: 3.63 },      // Participation < 25%
   'gp5': { low: 2.20, high: 10.00 },     // Moins d'or que support
+
+  // Solo kills props
+  'sk1': { low: 5.00, high: 1.80 },      // 3 Solo Kills ou plus
+  'sk2': { low: 12.00, high: 3.30 },     // 5 Solo Kills ou plus
+  'sk3': { low: 1.40, high: 4.00 },      // 0 Solo Kill
 };
 
 // Limits for adjusted odds
