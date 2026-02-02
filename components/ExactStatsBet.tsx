@@ -15,8 +15,8 @@ interface ExactStatsBetProps {
 type BetType = 'kda' | 'damage';
 
 // Fixed odds
-const EXACT_KDA_ODDS = 100;
-const EXACT_DAMAGE_ODDS = 15;
+const EXACT_KDA_ODDS = 13671;
+const EXACT_DAMAGE_ODDS = 41;
 
 // Max bets per game
 const MAX_DAMAGE_BETS = 3;
