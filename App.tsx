@@ -14,7 +14,6 @@ import TeamBalancer from './pages/TeamBalancer';
 import { useAuthStore } from './services/authStore';
 import { useMatchHistoryStore } from './services/matchHistoryStore';
 import { useGameStore } from './services/gameStore';
-import StatsPage from './pages/StatsPage';
 
 const App = () => {
   const initialize = useAuthStore((state) => state.initialize);
@@ -72,7 +71,6 @@ const App = () => {
           <Route path="leaderboard" element={<Leaderboard />} />
           <Route path="team-balancer" element={<TeamBalancer />} />
           <Route path="user/:userId" element={<PublicProfile />} />
-          <Route path="/stats" element={<StatsPage userId={useAuthStore.getState().user?.id || ''} />} />
         </Route>
       </Routes>
     </HashRouter>

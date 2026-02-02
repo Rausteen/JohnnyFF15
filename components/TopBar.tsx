@@ -22,7 +22,6 @@ const navLinks = [
   { path: '/history', label: 'Musée', icon: History },
   { path: '/leaderboard', label: 'Classement', icon: Trophy },
   { path: '/team-balancer', label: '5v5', icon: Swords },
-  { path: '/stats', label: 'Stats', icon: Sparkles }, // <-- Nouveau lien Stats
   ...(isAdmin ? [
     { path: '/admin', label: 'Admin', icon: ShieldAlert }
   ] : []),
