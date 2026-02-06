@@ -30,6 +30,9 @@ const Profile = () => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
+  // Get equipped cosmetics from Supabase (must be before any early return)
+  const { getCosmetic } = useCosmeticsLookup();
+
   // Update countdown timer
   useEffect(() => {
     const updateTimer = () => {
@@ -221,8 +224,6 @@ const Profile = () => {
 
   const canClaim = canClaimDailyBonus();
 
-  // Get equipped cosmetics from Supabase
-  const { getCosmetic } = useCosmeticsLookup();
   const equippedTitle = getCosmetic(profile?.equipped_title);
   const equippedBorder = getCosmetic(profile?.equipped_border);
 
@@ -232,15 +233,15 @@ const Profile = () => {
       <div className="flex items-center gap-4 mb-8">
         {/* Avatar with upload */}
         <div className="relative group">
-          <div className="w-20 h-20 rounded-2xl shadow-lg shadow-primary/30 relative">
+          <div className="w-20 h-20 shadow-lg shadow-primary/30 relative">
             {profile?.avatar_url ? (
               <img
                 src={profile.avatar_url}
                 alt={displayName}
-                className="w-full h-full object-cover rounded-2xl"
+                className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                 <span className="text-3xl font-black text-white">{displayName.charAt(0).toUpperCase()}</span>
               </div>
             )}
@@ -248,7 +249,7 @@ const Profile = () => {
               <img
                 src={equippedBorder.image_url}
                 alt=""
-                className="absolute inset-0 w-full h-full rounded-2xl pointer-events-none z-10 object-cover"
+                className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover"
               />
             )}
           </div>
@@ -256,7 +257,7 @@ const Profile = () => {
           {/* Upload overlay */}
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="absolute inset-0 rounded-2xl bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"
+            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"
           >
             {avatarUploading ? (
               <Loader2 className="w-6 h-6 text-white animate-spin" />

@@ -38,6 +38,9 @@ const PublicProfile = () => {
 
   const isOwnProfile = currentUser?.id === userId;
 
+  // Get equipped cosmetics from Supabase (must be before any early return)
+  const { getCosmetic } = useCosmeticsLookup();
+
   // Load user bets from Supabase
   const loadUserBets = async () => {
     if (!userId) return;
@@ -169,8 +172,6 @@ const PublicProfile = () => {
     year: 'numeric'
   });
 
-  // Get equipped cosmetics from Supabase
-  const { getCosmetic } = useCosmeticsLookup();
   const equippedTitle = getCosmetic(profile.equipped_title);
   const equippedBorder = getCosmetic(profile.equipped_border);
 
@@ -190,15 +191,15 @@ const PublicProfile = () => {
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
           {/* Avatar */}
           <div className="relative">
-            <div className="w-32 h-32 rounded-2xl shadow-lg shadow-primary/30 overflow-hidden relative">
+            <div className="w-32 h-32 shadow-lg shadow-primary/30 overflow-hidden relative">
               {profile.avatar_url ? (
                 <img
                   src={profile.avatar_url}
                   alt={profile.pseudo}
-                  className="w-full h-full object-cover rounded-2xl"
+                  className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                <div className="w-full h-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                   <span className="text-5xl font-black text-white">{profile.pseudo.charAt(0).toUpperCase()}</span>
                 </div>
               )}
@@ -206,7 +207,7 @@ const PublicProfile = () => {
                 <img
                   src={equippedBorder.image_url}
                   alt=""
-                  className="absolute inset-0 w-full h-full rounded-2xl pointer-events-none z-10 object-cover"
+                  className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover"
                 />
               )}
             </div>
