@@ -49,6 +49,7 @@ const Cases = () => {
   const [recentDrops, setRecentDrops] = useState<{ pseudo: string; item: LootItem; caseId: string; timestamp: number }[]>([]);
   const [showInventory, setShowInventory] = useState(false);
   const [inventoryFilter, setInventoryFilter] = useState<'all' | 'badge' | 'title' | 'border'>('all');
+  const [equipping, setEquipping] = useState<string | null>(null);
 
   const rouletteRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -86,6 +87,35 @@ const Cases = () => {
     title: inventoryItems.filter(i => i.type === 'title').length,
     border: inventoryItems.filter(i => i.type === 'border').length,
   }), [inventoryItems]);
+
+  // Equip/unequip cosmetic from inventory
+  const handleEquip = async (itemId: string, itemType: string, isCurrentlyEquipped: boolean) => {
+    if (!user || !profile || equipping) return;
+
+    setEquipping(itemId);
+
+    try {
+      const updateField = itemType === 'badge' ? 'equipped_badge'
+        : itemType === 'title' ? 'equipped_title'
+        : 'equipped_border';
+
+      const newValue = isCurrentlyEquipped ? null : itemId;
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ [updateField]: newValue })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      await loadProfile(user.id);
+    } catch (err) {
+      console.error('Equip error:', err);
+      setError("Erreur lors de l'équipement");
+    } finally {
+      setEquipping(null);
+    }
+  };
 
   // Load recent drops from localStorage (simulated for now)
   useEffect(() => {
@@ -314,17 +344,28 @@ const Cases = () => {
                   (item.type === 'title' && profile?.equipped_title === item.id) ||
                   (item.type === 'border' && profile?.equipped_border === item.id);
 
+                const isEquippingThis = equipping === item.id;
+
                 return (
-                  <div
+                  <button
                     key={item.id}
+                    onClick={() => handleEquip(item.id, item.type, isEquipped)}
+                    disabled={!!equipping}
                     className={`relative p-4 rounded-xl ${rarityConfig.bg} border-2 ${
-                      isEquipped ? 'border-green-500 shadow-lg shadow-green-500/30' : 'border-white/10'
-                    } text-center transition-all hover:scale-105`}
+                      isEquipped ? 'border-green-500 shadow-lg shadow-green-500/30' : 'border-white/10 hover:border-white/30'
+                    } text-center transition-all hover:scale-105 cursor-pointer disabled:cursor-not-allowed disabled:opacity-70`}
                   >
                     {/* Equipped indicator */}
                     {isEquipped && (
                       <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                         <Check className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+
+                    {/* Loading indicator */}
+                    {isEquippingThis && (
+                      <div className="absolute inset-0 bg-black/50 rounded-xl flex items-center justify-center">
+                        <Loader2 className="w-6 h-6 text-white animate-spin" />
                       </div>
                     )}
 
@@ -351,7 +392,12 @@ const Cases = () => {
                       {' • '}
                       {rarityConfig.label}
                     </div>
-                  </div>
+
+                    {/* Action hint */}
+                    <div className={`text-[10px] mt-2 font-bold ${isEquipped ? 'text-red-400' : 'text-green-400'}`}>
+                      {isEquipped ? 'Clic pour retirer' : 'Clic pour équiper'}
+                    </div>
+                  </button>
                 );
               })}
             </div>
@@ -361,7 +407,7 @@ const Cases = () => {
           <div className="mt-6 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700">
             <p className="text-sm text-zinc-400 text-center">
               <Info className="w-4 h-4 inline mr-2" />
-              Pour équiper tes cosmétiques, va dans la <a href="#/shop" className="text-purple-400 hover:underline">Boutique</a> → onglet "Mes Items"
+              Clique sur un item pour l'équiper ou le retirer. Tu peux aussi gérer tes cosmétiques dans la <a href="#/shop" className="text-purple-400 hover:underline">Boutique</a>.
             </p>
           </div>
         </div>
