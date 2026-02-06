@@ -207,7 +207,7 @@ const PublicProfile = () => {
                 <img
                   src={equippedBorder.image_url}
                   alt=""
-                  className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] pointer-events-none z-10 object-cover"
+                  className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
                 />
               )}
             </div>

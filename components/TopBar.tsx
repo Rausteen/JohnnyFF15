@@ -107,7 +107,7 @@ const navLinks = [
                     <img
                       src={equippedBorder.image_url}
                       alt=""
-                      className="absolute -inset-0.5 w-[calc(100%+4px)] h-[calc(100%+4px)] pointer-events-none z-10 object-cover"
+                      className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
                     />
                   )}
                 </div>
@@ -165,7 +165,7 @@ const navLinks = [
                     <img
                       src={equippedBorder.image_url}
                       alt=""
-                      className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] pointer-events-none z-10 object-cover"
+                      className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
                     />
                   )}
                 </div>

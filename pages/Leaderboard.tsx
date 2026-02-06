@@ -200,7 +200,7 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
             <img
               src={border.image_url}
               alt=""
-              className="absolute -inset-1.5 w-[calc(100%+12px)] h-[calc(100%+12px)] pointer-events-none z-10 object-cover"
+              className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
             />
           )}
         </div>
@@ -246,7 +246,7 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
             <img
               src={border.image_url}
               alt=""
-              className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] pointer-events-none z-10 object-cover"
+              className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
             />
           )}
         </div>

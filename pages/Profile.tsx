@@ -249,7 +249,7 @@ const Profile = () => {
               <img
                 src={equippedBorder.image_url}
                 alt=""
-                className="absolute -inset-2 w-[calc(100%+16px)] h-[calc(100%+16px)] pointer-events-none z-10 object-cover"
+                className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
               />
             )}
           </div>
