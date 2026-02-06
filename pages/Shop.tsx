@@ -16,7 +16,7 @@ import { supabase } from '../services/supabase';
 type TabType = 'badges' | 'titles' | 'borders';
 
 const Shop: React.FC = () => {
-  const { profile, refreshProfile } = useCreditsStore();
+  const { profile, loadProfile } = useCreditsStore();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>('badges');
   const [purchasing, setPurchasing] = useState<string | null>(null);
@@ -83,7 +83,7 @@ const Shop: React.FC = () => {
         throw updateError;
       }
 
-      await refreshProfile();
+      if (user) await loadProfile(user.id);
       setSuccess(`${item.name} acheté !`);
       setTimeout(() => setSuccess(null), 3000);
     } catch (err: any) {
@@ -117,7 +117,7 @@ const Shop: React.FC = () => {
         throw updateError;
       }
 
-      await refreshProfile();
+      if (user) await loadProfile(user.id);
     } catch (err) {
       console.error('Equip error:', err);
       setError("Erreur lors de l'équipement");
