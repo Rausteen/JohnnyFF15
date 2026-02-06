@@ -229,6 +229,13 @@ export const MOCK_PROPS: Prop[] = [
     category: 'LATE'
   },
   {
+    id: 'gp8',
+    title: "Top Damage de la Game",
+    description: "{player} fait le plus de dégâts de la game (10 joueurs).",
+    odds: 25.0,
+    category: 'GAMEPLAY'
+  },
+  {
     id: 'sp6',
     title: "Le Pentakill",
     description: "{player} fait un pentakill.",

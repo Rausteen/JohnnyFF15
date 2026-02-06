@@ -1,19 +1,31 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Landing from './pages/Landing';
-import Dashboard from './pages/Dashboard';
-import MyBets from './pages/MyBets';
-import History from './pages/History';
-import Admin from './pages/Admin';
-import Login from './pages/Login';
-import Profile from './pages/Profile';
-import Leaderboard from './pages/Leaderboard';
-import PublicProfile from './pages/PublicProfile';
-import TeamBalancer from './pages/TeamBalancer';
 import { useAuthStore } from './services/authStore';
 import { useMatchHistoryStore } from './services/matchHistoryStore';
 import { useGameStore } from './services/gameStore';
+
+// Lazy loaded pages for code splitting
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const MyBets = lazy(() => import('./pages/MyBets'));
+const History = lazy(() => import('./pages/History'));
+const Admin = lazy(() => import('./pages/Admin'));
+const Login = lazy(() => import('./pages/Login'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Leaderboard = lazy(() => import('./pages/Leaderboard'));
+const PublicProfile = lazy(() => import('./pages/PublicProfile'));
+const TeamBalancer = lazy(() => import('./pages/TeamBalancer'));
+
+// Loading fallback component
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[50vh]">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-400 mx-auto mb-4"></div>
+      <p className="text-gray-400">Chargement...</p>
+    </div>
+  </div>
+);
 
 const App = () => {
   const initialize = useAuthStore((state) => state.initialize);
@@ -59,20 +71,22 @@ const App = () => {
 
   return (
     <HashRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Landing />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="my-bets" element={<MyBets />} />
-          <Route path="history" element={<History />} />
-          <Route path="admin" element={<Admin />} />
-          <Route path="login" element={<Login />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="leaderboard" element={<Leaderboard />} />
-          <Route path="team-balancer" element={<TeamBalancer />} />
-          <Route path="user/:userId" element={<PublicProfile />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Landing />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="my-bets" element={<MyBets />} />
+            <Route path="history" element={<History />} />
+            <Route path="admin" element={<Admin />} />
+            <Route path="login" element={<Login />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="leaderboard" element={<Leaderboard />} />
+            <Route path="team-balancer" element={<TeamBalancer />} />
+            <Route path="user/:userId" element={<PublicProfile />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </HashRouter>
   );
 };

@@ -130,7 +130,10 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
       return `KDA: ${kda.toFixed(2)}`;
     case 'sp3': // Le Carry Mystique
       const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
-      return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg (max: ${(maxTeamDamage / 1000).toFixed(1)}k)`;
+      return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg (max équipe: ${(maxTeamDamage / 1000).toFixed(1)}k)`;
+    case 'gp8': // Top Damage de la Game
+      const maxGameDamage = Math.max(...match.info.participants.map(p => p.totalDamageDealtToChampions));
+      return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dmg (max game: ${(maxGameDamage / 1000).toFixed(1)}k)`;
     case 'sp6': // Le Pentakill
       return `${stats.pentaKills} pentakill${stats.pentaKills > 1 ? 's' : ''}`;
 
@@ -302,8 +305,12 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
       return kda > 3.0;
 
     case 'sp3': // Le Carry Mystique (top damage de l'équipe)
-      const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
-      return stats.totalDamageDealtToChampions === maxTeamDamage;
+      const maxTeamDmg = Math.max(...team.map(p => p.totalDamageDealtToChampions));
+      return stats.totalDamageDealtToChampions === maxTeamDmg;
+
+    case 'gp8': // Top Damage de la Game (10 joueurs)
+      const maxGameDmg = Math.max(...match.info.participants.map(p => p.totalDamageDealtToChampions));
+      return stats.totalDamageDealtToChampions === maxGameDmg;
 
     case 'sp6': // Le Pentakill
       return stats.pentaKills >= 1;

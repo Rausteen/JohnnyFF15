@@ -8,6 +8,7 @@ import { notifyGameStarted, notifyGameEnded } from './discordWebhook';
 import { TrackedPlayer, PlayerSkillRating } from '../types';
 import { getActiveTrackedPlayers, updateTrackedPlayer } from './playersService';
 import { calculateMultiplePlayerSkillRatings } from './playerStatsService';
+import { notifyGameStart, requestNotificationPermission } from './notificationService';
 
 // Browser ID is no longer used - all status updates come from game-watcher
 // const BROWSER_ID = `browser_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -274,6 +275,11 @@ export const useGameStore = create<GameState>((set, get) => ({
 
       // Auto-subscribe to realtime updates (no polling needed, game-watcher handles checks)
       get().subscribeToAllPlayers();
+
+      // Request notification permission (non-blocking)
+      requestNotificationPermission().then(granted => {
+        if (granted) console.log('Browser notifications enabled');
+      });
     } catch (error: any) {
       console.error('Error loading tracked players:', error);
       set({ error: error.message, loading: false });
@@ -371,6 +377,25 @@ export const useGameStore = create<GameState>((set, get) => ({
                 lastMatchStats: currentState?.lastMatchStats || null
               });
               set({ playerStates: newPlayerStates });
+
+              // Handle game start - send browser notification
+              if (!wasInGame && newData.is_in_game && newData.game_id && !hasNotifiedGame(player.puuid, newData.game_id)) {
+                console.log(`Game started for ${player.displayName}! Sending browser notification...`);
+                setNotifiedGame(player.puuid, newData.game_id);
+
+                // Get champion name from game data if available
+                const championName = newData.game_data?.participants?.find(
+                  p => p.puuid === player.puuid
+                )?.championId;
+                const championNameStr = championName ? getChampionName(championName) : undefined;
+                const gameMode = newData.game_data?.gameMode || 'Ranked';
+
+                notifyGameStart(
+                  [player.displayName],
+                  championNameStr ? [championNameStr] : undefined,
+                  gameMode
+                );
+              }
 
               // Handle game end
               if (wasInGame && !newData.is_in_game && previousGameId) {

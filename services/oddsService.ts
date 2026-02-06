@@ -33,7 +33,8 @@ const PROP_TYPES: Record<string, PropType> = {
   'kda8': 'POSITIVE',      // Triple kill ou plus
   'early5': 'POSITIVE',    // First Blood kill
   'sp2': 'POSITIVE',       // Le Miracle KDA (KDA > 3.0)
-  'sp3': 'POSITIVE',       // Le Carry Mystique (top damage)
+  'sp3': 'POSITIVE',       // Le Carry Mystique (top damage equipe)
+  'gp8': 'POSITIVE',       // Top Damage de la Game (10 joueurs)
   'sk1': 'POSITIVE',       // 3 Solo Kills ou plus
   'sk2': 'POSITIVE',       // 5 Solo Kills ou plus
   'sk3': 'NEGATIVE',       // 0 Solo Kill
