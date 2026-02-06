@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore, TRANSFER_LIMITS } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
-import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown } from 'lucide-react';
+import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, ShoppingBag } from 'lucide-react';
+import { getCosmeticById } from '../services/shopData';
 
 interface UserOption {
   id: string;
@@ -127,16 +128,33 @@ const Profile = () => {
 
   const canClaim = canClaimDailyBonus();
 
+  // Get equipped cosmetics
+  const equippedBadge = profile?.equipped_badge ? getCosmeticById(profile.equipped_badge) : null;
+  const equippedTitle = profile?.equipped_title ? getCosmeticById(profile.equipped_title) : null;
+  const equippedBorder = profile?.equipped_border ? getCosmeticById(profile.equipped_border) : null;
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30">
-          <span className="text-3xl font-black text-white">{displayName.charAt(0).toUpperCase()}</span>
+        <div
+          className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30"
+          style={equippedBorder?.gradient ? { background: equippedBorder.gradient, padding: '4px' } : undefined}
+        >
+          <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
+            <span className="text-3xl font-black text-white">{displayName.charAt(0).toUpperCase()}</span>
+          </div>
         </div>
         <div>
-          <h1 className="text-3xl font-black text-white">{displayName}</h1>
-          <p className="text-zinc-400">Joueur du Casino du Throw</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-black text-white">{displayName}</h1>
+            {equippedBadge?.icon && <span className="text-2xl" title={equippedBadge.name}>{equippedBadge.icon}</span>}
+          </div>
+          {equippedTitle ? (
+            <p className="text-zinc-400 italic">"{equippedTitle.name}"</p>
+          ) : (
+            <p className="text-zinc-400">Joueur du Casino du Throw</p>
+          )}
         </div>
       </div>
 

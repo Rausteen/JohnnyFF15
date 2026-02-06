@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift, Trophy, Swords, ShoppingBag } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
+import { getCosmeticById } from '../services/shopData';
 
 const TopBar = () => {
   const { user, signOut, loading: authLoading } = useAuthStore();
@@ -36,6 +37,10 @@ const navLinks = [
 
   // Get user display name
   const displayName = profile?.pseudo || user?.user_metadata?.pseudo || user?.email?.split('@')[0] || 'Utilisateur';
+
+  // Get equipped cosmetics
+  const equippedBadge = profile?.equipped_badge ? getCosmeticById(profile.equipped_badge) : null;
+  const equippedBorder = profile?.equipped_border ? getCosmeticById(profile.equipped_border) : null;
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/80 backdrop-blur-xl">
@@ -90,12 +95,18 @@ const navLinks = [
                 to="/profile"
                 className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition cursor-pointer"
               >
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <span className="text-xs font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center"
+                  style={equippedBorder?.gradient ? { background: equippedBorder.gradient, padding: '2px' } : undefined}
+                >
+                  <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                    <span className="text-xs font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
+                  </div>
                 </div>
                 <span className="text-sm font-bold text-white truncate max-w-[100px]">
                   {displayName}
                 </span>
+                {equippedBadge?.icon && <span title={equippedBadge.name}>{equippedBadge.icon}</span>}
               </Link>
               {/* Sign Out */}
               <button
@@ -135,10 +146,16 @@ const navLinks = [
           {user && profile && (
             <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-zinc-900 to-black border border-gold/20 mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <span className="text-sm font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center"
+                  style={equippedBorder?.gradient ? { background: equippedBorder.gradient, padding: '2px' } : undefined}
+                >
+                  <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                    <span className="text-sm font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
+                  </div>
                 </div>
                 <span className="text-white font-bold">{displayName}</span>
+                {equippedBadge?.icon && <span title={equippedBadge.name}>{equippedBadge.icon}</span>}
               </div>
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-gold" />

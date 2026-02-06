@@ -5,6 +5,7 @@ import { supabase } from '../services/supabase';
 import { useAuthStore } from '../services/authStore';
 import { getBetsByUserId } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
+import { getCosmeticById } from '../services/shopData';
 
 interface PublicUser {
   id: string;
@@ -16,6 +17,9 @@ interface PublicUser {
   jc_won: number;
   jc_lost: number;
   created_at: string;
+  equipped_badge?: string | null;
+  equipped_title?: string | null;
+  equipped_border?: string | null;
 }
 
 const PublicProfile = () => {
@@ -164,6 +168,11 @@ const PublicProfile = () => {
     year: 'numeric'
   });
 
+  // Get equipped cosmetics
+  const equippedBadge = profile.equipped_badge ? getCosmeticById(profile.equipped_badge) : null;
+  const equippedTitle = profile.equipped_title ? getCosmeticById(profile.equipped_title) : null;
+  const equippedBorder = profile.equipped_border ? getCosmeticById(profile.equipped_border) : null;
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Back button */}
@@ -180,8 +189,13 @@ const PublicProfile = () => {
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
           {/* Avatar */}
           <div className="relative">
-            <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30">
-              <span className="text-5xl font-black text-white">{profile.pseudo.charAt(0).toUpperCase()}</span>
+            <div
+              className="w-32 h-32 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30"
+              style={equippedBorder?.gradient ? { background: equippedBorder.gradient, padding: '5px' } : undefined}
+            >
+              <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
+                <span className="text-5xl font-black text-white">{profile.pseudo.charAt(0).toUpperCase()}</span>
+              </div>
             </div>
             {rank && rank <= 3 && (
               <div className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-gold flex items-center justify-center shadow-lg">
@@ -194,12 +208,16 @@ const PublicProfile = () => {
           <div className="flex-1 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
               <h1 className="text-3xl font-black text-white">{profile.pseudo}</h1>
+              {equippedBadge?.icon && <span className="text-2xl" title={equippedBadge.name}>{equippedBadge.icon}</span>}
               {isOwnProfile && (
                 <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm font-bold">
                   C'est toi !
                 </span>
               )}
             </div>
+            {equippedTitle && (
+              <p className="text-zinc-400 italic mb-2">"{equippedTitle.name}"</p>
+            )}
 
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-zinc-400 mb-6">
               <div className="flex items-center gap-2">
