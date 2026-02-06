@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Sparkles, Crown, Frame, Check, Loader2, AlertCircle } from 'lucide-react';
+import { ShoppingBag, Sparkles, Crown, Frame, Check, Loader2, AlertCircle, Lock } from 'lucide-react';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import {
@@ -7,7 +7,6 @@ import {
   TITLES,
   BORDERS,
   CosmeticItem,
-  CosmeticType,
   getRarityColor,
   getRarityBg,
   getRarityLabel,
@@ -69,7 +68,6 @@ const Shop: React.FC = () => {
     setSuccess(null);
 
     try {
-      // Update profile: subtract credits and add to owned cosmetics
       const newOwnedCosmetics = [...ownedCosmetics, item.id];
       const newCredits = credits - item.price;
 
@@ -88,9 +86,9 @@ const Shop: React.FC = () => {
       await refreshProfile();
       setSuccess(`${item.name} acheté !`);
       setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Purchase error:', err);
-      setError("Erreur lors de l'achat");
+      setError(err?.message || "Erreur lors de l'achat");
     } finally {
       setPurchasing(null);
     }
@@ -108,7 +106,6 @@ const Shop: React.FC = () => {
         : item.type === 'title' ? 'equipped_title'
         : 'equipped_border';
 
-      // Toggle: if already equipped, unequip (set to null)
       const newValue = isEquipped(item) ? null : item.id;
 
       const { error: updateError } = await supabase
@@ -129,164 +126,232 @@ const Shop: React.FC = () => {
     }
   };
 
-  const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-    { id: 'badges', label: 'Badges', icon: <Sparkles className="w-4 h-4" /> },
-    { id: 'titles', label: 'Titres', icon: <Crown className="w-4 h-4" /> },
-    { id: 'borders', label: 'Bordures', icon: <Frame className="w-4 h-4" /> },
+  const tabs: { id: TabType; label: string; icon: React.ReactNode; count: number }[] = [
+    { id: 'badges', label: 'Badges', icon: <Sparkles className="w-5 h-5" />, count: BADGES.length },
+    { id: 'titles', label: 'Titres', icon: <Crown className="w-5 h-5" />, count: TITLES.length },
+    { id: 'borders', label: 'Bordures', icon: <Frame className="w-5 h-5" />, count: BORDERS.length },
   ];
 
+  const getRarityGlow = (rarity: CosmeticItem['rarity']) => {
+    switch (rarity) {
+      case 'common': return '';
+      case 'rare': return 'shadow-[0_0_20px_rgba(59,130,246,0.3)]';
+      case 'epic': return 'shadow-[0_0_25px_rgba(168,85,247,0.4)]';
+      case 'legendary': return 'shadow-[0_0_30px_rgba(234,179,8,0.5)]';
+    }
+  };
+
+  const getRarityBorder = (rarity: CosmeticItem['rarity']) => {
+    switch (rarity) {
+      case 'common': return 'border-zinc-600';
+      case 'rare': return 'border-blue-500/50';
+      case 'epic': return 'border-purple-500/50';
+      case 'legendary': return 'border-yellow-500/50 animate-pulse';
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center">
-            <ShoppingBag className="w-6 h-6 text-white" />
+    <div className="min-h-screen">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500 mb-4 shadow-2xl shadow-purple-500/30">
+            <ShoppingBag className="w-10 h-10 text-white" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Boutique</h1>
-            <p className="text-zinc-400 text-sm">Personnalise ton profil</p>
+          <h1 className="text-4xl font-black text-white mb-2">Boutique</h1>
+          <p className="text-zinc-400">Flex sur les autres avec des cosmétiques exclusifs</p>
+
+          {/* Balance */}
+          <div className="inline-flex items-center gap-3 mt-6 px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-amber-500/10 border border-yellow-500/30">
+            <Sparkles className="w-5 h-5 text-yellow-400" />
+            <span className="text-2xl font-black font-mono text-yellow-400">{credits.toLocaleString()}</span>
+            <span className="text-yellow-400/70 font-bold">JC</span>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-sm text-zinc-400">Tes Johnny Coins</div>
-          <div className="text-2xl font-bold text-gold font-mono">{credits.toLocaleString()} JC</div>
+
+        {/* Messages */}
+        {error && (
+          <div className="max-w-md mx-auto mb-6 flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+        {success && (
+          <div className="max-w-md mx-auto mb-6 flex items-center gap-3 p-4 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400">
+            <Check className="w-5 h-5 flex-shrink-0" />
+            <span>{success}</span>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex justify-center mb-8">
+          <div className="inline-flex gap-2 p-2 bg-zinc-900/80 rounded-2xl border border-zinc-800">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-primary to-accent text-white shadow-lg shadow-primary/30'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  activeTab === tab.id ? 'bg-white/20' : 'bg-zinc-700'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Messages */}
-      {error && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400">
-          <AlertCircle className="w-4 h-4" />
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400">
-          <Check className="w-4 h-4" />
-          {success}
-        </div>
-      )}
+        {/* Items Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {getItemsForTab().map(item => {
+            const owned = isOwned(item.id);
+            const equipped = isEquipped(item);
+            const canAfford = credits >= item.price;
+            const isLoading = purchasing === item.id;
 
-      {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-zinc-900/50 rounded-xl">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium transition-all ${
-              activeTab === tab.id
-                ? 'bg-primary text-white'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-            }`}
-          >
-            {tab.icon}
-            {tab.label}
-          </button>
-        ))}
-      </div>
+            return (
+              <div
+                key={item.id}
+                className={`relative group rounded-2xl border-2 transition-all duration-300 overflow-hidden
+                  ${getRarityBorder(item.rarity)} ${getRarityGlow(item.rarity)}
+                  ${owned ? 'bg-zinc-900/50' : 'bg-zinc-900/80 hover:scale-[1.02]'}
+                  ${equipped ? 'ring-2 ring-primary ring-offset-2 ring-offset-zinc-950' : ''}
+                `}
+              >
+                {/* Rarity indicator top bar */}
+                <div className={`h-1 ${
+                  item.rarity === 'common' ? 'bg-zinc-500' :
+                  item.rarity === 'rare' ? 'bg-gradient-to-r from-blue-400 to-blue-600' :
+                  item.rarity === 'epic' ? 'bg-gradient-to-r from-purple-400 to-purple-600' :
+                  'bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-600'
+                }`} />
 
-      {/* Items Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {getItemsForTab().map(item => {
-          const owned = isOwned(item.id);
-          const equipped = isEquipped(item);
-          const canAfford = credits >= item.price;
-          const isLoading = purchasing === item.id;
-
-          return (
-            <div
-              key={item.id}
-              className={`relative p-4 rounded-xl border transition-all ${
-                owned
-                  ? 'bg-zinc-800/50 border-zinc-700'
-                  : getRarityBg(item.rarity)
-              } ${equipped ? 'ring-2 ring-primary' : ''}`}
-            >
-              {/* Rarity badge */}
-              <div className={`absolute top-3 right-3 text-xs font-medium px-2 py-0.5 rounded-full ${getRarityBg(item.rarity)} ${getRarityColor(item.rarity)}`}>
-                {getRarityLabel(item.rarity)}
-              </div>
-
-              {/* Item display */}
-              <div className="mb-4">
-                {item.type === 'badge' && item.icon && (
-                  <div className="text-4xl mb-2">{item.icon}</div>
-                )}
-                {item.type === 'border' && item.gradient && (
-                  <div
-                    className="w-16 h-16 rounded-xl mb-2"
-                    style={{ background: item.gradient }}
-                  />
-                )}
-                {item.type === 'title' && (
-                  <div className={`text-lg font-bold mb-2 ${getRarityColor(item.rarity)}`}>
-                    "{item.name}"
+                <div className="p-5">
+                  {/* Item Icon/Preview */}
+                  <div className="flex items-center justify-center h-24 mb-4">
+                    {item.type === 'badge' && item.icon && (
+                      <div className="text-6xl transform group-hover:scale-110 transition-transform">
+                        {item.icon}
+                      </div>
+                    )}
+                    {item.type === 'border' && item.gradient && (
+                      <div
+                        className="w-20 h-20 rounded-2xl transform group-hover:scale-110 transition-transform"
+                        style={{ background: item.gradient }}
+                      />
+                    )}
+                    {item.type === 'title' && (
+                      <div className={`text-xl font-black text-center ${getRarityColor(item.rarity)}`}>
+                        "{item.name}"
+                      </div>
+                    )}
                   </div>
-                )}
-                <h3 className="font-bold text-white">{item.name}</h3>
-                <p className="text-sm text-zinc-400">{item.description}</p>
-              </div>
 
-              {/* Price / Actions */}
-              <div className="flex items-center justify-between">
-                {owned ? (
-                  <span className="text-sm text-green-400 flex items-center gap-1">
-                    <Check className="w-4 h-4" />
-                    Possédé
-                  </span>
-                ) : (
-                  <span className={`font-bold font-mono ${canAfford ? 'text-gold' : 'text-red-400'}`}>
-                    {item.price.toLocaleString()} JC
-                  </span>
-                )}
+                  {/* Item Info */}
+                  <div className="text-center mb-4">
+                    <div className={`inline-block text-xs font-bold px-3 py-1 rounded-full mb-2 ${getRarityBg(item.rarity)} ${getRarityColor(item.rarity)}`}>
+                      {getRarityLabel(item.rarity)}
+                    </div>
+                    <h3 className="font-bold text-white text-lg">{item.name}</h3>
+                    <p className="text-sm text-zinc-500 mt-1">{item.description}</p>
+                  </div>
 
-                {owned ? (
-                  <button
-                    onClick={() => handleEquip(item)}
-                    disabled={isLoading}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                      equipped
-                        ? 'bg-primary text-white'
-                        : 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
-                    }`}
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : equipped ? (
-                      'Équipé'
+                  {/* Price & Actions */}
+                  <div className="space-y-3">
+                    {owned ? (
+                      <>
+                        <div className="flex items-center justify-center gap-2 py-2 text-green-400">
+                          <Check className="w-5 h-5" />
+                          <span className="font-bold">Possédé</span>
+                        </div>
+                        <button
+                          onClick={() => handleEquip(item)}
+                          disabled={isLoading}
+                          className={`w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                            equipped
+                              ? 'bg-primary text-white'
+                              : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                          }`}
+                        >
+                          {isLoading ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : equipped ? (
+                            <>
+                              <Check className="w-5 h-5" />
+                              Équipé
+                            </>
+                          ) : (
+                            'Équiper'
+                          )}
+                        </button>
+                      </>
                     ) : (
-                      'Équiper'
+                      <>
+                        <div className={`text-center py-2 font-mono text-xl font-black ${canAfford ? 'text-yellow-400' : 'text-red-400'}`}>
+                          {item.price.toLocaleString()} JC
+                        </div>
+                        <button
+                          onClick={() => handlePurchase(item)}
+                          disabled={!canAfford || isLoading || !user}
+                          className={`w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                            !user
+                              ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                              : canAfford
+                                ? 'bg-gradient-to-r from-primary to-accent text-white hover:opacity-90 hover:shadow-lg hover:shadow-primary/30'
+                                : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                          }`}
+                        >
+                          {isLoading ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : !user ? (
+                            <>
+                              <Lock className="w-4 h-4" />
+                              Connecte-toi
+                            </>
+                          ) : !canAfford ? (
+                            <>
+                              <Lock className="w-4 h-4" />
+                              Pas assez de JC
+                            </>
+                          ) : (
+                            'Acheter'
+                          )}
+                        </button>
+                      </>
                     )}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handlePurchase(item)}
-                    disabled={!canAfford || isLoading}
-                    className="px-4 py-2 bg-gradient-to-r from-primary to-accent rounded-lg text-sm font-medium text-white transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      'Acheter'
-                    )}
-                  </button>
-                )}
+                  </div>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
 
-      {/* Info box */}
-      <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800">
-        <h3 className="font-bold text-white mb-2">Comment ça marche ?</h3>
-        <ul className="text-sm text-zinc-400 space-y-1">
-          <li>• <strong>Badges</strong> s'affichent à côté de ton pseudo</li>
-          <li>• <strong>Titres</strong> apparaissent sous ton nom</li>
-          <li>• <strong>Bordures</strong> personnalisent ton profil</li>
-          <li>• Tu peux équiper un item de chaque type en même temps</li>
-        </ul>
+        {/* Legend */}
+        <div className="mt-12 flex flex-wrap justify-center gap-6 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-zinc-500"></div>
+            <span className="text-zinc-400">Commun</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <span className="text-zinc-400">Rare</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+            <span className="text-zinc-400">Épique</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-yellow-500 animate-pulse"></div>
+            <span className="text-zinc-400">Légendaire</span>
+          </div>
+        </div>
       </div>
     </div>
   );
