@@ -101,6 +101,11 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
       return;
     }
 
+    if (val > 30000) {
+      setError("Mise maximum combo: 30 000 JC");
+      return;
+    }
+
     setLoading(true);
 
     try {
