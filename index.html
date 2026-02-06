@@ -85,23 +85,64 @@
                           linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
       }
 
-      /* Animated border for profile avatars */
+      /* Animated flame border for profile avatars */
       .animated-border {
         position: relative;
+        z-index: 1;
       }
-      .animated-border::before {
+      .animated-border::before,
+      .animated-border::after {
         content: "";
         position: absolute;
-        inset: -3px;
+        inset: -4px;
         border-radius: inherit;
-        background: conic-gradient(from 0deg, #ff5a00, #ffcc00, #ff004c, #ff5a00);
-        animation: spin-border 2.5s linear infinite;
-        filter: blur(4px);
-        opacity: 0.9;
         z-index: -1;
       }
-      @keyframes spin-border {
-        to { transform: rotate(360deg); }
+      .animated-border::before {
+        background: linear-gradient(45deg,
+          #ff0000, #ff4500, #ff8c00, #ffd700,
+          #ff8c00, #ff4500, #ff0000, #ff4500,
+          #ff8c00, #ffd700, #ff8c00, #ff4500, #ff0000);
+        background-size: 400% 400%;
+        animation: flame-dance 2s ease-in-out infinite;
+        filter: blur(6px);
+        opacity: 0.95;
+      }
+      .animated-border::after {
+        background: radial-gradient(circle at 50% 100%,
+          rgba(255, 200, 0, 0.9) 0%,
+          rgba(255, 100, 0, 0.7) 30%,
+          rgba(255, 0, 0, 0.5) 60%,
+          transparent 80%);
+        animation: flame-flicker 0.15s ease-in-out infinite alternate, flame-pulse 1s ease-in-out infinite;
+        filter: blur(3px);
+        opacity: 0.8;
+      }
+      @keyframes flame-dance {
+        0%, 100% {
+          background-position: 0% 50%;
+          transform: scale(1) rotate(0deg);
+        }
+        25% {
+          background-position: 50% 25%;
+          transform: scale(1.02) rotate(1deg);
+        }
+        50% {
+          background-position: 100% 50%;
+          transform: scale(1.05) rotate(0deg);
+        }
+        75% {
+          background-position: 50% 75%;
+          transform: scale(1.02) rotate(-1deg);
+        }
+      }
+      @keyframes flame-flicker {
+        0% { opacity: 0.7; transform: scale(0.98); }
+        100% { opacity: 0.9; transform: scale(1.02); }
+      }
+      @keyframes flame-pulse {
+        0%, 100% { filter: blur(3px) brightness(1); }
+        50% { filter: blur(4px) brightness(1.2); }
       }
     </style>
   <script type="importmap">
