@@ -4,7 +4,7 @@ import { useAuthStore } from '../services/authStore';
 import { useCreditsStore, TRANSFER_LIMITS } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
 import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, Camera, X } from 'lucide-react';
-import { getCosmeticById } from '../services/shopData';
+import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
 
 interface UserOption {
   id: string;
@@ -221,10 +221,10 @@ const Profile = () => {
 
   const canClaim = canClaimDailyBonus();
 
-  // Get equipped cosmetics
-  const equippedBadge = profile?.equipped_badge ? getCosmeticById(profile.equipped_badge) : null;
-  const equippedTitle = profile?.equipped_title ? getCosmeticById(profile.equipped_title) : null;
-  const equippedBorder = profile?.equipped_border ? getCosmeticById(profile.equipped_border) : null;
+  // Get equipped cosmetics from Supabase
+  const { getCosmetic } = useCosmeticsLookup();
+  const equippedTitle = getCosmetic(profile?.equipped_title);
+  const equippedBorder = getCosmetic(profile?.equipped_border);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -232,9 +232,7 @@ const Profile = () => {
       <div className="flex items-center gap-4 mb-8">
         {/* Avatar with upload */}
         <div className="relative group">
-          <div
-            className={`w-20 h-20 rounded-2xl shadow-lg shadow-primary/30 relative ${equippedBorder?.animated ? 'animated-border' : ''}`}
-          >
+          <div className="w-20 h-20 rounded-2xl shadow-lg shadow-primary/30 relative">
             {profile?.avatar_url ? (
               <img
                 src={profile.avatar_url}
@@ -246,20 +244,11 @@ const Profile = () => {
                 <span className="text-3xl font-black text-white">{displayName.charAt(0).toUpperCase()}</span>
               </div>
             )}
-            {equippedBorder?.gradient && !equippedBorder?.animated && (
-              <div
-                className="absolute inset-0 rounded-2xl pointer-events-none z-10"
-                style={
-                  equippedBorder.gradient.startsWith('url(')
-                    ? { background: equippedBorder.gradient }
-                    : {
-                        background: equippedBorder.gradient,
-                        WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                        WebkitMaskComposite: 'xor',
-                        maskComposite: 'exclude',
-                        padding: '4px',
-                      } as React.CSSProperties
-                }
+            {equippedBorder?.image_url && (
+              <img
+                src={equippedBorder.image_url}
+                alt=""
+                className="absolute inset-0 w-full h-full rounded-2xl pointer-events-none z-10 object-cover"
               />
             )}
           </div>
@@ -299,7 +288,6 @@ const Profile = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-black text-white">{displayName}</h1>
-            {equippedBadge?.icon && <span className="text-2xl" title={equippedBadge.name}>{equippedBadge.icon}</span>}
           </div>
           {equippedTitle ? (
             <p className="text-zinc-400 italic">"{equippedTitle.name}"</p>

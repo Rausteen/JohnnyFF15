@@ -5,7 +5,7 @@ import { supabase } from '../services/supabase';
 import { useAuthStore } from '../services/authStore';
 import { getBetsByUserId } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
-import { getCosmeticById } from '../services/shopData';
+import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
 
 interface PublicUser {
   id: string;
@@ -169,10 +169,10 @@ const PublicProfile = () => {
     year: 'numeric'
   });
 
-  // Get equipped cosmetics
-  const equippedBadge = profile.equipped_badge ? getCosmeticById(profile.equipped_badge) : null;
-  const equippedTitle = profile.equipped_title ? getCosmeticById(profile.equipped_title) : null;
-  const equippedBorder = profile.equipped_border ? getCosmeticById(profile.equipped_border) : null;
+  // Get equipped cosmetics from Supabase
+  const { getCosmetic } = useCosmeticsLookup();
+  const equippedTitle = getCosmetic(profile.equipped_title);
+  const equippedBorder = getCosmetic(profile.equipped_border);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -190,9 +190,7 @@ const PublicProfile = () => {
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
           {/* Avatar */}
           <div className="relative">
-            <div
-              className={`w-32 h-32 rounded-2xl shadow-lg shadow-primary/30 overflow-hidden relative ${equippedBorder?.animated ? 'animated-border' : ''}`}
-            >
+            <div className="w-32 h-32 rounded-2xl shadow-lg shadow-primary/30 overflow-hidden relative">
               {profile.avatar_url ? (
                 <img
                   src={profile.avatar_url}
@@ -204,20 +202,11 @@ const PublicProfile = () => {
                   <span className="text-5xl font-black text-white">{profile.pseudo.charAt(0).toUpperCase()}</span>
                 </div>
               )}
-              {equippedBorder?.gradient && !equippedBorder?.animated && (
-                <div
-                  className="absolute inset-0 rounded-2xl pointer-events-none z-10"
-                  style={
-                    equippedBorder.gradient.startsWith('url(')
-                      ? { background: equippedBorder.gradient }
-                      : {
-                          background: equippedBorder.gradient,
-                          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                          WebkitMaskComposite: 'xor',
-                          maskComposite: 'exclude',
-                          padding: '5px',
-                        } as React.CSSProperties
-                  }
+              {equippedBorder?.image_url && (
+                <img
+                  src={equippedBorder.image_url}
+                  alt=""
+                  className="absolute inset-0 w-full h-full rounded-2xl pointer-events-none z-10 object-cover"
                 />
               )}
             </div>
@@ -232,7 +221,6 @@ const PublicProfile = () => {
           <div className="flex-1 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
               <h1 className="text-3xl font-black text-white">{profile.pseudo}</h1>
-              {equippedBadge?.icon && <span className="text-2xl" title={equippedBadge.name}>{equippedBadge.icon}</span>}
               {isOwnProfile && (
                 <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm font-bold">
                   C'est toi !

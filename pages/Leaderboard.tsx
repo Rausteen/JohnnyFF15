@@ -4,7 +4,7 @@ import { Trophy, Medal, Sparkles, TrendingUp, TrendingDown, Crown, Award, Loader
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../services/authStore';
 import PlayerBalanceGraph from '../components/PlayerBalanceGraph';
-import { getCosmeticById } from '../services/shopData';
+import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
 
 interface LeaderboardUser {
   id: string;
@@ -170,9 +170,9 @@ const Leaderboard = () => {
 // Podium Card
 const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank: number; isCurrentUser: boolean }) => {
   const winRate = user.total_bets > 0 ? Math.round((user.bets_won / user.total_bets) * 100) : 0;
-  const badge = user.equipped_badge ? getCosmeticById(user.equipped_badge) : null;
-  const title = user.equipped_title ? getCosmeticById(user.equipped_title) : null;
-  const border = user.equipped_border ? getCosmeticById(user.equipped_border) : null;
+  const { getCosmetic } = useCosmeticsLookup();
+  const title = getCosmetic(user.equipped_title);
+  const border = getCosmetic(user.equipped_border);
   const rankStyles = {
     1: { bg: 'bg-gradient-to-b from-gold/20 via-amber-900/10 to-zinc-900', border: 'border-gold/50', icon: <Crown className="w-8 h-8 text-gold" />, text: 'text-gold' },
     2: { bg: 'bg-gradient-to-b from-zinc-400/20 via-zinc-600/10 to-zinc-900', border: 'border-zinc-400/50', icon: <Medal className="w-7 h-7 text-zinc-300" />, text: 'text-zinc-300' },
@@ -196,26 +196,16 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
               <span className="text-2xl font-black text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
             </div>
           )}
-          {border?.gradient && (
-            <div
-              className="absolute inset-0 rounded-full pointer-events-none z-10"
-              style={
-                border.gradient.startsWith('url(')
-                  ? { background: border.gradient }
-                  : {
-                      background: border.gradient,
-                      WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                      WebkitMaskComposite: 'xor',
-                      maskComposite: 'exclude',
-                      padding: '3px',
-                    } as React.CSSProperties
-              }
+          {border?.image_url && (
+            <img
+              src={border.image_url}
+              alt=""
+              className="absolute inset-0 w-full h-full rounded-full pointer-events-none z-10 object-cover"
             />
           )}
         </div>
         <div className="flex items-center gap-1">
           <h3 className="font-bold text-white text-lg truncate max-w-full">{user.pseudo}</h3>
-          {badge?.icon && <span className="text-lg" title={badge.name}>{badge.icon}</span>}
         </div>
         {title && <div className="text-xs text-zinc-400 italic">"{title.name}"</div>}
         <div className={`flex items-center gap-2 mt-2 ${style.text}`}>
@@ -233,8 +223,8 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
 // Leaderboard Row
 const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentUser: boolean }> = ({ user, rank, isCurrentUser }) => {
   const winRate = user.total_bets > 0 ? Math.round((user.bets_won / user.total_bets) * 100) : 0;
-  const badge = user.equipped_badge ? getCosmeticById(user.equipped_badge) : null;
-  const border = user.equipped_border ? getCosmeticById(user.equipped_border) : null;
+  const { getCosmetic } = useCosmeticsLookup();
+  const border = getCosmetic(user.equipped_border);
   return (
     <Link
       to={`/user/${user.id}`}
@@ -252,25 +242,15 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
               <span className="font-bold text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
             </div>
           )}
-          {border?.gradient && (
-            <div
-              className="absolute inset-0 rounded-full pointer-events-none z-10"
-              style={
-                border.gradient.startsWith('url(')
-                  ? { background: border.gradient }
-                  : {
-                      background: border.gradient,
-                      WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-                      WebkitMaskComposite: 'xor',
-                      maskComposite: 'exclude',
-                      padding: '2px',
-                    } as React.CSSProperties
-              }
+          {border?.image_url && (
+            <img
+              src={border.image_url}
+              alt=""
+              className="absolute inset-0 w-full h-full rounded-full pointer-events-none z-10 object-cover"
             />
           )}
         </div>
         <span className="font-bold text-white truncate">{user.pseudo}</span>
-        {badge?.icon && <span title={badge.name}>{badge.icon}</span>}
         {isCurrentUser && <span className="text-xs text-primary">(toi)</span>}
       </div>
       <div className="col-span-3 flex items-center justify-end gap-2">

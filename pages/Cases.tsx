@@ -437,7 +437,11 @@ const Cases = () => {
                             : 'border-white/10'
                         } flex flex-col items-center justify-center p-2 transition-all duration-300`}
                       >
-                        <div className="text-3xl mb-1">{display.icon}</div>
+                        {item.kind === 'cosmetic' && item.cosmetic?.image_url ? (
+                          <img src={item.cosmetic.preview_url || item.cosmetic.image_url} alt={item.cosmetic.name} className="w-16 h-16 object-contain mb-1" />
+                        ) : (
+                          <div className="text-3xl mb-1">{display.icon}</div>
+                        )}
                         <div className={`text-xs font-bold ${display.color} text-center truncate w-full`}>
                           {display.name}
                         </div>
