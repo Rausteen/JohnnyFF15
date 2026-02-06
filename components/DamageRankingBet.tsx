@@ -4,7 +4,11 @@ import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
 import { useGameStore } from '../services/gameStore';
+import { getUserPendingBets } from '../services/betsService';
 import { TrackedPlayer } from '../types';
+
+// Max 1 damage ranking bet per game
+const MAX_RANKING_BETS = 1;
 
 // Odds based on number of players ranked
 // 3 players: 3! / 1 = 6 combinations, but only partial ranking
@@ -39,6 +43,7 @@ const DamageRankingBet: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [draggedPlayer, setDraggedPlayer] = useState<TrackedPlayer | null>(null);
+  const [rankingBetsCount, setRankingBetsCount] = useState(0);
 
   // Get all tracked players currently in the same Flex game
   const playersInFlexGame = useMemo(() => {
@@ -90,6 +95,32 @@ const DamageRankingBet: React.FC = () => {
     ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
     : 0;
   const isBettingWindowClosed = bettingLimitEnabled && gameTimeMinutes >= 4;
+
+  // Count existing ranking bets for this game
+  const maxRankingBetsReached = rankingBetsCount >= MAX_RANKING_BETS;
+
+  useEffect(() => {
+    const countRankingBets = async () => {
+      if (!user || !betMatchId) {
+        setRankingBetsCount(0);
+        return;
+      }
+      try {
+        const pendingBets = await getUserPendingBets(user.id);
+        const count = pendingBets.filter(
+          bet => bet.matchId === betMatchId && bet.propId.startsWith('damage_ranking_')
+        ).length;
+        setRankingBetsCount(count);
+      } catch (err) {
+        console.error('Error counting ranking bets:', err);
+      }
+    };
+    countRankingBets();
+
+    const handleBetPlaced = () => countRankingBets();
+    window.addEventListener('betPlaced', handleBetPlaced);
+    return () => window.removeEventListener('betPlaced', handleBetPlaced);
+  }, [user, betMatchId]);
 
   // Available players (not yet ranked)
   const availablePlayers = useMemo(() => {
@@ -166,6 +197,11 @@ const DamageRankingBet: React.FC = () => {
 
     if (isBettingWindowClosed) {
       setError("Paris fermés après 4 minutes");
+      return;
+    }
+
+    if (maxRankingBetsReached) {
+      setError("Maximum 1 pari classement dégâts par game");
       return;
     }
 
@@ -414,7 +450,7 @@ const DamageRankingBet: React.FC = () => {
         {/* Place Bet Button */}
         <button
           onClick={handlePlaceBet}
-          disabled={!canPlaceBet || !amount || loading || !user || isBettingWindowClosed}
+          disabled={!canPlaceBet || !amount || loading || !user || isBettingWindowClosed || maxRankingBetsReached}
           className="w-full py-3 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 hover:opacity-90 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
@@ -424,6 +460,8 @@ const DamageRankingBet: React.FC = () => {
             </>
           ) : !user ? (
             'Connecte-toi pour parier'
+          ) : maxRankingBetsReached ? (
+            'Pari déjà placé pour cette game'
           ) : isBettingWindowClosed ? (
             'Paris fermés (4 min)'
           ) : !canPlaceBet ? (
