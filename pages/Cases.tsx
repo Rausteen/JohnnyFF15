@@ -38,7 +38,7 @@ function getCosmeticInfo(id: string): { type: string; name: string; icon?: strin
 const Cases = () => {
   const { user } = useAuthStore();
   const { profile, loadProfile } = useCreditsStore();
-  const [selectedCase, setSelectedCase] = useState<Case | null>(null);
+  const [selectedCase, setSelectedCase] = useState<Case | null>(CASES[0]);
   const [isOpening, setIsOpening] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [wonItem, setWonItem] = useState<LootItem | null>(null);
@@ -413,45 +413,7 @@ const Cases = () => {
         </div>
       )}
 
-      {/* Case Selection */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-        {CASES.map((caseItem) => (
-          <button
-            key={caseItem.id}
-            onClick={() => setSelectedCase(caseItem)}
-            disabled={isOpening}
-            className={`relative p-6 rounded-2xl border-2 transition-all duration-300 ${
-              selectedCase?.id === caseItem.id
-                ? 'border-primary bg-primary/10 scale-105'
-                : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500 hover:scale-102'
-            } ${isOpening ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {/* Case Image */}
-            <div className={`w-24 h-24 mx-auto mb-4 rounded-2xl bg-gradient-to-br ${caseItem.color} flex items-center justify-center text-5xl shadow-lg ${caseItem.glowColor}`}>
-              {caseItem.image}
-            </div>
-
-            {/* Case Info */}
-            <h3 className="text-lg font-bold text-white mb-1">{caseItem.name}</h3>
-            <p className="text-xs text-zinc-400 mb-3 line-clamp-2">{caseItem.description}</p>
-
-            {/* Price */}
-            <div className="flex items-center justify-center gap-2">
-              <Sparkles className="w-4 h-4 text-gold" />
-              <span className="font-mono font-bold text-gold">{caseItem.price.toLocaleString('fr-FR')} JC</span>
-            </div>
-
-            {/* Can't afford indicator */}
-            {profile && profile.credits < caseItem.price && (
-              <div className="absolute top-2 right-2 px-2 py-1 rounded-full bg-red-500/20 text-red-400 text-xs font-bold">
-                Pas assez
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Selected Case Details & Open Button */}
+      {/* Case Details & Open Button */}
       {selectedCase && (
         <div className="bg-zinc-900 rounded-3xl border border-zinc-800 p-8 mb-12">
           <div className="flex flex-col md:flex-row items-center gap-8">

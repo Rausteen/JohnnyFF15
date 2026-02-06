@@ -94,135 +94,55 @@ export const CASE_BORDERS: LootItem[] = [
 
 export const CASES: Case[] = [
   {
-    id: 'basic',
-    name: 'Caisse Basique',
-    description: 'Pour les débutants. Petits gains mais accessible.',
-    price: 2000,
-    image: '📦',
-    color: 'from-zinc-600 to-zinc-800',
-    glowColor: 'shadow-zinc-500/30',
-    lootTable: [
-      // JC Rewards (75%)
-      { id: 'basic_jc_500', type: 'jc', name: '500 JC', jcAmount: 500, rarity: 'common', dropRate: 35 },
-      { id: 'basic_jc_1000', type: 'jc', name: '1 000 JC', jcAmount: 1000, rarity: 'common', dropRate: 20 },
-      { id: 'basic_jc_1500', type: 'jc', name: '1 500 JC', jcAmount: 1500, rarity: 'uncommon', dropRate: 12 },
-      { id: 'basic_jc_2500', type: 'jc', name: '2 500 JC', jcAmount: 2500, rarity: 'uncommon', dropRate: 8 },
-      // Cosmetics (22%)
-      { ...CASE_BADGES[0], dropRate: 8 }, // Dés Chanceux
-      { ...CASE_BADGES[1], dropRate: 7 }, // Trèfle
-      { ...CASE_BADGES[2], dropRate: 4 }, // Machine à Sous
-      { ...CASE_BADGES[4], dropRate: 2 }, // Diamant Brut
-      { ...CASE_TITLES[0], dropRate: 1 }, // Le Chanceux
-      // Big wins (3%)
-      { id: 'basic_jc_5000', type: 'jc', name: '5 000 JC', jcAmount: 5000, rarity: 'rare', dropRate: 2.5 },
-      { id: 'basic_jc_10000', type: 'jc', name: '10 000 JC', jcAmount: 10000, rarity: 'epic', dropRate: 0.5 },
-    ],
-  },
-  {
-    id: 'premium',
-    name: 'Caisse Premium',
-    description: 'Meilleures chances pour les cosmétiques rares.',
+    id: 'challenger',
+    name: 'Challenger Case',
+    description: 'La caisse unique. Toutes les raretés, tous les cosmétiques, un seul prix.',
     price: 10000,
-    image: '🎁',
-    color: 'from-blue-600 to-blue-900',
-    glowColor: 'shadow-blue-500/30',
+    image: '⚔️',
+    color: 'from-orange-500 via-red-600 to-purple-700',
+    glowColor: 'shadow-orange-500/50',
     lootTable: [
-      // JC Rewards (60%)
-      { id: 'premium_jc_2000', type: 'jc', name: '2 000 JC', jcAmount: 2000, rarity: 'common', dropRate: 25 },
-      { id: 'premium_jc_5000', type: 'jc', name: '5 000 JC', jcAmount: 5000, rarity: 'common', dropRate: 15 },
-      { id: 'premium_jc_8000', type: 'jc', name: '8 000 JC', jcAmount: 8000, rarity: 'uncommon', dropRate: 10 },
-      { id: 'premium_jc_12000', type: 'jc', name: '12 000 JC', jcAmount: 12000, rarity: 'uncommon', dropRate: 6 },
-      { id: 'premium_jc_20000', type: 'jc', name: '20 000 JC', jcAmount: 20000, rarity: 'rare', dropRate: 4 },
-      // Cosmetics (35%)
-      { ...CASE_BADGES[2], dropRate: 8 }, // Machine à Sous
-      { ...CASE_BADGES[3], dropRate: 6 }, // Liasse
-      { ...CASE_BADGES[4], dropRate: 5 }, // Diamant Brut
-      { ...CASE_BADGES[5], dropRate: 4 }, // To The Moon
-      { ...CASE_BADGES[6], dropRate: 3 }, // En Feu
-      { ...CASE_TITLES[0], dropRate: 3 }, // Le Chanceux
-      { ...CASE_TITLES[1], dropRate: 2 }, // Parieur Fou
-      { ...CASE_TITLES[2], dropRate: 2 }, // Whale Officiel
-      { ...CASE_BORDERS[0], dropRate: 1.5 }, // Néon
-      { ...CASE_BADGES[8], dropRate: 0.5 }, // Couronne Divine
-      // Big wins (5%)
-      { id: 'premium_jc_35000', type: 'jc', name: '35 000 JC', jcAmount: 35000, rarity: 'epic', dropRate: 3 },
-      { id: 'premium_jc_50000', type: 'jc', name: '50 000 JC', jcAmount: 50000, rarity: 'legendary', dropRate: 1.5 },
-      { ...CASE_BORDERS[2], dropRate: 0.5 }, // Arc-en-ciel
-    ],
-  },
-  {
-    id: 'legendary',
-    name: 'Caisse Légendaire',
-    description: 'Items épiques et légendaires. Gros potentiel.',
-    price: 50000,
-    image: '👑',
-    color: 'from-amber-500 to-amber-800',
-    glowColor: 'shadow-gold/50',
-    lootTable: [
-      // JC Rewards (55%)
-      { id: 'legend_jc_10000', type: 'jc', name: '10 000 JC', jcAmount: 10000, rarity: 'common', dropRate: 20 },
-      { id: 'legend_jc_25000', type: 'jc', name: '25 000 JC', jcAmount: 25000, rarity: 'common', dropRate: 12 },
-      { id: 'legend_jc_40000', type: 'jc', name: '40 000 JC', jcAmount: 40000, rarity: 'uncommon', dropRate: 10 },
-      { id: 'legend_jc_60000', type: 'jc', name: '60 000 JC', jcAmount: 60000, rarity: 'uncommon', dropRate: 6 },
-      { id: 'legend_jc_100000', type: 'jc', name: '100 000 JC', jcAmount: 100000, rarity: 'rare', dropRate: 4 },
-      { id: 'legend_jc_150000', type: 'jc', name: '150 000 JC', jcAmount: 150000, rarity: 'epic', dropRate: 3 },
-      // Cosmetics (40%)
-      { ...CASE_BADGES[5], dropRate: 6 }, // To The Moon
-      { ...CASE_BADGES[6], dropRate: 5 }, // En Feu
-      { ...CASE_BADGES[7], dropRate: 5 }, // Étoile Filante
-      { ...CASE_BADGES[8], dropRate: 4 }, // Couronne Divine
-      { ...CASE_BADGES[9], dropRate: 3 }, // Orbe Mystique
-      { ...CASE_TITLES[2], dropRate: 4 }, // Whale Officiel
-      { ...CASE_TITLES[3], dropRate: 3 }, // RNG Manipulateur
-      { ...CASE_TITLES[4], dropRate: 2 }, // Touché par la Grâce
-      { ...CASE_BORDERS[0], dropRate: 3 }, // Néon
-      { ...CASE_BORDERS[1], dropRate: 2.5 }, // Coucher de Soleil
-      { ...CASE_BORDERS[2], dropRate: 1.5 }, // Arc-en-ciel
-      { ...CASE_BORDERS[3], dropRate: 1 }, // Inferno
-      // Jackpot (5%)
-      { id: 'legend_jc_250000', type: 'jc', name: '250 000 JC', jcAmount: 250000, rarity: 'legendary', dropRate: 3 },
-      { ...CASE_BADGES[10], dropRate: 1 }, // Crâne du Throw
-      { ...CASE_BORDERS[5], dropRate: 1 }, // Cosmos
-    ],
-  },
-  {
-    id: 'mythic',
-    name: 'Caisse Mythique',
-    description: 'La caisse ultime. Jackpots et items mythiques.',
-    price: 200000,
-    image: '🔮',
-    color: 'from-purple-600 via-pink-600 to-red-600',
-    glowColor: 'shadow-purple-500/50',
-    lootTable: [
-      // JC Rewards (50%)
-      { id: 'mythic_jc_20000', type: 'jc', name: '20 000 JC', jcAmount: 20000, rarity: 'common', dropRate: 15 },
-      { id: 'mythic_jc_50000', type: 'jc', name: '50 000 JC', jcAmount: 50000, rarity: 'common', dropRate: 12 },
-      { id: 'mythic_jc_75000', type: 'jc', name: '75 000 JC', jcAmount: 75000, rarity: 'uncommon', dropRate: 8 },
-      { id: 'mythic_jc_100000', type: 'jc', name: '100 000 JC', jcAmount: 100000, rarity: 'uncommon', dropRate: 6 },
-      { id: 'mythic_jc_150000', type: 'jc', name: '150 000 JC', jcAmount: 150000, rarity: 'rare', dropRate: 5 },
-      { id: 'mythic_jc_250000', type: 'jc', name: '250 000 JC', jcAmount: 250000, rarity: 'rare', dropRate: 4 },
-      // Epic+ Cosmetics (40%)
-      { ...CASE_BADGES[6], dropRate: 4 }, // En Feu
-      { ...CASE_BADGES[7], dropRate: 4 }, // Étoile Filante
-      { ...CASE_BADGES[8], dropRate: 5 }, // Couronne Divine
-      { ...CASE_BADGES[9], dropRate: 4 }, // Orbe Mystique
-      { ...CASE_BADGES[10], dropRate: 3 }, // Crâne du Throw
-      { ...CASE_BADGES[11], dropRate: 2 }, // Étoile Cosmique
-      { ...CASE_TITLES[3], dropRate: 3 }, // RNG Manipulateur
-      { ...CASE_TITLES[4], dropRate: 3 }, // Touché par la Grâce
-      { ...CASE_TITLES[5], dropRate: 2 }, // Le Millionnaire
-      { ...CASE_TITLES[6], dropRate: 1.5 }, // Maître du Casino
-      { ...CASE_TITLES[7], dropRate: 1 }, // Dieu du Throw
-      { ...CASE_BORDERS[2], dropRate: 2 }, // Arc-en-ciel
-      { ...CASE_BORDERS[3], dropRate: 2 }, // Inferno
-      { ...CASE_BORDERS[4], dropRate: 1.5 }, // Glacial
-      { ...CASE_BORDERS[5], dropRate: 1.5 }, // Cosmos
-      { ...CASE_BORDERS[6], dropRate: 0.5 }, // Divin
-      // Jackpots (10%)
-      { id: 'mythic_jc_500000', type: 'jc', name: '500 000 JC', jcAmount: 500000, rarity: 'legendary', dropRate: 5 },
-      { id: 'mythic_jc_1000000', type: 'jc', name: '1 000 000 JC', jcAmount: 1000000, rarity: 'legendary', dropRate: 3 },
-      { id: 'mythic_jc_2000000', type: 'jc', name: '2 000 000 JC JACKPOT!', jcAmount: 2000000, rarity: 'mythic', dropRate: 1.5 },
-      { id: 'mythic_ticket', type: 'ticket', name: 'Ticket Caisse Mythique', icon: '🎫', rarity: 'mythic', dropRate: 0.5 },
+      // JC Rewards (53%)
+      { id: 'chall_jc_2000', type: 'jc', name: '2 000 JC', jcAmount: 2000, rarity: 'common', dropRate: 19 },
+      { id: 'chall_jc_5000', type: 'jc', name: '5 000 JC', jcAmount: 5000, rarity: 'common', dropRate: 14 },
+      { id: 'chall_jc_8000', type: 'jc', name: '8 000 JC', jcAmount: 8000, rarity: 'uncommon', dropRate: 10 },
+      { id: 'chall_jc_12000', type: 'jc', name: '12 000 JC', jcAmount: 12000, rarity: 'uncommon', dropRate: 7 },
+      { id: 'chall_jc_20000', type: 'jc', name: '20 000 JC', jcAmount: 20000, rarity: 'rare', dropRate: 3 },
+      // Common Cosmetics (10%)
+      { ...CASE_BADGES[0], dropRate: 5 },  // Dés Chanceux
+      { ...CASE_BADGES[1], dropRate: 5 },  // Trèfle
+      // Uncommon Cosmetics (7%)
+      { ...CASE_BADGES[2], dropRate: 4 },  // Machine à Sous
+      { ...CASE_BADGES[3], dropRate: 3 },  // Liasse
+      // Rare Cosmetics (9%)
+      { ...CASE_BADGES[4], dropRate: 3 },  // Diamant Brut
+      { ...CASE_BADGES[5], dropRate: 2.5 }, // To The Moon
+      { ...CASE_TITLES[0], dropRate: 2 },  // Le Chanceux
+      { ...CASE_TITLES[1], dropRate: 1.5 }, // Parieur Fou
+      // Epic Cosmetics (7.3%)
+      { ...CASE_BADGES[6], dropRate: 2 },  // En Feu
+      { ...CASE_BADGES[7], dropRate: 1.5 }, // Étoile Filante
+      { ...CASE_TITLES[2], dropRate: 1.5 }, // Whale Officiel
+      { ...CASE_TITLES[3], dropRate: 1 },  // RNG Manipulateur
+      { ...CASE_BORDERS[0], dropRate: 0.8 }, // Néon
+      { ...CASE_BORDERS[1], dropRate: 0.5 }, // Coucher de Soleil
+      // Legendary (3.9%)
+      { ...CASE_BADGES[8], dropRate: 0.8 },  // Couronne Divine
+      { ...CASE_BADGES[9], dropRate: 0.6 },  // Orbe Mystique
+      { ...CASE_TITLES[4], dropRate: 0.5 },  // Touché par la Grâce
+      { ...CASE_TITLES[5], dropRate: 0.3 },  // Le Millionnaire
+      { ...CASE_BORDERS[2], dropRate: 0.4 },  // Arc-en-ciel
+      { ...CASE_BORDERS[3], dropRate: 0.3 },  // Inferno
+      { id: 'chall_jc_50000', type: 'jc', name: '50 000 JC', jcAmount: 50000, rarity: 'legendary', dropRate: 1 },
+      // Mythic (0.8%)
+      { ...CASE_BADGES[10], dropRate: 0.15 }, // Crâne du Throw
+      { ...CASE_BADGES[11], dropRate: 0.1 },  // Étoile Cosmique
+      { ...CASE_TITLES[6], dropRate: 0.1 },   // Maître du Casino
+      { ...CASE_TITLES[7], dropRate: 0.05 },  // Dieu du Throw
+      { ...CASE_BORDERS[5], dropRate: 0.1 },  // Cosmos
+      { ...CASE_BORDERS[6], dropRate: 0.05 }, // Divin
+      { id: 'chall_jc_100000', type: 'jc', name: '100 000 JC', jcAmount: 100000, rarity: 'mythic', dropRate: 0.2 },
+      { ...CASE_BORDERS[4], dropRate: 0.05 }, // Glacial
     ],
   },
 ];
