@@ -26,7 +26,7 @@ const Cases = () => {
   // Load cosmetics from Supabase
   useEffect(() => {
     const loadCosmetics = async () => {
-      const { data } = await supabase.from('cosmetics').select('*');
+      const { data } = await supabase.from('cosmetics').select('*').limit(5000);
       if (data) setCosmetics(data);
     };
     loadCosmetics();

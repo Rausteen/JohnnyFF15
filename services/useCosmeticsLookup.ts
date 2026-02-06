@@ -16,7 +16,7 @@ export function useCosmeticsLookup() {
 
   useEffect(() => {
     if (cachedCosmetics) return;
-    supabase.from('cosmetics').select('*').then(({ data }) => {
+    supabase.from('cosmetics').select('*').limit(5000).then(({ data }) => {
       if (data) {
         cachedCosmetics = data;
         setCosmetics(data);
