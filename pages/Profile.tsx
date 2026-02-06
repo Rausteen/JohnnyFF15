@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore, TRANSFER_LIMITS } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
-import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, ShoppingBag, Camera, X } from 'lucide-react';
+import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, Camera, X } from 'lucide-react';
 import { getCosmeticById } from '../services/shopData';
 
 interface UserOption {
