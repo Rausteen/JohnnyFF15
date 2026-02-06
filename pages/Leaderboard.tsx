@@ -187,8 +187,7 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
       <div className="flex flex-col items-center text-center">
         {style.icon}
         <div
-          className={`w-16 h-16 rounded-full flex items-center justify-center mt-4 mb-3 overflow-hidden ${rank === 1 ? 'ring-4 ring-gold/50' : ''}`}
-          style={border?.gradient ? { background: border.gradient, padding: '3px' } : undefined}
+          className={`w-16 h-16 rounded-full mt-4 mb-3 overflow-hidden relative ${rank === 1 ? 'ring-4 ring-gold/50' : ''}`}
         >
           {user.avatar_url ? (
             <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full rounded-full object-cover" />
@@ -196,6 +195,22 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
             <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <span className="text-2xl font-black text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
             </div>
+          )}
+          {border?.gradient && (
+            <div
+              className="absolute inset-0 rounded-full pointer-events-none z-10"
+              style={
+                border.gradient.startsWith('url(')
+                  ? { background: border.gradient }
+                  : {
+                      background: border.gradient,
+                      WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                      WebkitMaskComposite: 'xor',
+                      maskComposite: 'exclude',
+                      padding: '3px',
+                    } as React.CSSProperties
+              }
+            />
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -228,8 +243,7 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
       <div className="col-span-1 text-center font-bold text-zinc-500">{rank}</div>
       <div className="col-span-4 flex items-center gap-3">
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
-          style={border?.gradient ? { background: border.gradient, padding: '2px' } : undefined}
+          className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden relative"
         >
           {user.avatar_url ? (
             <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full rounded-full object-cover" />
@@ -237,6 +251,22 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
             <div className="w-full h-full rounded-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center">
               <span className="font-bold text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
             </div>
+          )}
+          {border?.gradient && (
+            <div
+              className="absolute inset-0 rounded-full pointer-events-none z-10"
+              style={
+                border.gradient.startsWith('url(')
+                  ? { background: border.gradient }
+                  : {
+                      background: border.gradient,
+                      WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                      WebkitMaskComposite: 'xor',
+                      maskComposite: 'exclude',
+                      padding: '2px',
+                    } as React.CSSProperties
+              }
+            />
           )}
         </div>
         <span className="font-bold text-white truncate">{user.pseudo}</span>

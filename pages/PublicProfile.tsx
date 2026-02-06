@@ -191,19 +191,34 @@ const PublicProfile = () => {
           {/* Avatar */}
           <div className="relative">
             <div
-              className={`w-32 h-32 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 overflow-hidden ${equippedBorder?.animated ? 'animated-border' : ''}`}
-              style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '5px' } : undefined}
+              className={`w-32 h-32 rounded-2xl shadow-lg shadow-primary/30 overflow-hidden relative ${equippedBorder?.animated ? 'animated-border' : ''}`}
             >
               {profile.avatar_url ? (
                 <img
                   src={profile.avatar_url}
                   alt={profile.pseudo}
-                  className={`w-full h-full object-cover ${equippedBorder ? 'rounded-xl' : 'rounded-2xl'}`}
+                  className="w-full h-full object-cover rounded-2xl"
                 />
               ) : (
-                <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
+                <div className="w-full h-full rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                   <span className="text-5xl font-black text-white">{profile.pseudo.charAt(0).toUpperCase()}</span>
                 </div>
+              )}
+              {equippedBorder?.gradient && !equippedBorder?.animated && (
+                <div
+                  className="absolute inset-0 rounded-2xl pointer-events-none z-10"
+                  style={
+                    equippedBorder.gradient.startsWith('url(')
+                      ? { background: equippedBorder.gradient }
+                      : {
+                          background: equippedBorder.gradient,
+                          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                          WebkitMaskComposite: 'xor',
+                          maskComposite: 'exclude',
+                          padding: '5px',
+                        } as React.CSSProperties
+                  }
+                />
               )}
             </div>
             {rank && rank <= 3 && (

@@ -233,19 +233,34 @@ const Profile = () => {
         {/* Avatar with upload */}
         <div className="relative group">
           <div
-            className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 ${equippedBorder?.animated ? 'animated-border' : ''}`}
-            style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '4px' } : undefined}
+            className={`w-20 h-20 rounded-2xl shadow-lg shadow-primary/30 relative ${equippedBorder?.animated ? 'animated-border' : ''}`}
           >
             {profile?.avatar_url ? (
               <img
                 src={profile.avatar_url}
                 alt={displayName}
-                className={`w-full h-full object-cover ${equippedBorder ? 'rounded-xl' : 'rounded-2xl'}`}
+                className="w-full h-full object-cover rounded-2xl"
               />
             ) : (
-              <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
+              <div className="w-full h-full rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                 <span className="text-3xl font-black text-white">{displayName.charAt(0).toUpperCase()}</span>
               </div>
+            )}
+            {equippedBorder?.gradient && !equippedBorder?.animated && (
+              <div
+                className="absolute inset-0 rounded-2xl pointer-events-none z-10"
+                style={
+                  equippedBorder.gradient.startsWith('url(')
+                    ? { background: equippedBorder.gradient }
+                    : {
+                        background: equippedBorder.gradient,
+                        WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                        WebkitMaskComposite: 'xor',
+                        maskComposite: 'exclude',
+                        padding: '4px',
+                      } as React.CSSProperties
+                }
+              />
             )}
           </div>
 

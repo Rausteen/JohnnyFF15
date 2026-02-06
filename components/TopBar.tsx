@@ -97,8 +97,7 @@ const navLinks = [
                 className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition cursor-pointer"
               >
                 <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center overflow-hidden ${equippedBorder?.animated ? 'animated-border' : ''}`}
-                  style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '2px' } : undefined}
+                  className={`w-6 h-6 rounded-full overflow-hidden relative ${equippedBorder?.animated ? 'animated-border' : ''}`}
                 >
                   {profile?.avatar_url ? (
                     <img src={profile.avatar_url} alt={displayName} className="w-full h-full rounded-full object-cover" />
@@ -106,6 +105,22 @@ const navLinks = [
                     <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                       <span className="text-xs font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
                     </div>
+                  )}
+                  {equippedBorder?.gradient && !equippedBorder?.animated && (
+                    <div
+                      className="absolute inset-0 rounded-full pointer-events-none z-10"
+                      style={
+                        equippedBorder.gradient.startsWith('url(')
+                          ? { background: equippedBorder.gradient }
+                          : {
+                              background: equippedBorder.gradient,
+                              WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                              WebkitMaskComposite: 'xor',
+                              maskComposite: 'exclude',
+                              padding: '2px',
+                            } as React.CSSProperties
+                      }
+                    />
                   )}
                 </div>
                 <span className="text-sm font-bold text-white truncate max-w-[100px]">
@@ -152,8 +167,7 @@ const navLinks = [
             <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-zinc-900 to-black border border-gold/20 mb-4">
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${equippedBorder?.animated ? 'animated-border' : ''}`}
-                  style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '2px' } : undefined}
+                  className={`w-10 h-10 rounded-full overflow-hidden relative ${equippedBorder?.animated ? 'animated-border' : ''}`}
                 >
                   {profile?.avatar_url ? (
                     <img src={profile.avatar_url} alt={displayName} className="w-full h-full rounded-full object-cover" />
@@ -161,6 +175,22 @@ const navLinks = [
                     <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                       <span className="text-sm font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
                     </div>
+                  )}
+                  {equippedBorder?.gradient && !equippedBorder?.animated && (
+                    <div
+                      className="absolute inset-0 rounded-full pointer-events-none z-10"
+                      style={
+                        equippedBorder.gradient.startsWith('url(')
+                          ? { background: equippedBorder.gradient }
+                          : {
+                              background: equippedBorder.gradient,
+                              WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                              WebkitMaskComposite: 'xor',
+                              maskComposite: 'exclude',
+                              padding: '2px',
+                            } as React.CSSProperties
+                      }
+                    />
                   )}
                 </div>
                 <span className="text-white font-bold">{displayName}</span>
