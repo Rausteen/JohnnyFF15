@@ -1,9 +1,39 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Package, Sparkles, Loader2, Volume2, VolumeX, ChevronRight, Gift, Info } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Package, Sparkles, Loader2, Volume2, VolumeX, ChevronRight, Gift, Info, Backpack, Award, Type, Circle, Check } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
-import { CASES, Case, LootItem, RARITY_CONFIG, rollLoot, generateRouletteItems, getCaseExclusiveCosmetic } from '../services/casesData';
+import { CASES, Case, LootItem, RARITY_CONFIG, rollLoot, generateRouletteItems, getCaseExclusiveCosmetic, CASE_BADGES, CASE_TITLES, CASE_BORDERS } from '../services/casesData';
+import { ALL_COSMETICS } from '../services/shopData';
+
+// Helper to get cosmetic info from ID
+function getCosmeticInfo(id: string): { type: string; name: string; icon?: string; gradient?: string; rarity: string } | null {
+  // Check case-exclusive cosmetics first
+  const caseCosmetic = getCaseExclusiveCosmetic(id);
+  if (caseCosmetic) {
+    return {
+      type: caseCosmetic.type,
+      name: caseCosmetic.name,
+      icon: caseCosmetic.icon,
+      gradient: caseCosmetic.gradient,
+      rarity: caseCosmetic.rarity
+    };
+  }
+
+  // Check shop cosmetics
+  const shopCosmetic = ALL_COSMETICS.find(c => c.id === id);
+  if (shopCosmetic) {
+    return {
+      type: shopCosmetic.type,
+      name: shopCosmetic.name,
+      icon: shopCosmetic.icon,
+      gradient: shopCosmetic.gradient,
+      rarity: shopCosmetic.rarity
+    };
+  }
+
+  return null;
+}
 
 const Cases = () => {
   const { user } = useAuthStore();
@@ -17,9 +47,45 @@ const Cases = () => {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recentDrops, setRecentDrops] = useState<{ pseudo: string; item: LootItem; caseId: string; timestamp: number }[]>([]);
+  const [showInventory, setShowInventory] = useState(false);
+  const [inventoryFilter, setInventoryFilter] = useState<'all' | 'badge' | 'title' | 'border'>('all');
 
   const rouletteRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Parse owned cosmetics into display-ready items
+  const inventoryItems = useMemo(() => {
+    if (!profile?.owned_cosmetics) return [];
+
+    return profile.owned_cosmetics
+      .map(id => {
+        const info = getCosmeticInfo(id);
+        if (!info) return null;
+        return { id, ...info };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => {
+        // Sort by rarity (mythic first) then by type
+        const rarityOrder = ['mythic', 'legendary', 'epic', 'rare', 'uncommon', 'common'];
+        const rarityDiff = rarityOrder.indexOf(a.rarity) - rarityOrder.indexOf(b.rarity);
+        if (rarityDiff !== 0) return rarityDiff;
+        return a.type.localeCompare(b.type);
+      });
+  }, [profile?.owned_cosmetics]);
+
+  // Filter inventory items
+  const filteredInventory = useMemo(() => {
+    if (inventoryFilter === 'all') return inventoryItems;
+    return inventoryItems.filter(item => item.type === inventoryFilter);
+  }, [inventoryItems, inventoryFilter]);
+
+  // Count by type
+  const inventoryCounts = useMemo(() => ({
+    all: inventoryItems.length,
+    badge: inventoryItems.filter(i => i.type === 'badge').length,
+    title: inventoryItems.filter(i => i.type === 'title').length,
+    border: inventoryItems.filter(i => i.type === 'border').length,
+  }), [inventoryItems]);
 
   // Load recent drops from localStorage (simulated for now)
   useEffect(() => {
@@ -164,19 +230,140 @@ const Cases = () => {
         <p className="text-zinc-400">Ouvre des caisses et tente ta chance pour des récompenses exclusives!</p>
       </div>
 
-      {/* Balance */}
-      <div className="flex justify-center mb-8">
+      {/* Balance & Inventory Toggle */}
+      <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-8">
         <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-gradient-to-r from-gold/10 to-amber-900/20 border border-gold/30">
           <Sparkles className="w-5 h-5 text-gold" />
           <span className="text-xl font-mono font-bold text-gold">
             {profile?.credits.toLocaleString('fr-FR') || 0} JC
           </span>
         </div>
+        <button
+          onClick={() => setShowInventory(!showInventory)}
+          className={`inline-flex items-center gap-2 px-6 py-3 rounded-full border transition-all ${
+            showInventory
+              ? 'bg-purple-500/20 border-purple-500/50 text-purple-400'
+              : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+          }`}
+        >
+          <Backpack className="w-5 h-5" />
+          <span className="font-bold">Inventaire</span>
+          {inventoryCounts.all > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-300 text-sm font-mono">
+              {inventoryCounts.all}
+            </span>
+          )}
+        </button>
       </div>
 
       {error && (
         <div className="mb-6 p-4 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 text-center max-w-md mx-auto">
           {error}
+        </div>
+      )}
+
+      {/* Inventory Section */}
+      {showInventory && (
+        <div className="bg-zinc-900 rounded-3xl border border-zinc-800 p-6 mb-12">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <Backpack className="w-6 h-6 text-purple-400" />
+              <h2 className="text-xl font-bold text-white">Mon Inventaire</h2>
+            </div>
+
+            {/* Filters */}
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { key: 'all', label: 'Tout', icon: Backpack },
+                { key: 'badge', label: 'Badges', icon: Award },
+                { key: 'title', label: 'Titres', icon: Type },
+                { key: 'border', label: 'Bordures', icon: Circle },
+              ].map(filter => (
+                <button
+                  key={filter.key}
+                  onClick={() => setInventoryFilter(filter.key as typeof inventoryFilter)}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                    inventoryFilter === filter.key
+                      ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50'
+                      : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-zinc-500'
+                  }`}
+                >
+                  <filter.icon className="w-4 h-4" />
+                  {filter.label}
+                  <span className="text-xs opacity-70">({inventoryCounts[filter.key as keyof typeof inventoryCounts]})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filteredInventory.length === 0 ? (
+            <div className="text-center py-12">
+              <Backpack className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
+              <p className="text-zinc-500">
+                {inventoryFilter === 'all'
+                  ? "Ton inventaire est vide. Ouvre des caisses pour obtenir des cosmétiques!"
+                  : `Aucun ${inventoryFilter === 'badge' ? 'badge' : inventoryFilter === 'title' ? 'titre' : 'bordure'} dans ton inventaire.`}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {filteredInventory.map((item) => {
+                const rarityConfig = RARITY_CONFIG[item.rarity as keyof typeof RARITY_CONFIG] || RARITY_CONFIG.common;
+                const isEquipped =
+                  (item.type === 'badge' && profile?.equipped_badge === item.id) ||
+                  (item.type === 'title' && profile?.equipped_title === item.id) ||
+                  (item.type === 'border' && profile?.equipped_border === item.id);
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`relative p-4 rounded-xl ${rarityConfig.bg} border-2 ${
+                      isEquipped ? 'border-green-500 shadow-lg shadow-green-500/30' : 'border-white/10'
+                    } text-center transition-all hover:scale-105`}
+                  >
+                    {/* Equipped indicator */}
+                    {isEquipped && (
+                      <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                        <Check className="w-4 h-4 text-white" />
+                      </div>
+                    )}
+
+                    {/* Icon / Preview */}
+                    {item.type === 'border' && item.gradient ? (
+                      <div
+                        className="w-12 h-12 mx-auto mb-2 rounded-full"
+                        style={{ background: item.gradient }}
+                      />
+                    ) : (
+                      <div className="text-3xl mb-2">
+                        {item.icon || (item.type === 'title' ? '📜' : '🎁')}
+                      </div>
+                    )}
+
+                    {/* Name */}
+                    <div className={`text-sm font-bold ${rarityConfig.color} truncate`}>
+                      {item.name}
+                    </div>
+
+                    {/* Type & Rarity */}
+                    <div className="text-[10px] text-zinc-500 mt-1">
+                      {item.type === 'badge' ? 'Badge' : item.type === 'title' ? 'Titre' : 'Bordure'}
+                      {' • '}
+                      {rarityConfig.label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Tip */}
+          <div className="mt-6 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700">
+            <p className="text-sm text-zinc-400 text-center">
+              <Info className="w-4 h-4 inline mr-2" />
+              Pour équiper tes cosmétiques, va dans la <a href="#/shop" className="text-purple-400 hover:underline">Boutique</a> → onglet "Mes Items"
+            </p>
+          </div>
         </div>
       )}
 
