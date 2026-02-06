@@ -233,8 +233,8 @@ const Profile = () => {
         {/* Avatar with upload */}
         <div className="relative group">
           <div
-            className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30"
-            style={equippedBorder?.gradient ? { background: equippedBorder.gradient, padding: '4px' } : undefined}
+            className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 ${equippedBorder?.animated ? 'animated-border' : ''}`}
+            style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '4px' } : undefined}
           >
             {profile?.avatar_url ? (
               <img

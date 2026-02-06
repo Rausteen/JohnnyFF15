@@ -191,8 +191,8 @@ const PublicProfile = () => {
           {/* Avatar */}
           <div className="relative">
             <div
-              className="w-32 h-32 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 overflow-hidden"
-              style={equippedBorder?.gradient ? { background: equippedBorder.gradient, padding: '5px' } : undefined}
+              className={`w-32 h-32 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 overflow-hidden ${equippedBorder?.animated ? 'animated-border' : ''}`}
+              style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '5px' } : undefined}
             >
               {profile.avatar_url ? (
                 <img

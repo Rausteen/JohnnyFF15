@@ -241,10 +241,10 @@ const Shop: React.FC = () => {
                         {item.icon}
                       </div>
                     )}
-                    {item.type === 'border' && item.gradient && (
+                    {item.type === 'border' && (item.gradient || item.animated) && (
                       <div
-                        className="w-20 h-20 rounded-2xl transform group-hover:scale-110 transition-transform"
-                        style={{ background: item.gradient }}
+                        className={`w-20 h-20 rounded-2xl transform group-hover:scale-110 transition-transform ${item.animated ? 'animated-border' : ''}`}
+                        style={!item.animated && item.gradient ? { background: item.gradient } : undefined}
                       />
                     )}
                     {item.type === 'title' && (

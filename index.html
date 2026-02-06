@@ -84,6 +84,25 @@
         background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
                           linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
       }
+
+      /* Animated border for profile avatars */
+      .animated-border {
+        position: relative;
+      }
+      .animated-border::before {
+        content: "";
+        position: absolute;
+        inset: -3px;
+        border-radius: inherit;
+        background: conic-gradient(from 0deg, #ff5a00, #ffcc00, #ff004c, #ff5a00);
+        animation: spin-border 2.5s linear infinite;
+        filter: blur(4px);
+        opacity: 0.9;
+        z-index: -1;
+      }
+      @keyframes spin-border {
+        to { transform: rotate(360deg); }
+      }
     </style>
   <script type="importmap">
 {

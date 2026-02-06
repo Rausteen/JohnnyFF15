@@ -13,6 +13,7 @@ export interface CosmeticItem {
   rarity: 'common' | 'rare' | 'epic' | 'legendary';
   icon?: string; // Emoji or icon
   gradient?: string; // CSS gradient for borders
+  animated?: boolean; // For animated borders
   unlockRequirement?: string; // Optional requirement description
 }
 
@@ -146,6 +147,16 @@ export const TITLES: CosmeticItem[] = [
 
 // Border items - Profile card border
 export const BORDERS: CosmeticItem[] = [
+  {
+    id: 'border_animated_fire',
+    name: 'Bordure Infernale Animée',
+    description: 'Flammes qui tournent autour de ton avatar',
+    type: 'border',
+    price: 0,
+    rarity: 'legendary',
+    animated: true,
+    gradient: 'conic-gradient(from 0deg, #ff5a00, #ffcc00, #ff004c, #ff5a00)',
+  },
   {
     id: 'border_bronze',
     name: 'Bordure Bronze',
