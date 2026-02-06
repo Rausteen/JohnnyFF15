@@ -37,14 +37,24 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
     testMatchId,
     testPlayer,
     playerStates,
+    bettingLimitEnabled,
   } = useGameStore();
 
   const activePlayer = testMode ? testPlayer : player;
   const playerState = activePlayer?.puuid ? playerStates.get(activePlayer.puuid) : undefined;
+  const currentGame = playerState?.currentGame;
   const isInGame = testMode ? true : (playerState?.isInGame || false);
   const betMatchId = testMode ? testMatchId : playerState?.currentGameId;
 
   const isSelfBetting = isUserThePlayer(activePlayer, user?.id);
+
+  // Calculate game time in minutes for betting window
+  const gameTimeMinutes = currentGame
+    ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
+    : 0;
+
+  // Check if betting window is closed (4 minutes)
+  const isBettingWindowClosed = bettingLimitEnabled && isInGame && gameTimeMinutes >= 4;
 
   const [betType, setBetType] = useState<BetType>('kda');
   const [kills, setKills] = useState(4);
@@ -127,6 +137,12 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
 
     if (!isInGame || !activePlayer) {
       setError("Aucune game en cours");
+      return;
+    }
+
+    // Check betting window (4 minutes)
+    if (isBettingWindowClosed) {
+      setError("Paris fermés après 4 minutes");
       return;
     }
 
@@ -496,7 +512,7 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
         {/* Place Bet Button */}
         <button
           onClick={handlePlaceBet}
-          disabled={!isInGame || !amount || loading || !user || isSelfBetting || (betType === 'damage' && maxDamageBetsReached)}
+          disabled={!isInGame || !amount || loading || !user || isSelfBetting || isBettingWindowClosed || (betType === 'damage' && maxDamageBetsReached)}
           className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 hover:opacity-90 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
@@ -511,6 +527,8 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
               <UserX className="w-4 h-4" />
               Tu ne peux pas parier sur toi
             </>
+          ) : isBettingWindowClosed ? (
+            'Paris fermés (4 min)'
           ) : (
             <>
               <Target className="w-4 h-4" />

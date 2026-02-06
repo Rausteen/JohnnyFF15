@@ -28,16 +28,26 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
     testMatchData,
     testPlayer,
     playerStates,
-    isAnyPlayerInGame
+    isAnyPlayerInGame,
+    bettingLimitEnabled
   } = useGameStore();
 
   const activePlayer = testMode ? testPlayer : player;
   const playerState = activePlayer?.puuid ? playerStates.get(activePlayer.puuid) : undefined;
+  const currentGame = playerState?.currentGame;
   const isInGame = testMode ? true : (playerState?.isInGame || false);
   const betMatchId = testMode ? testMatchId : playerState?.currentGameId;
 
   // Check if user is the player they're trying to bet on (self-betting prevention)
   const isSelfBetting = isUserThePlayer(activePlayer, user?.id);
+
+  // Calculate game time in minutes for betting window
+  const gameTimeMinutes = currentGame
+    ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
+    : 0;
+
+  // Check if betting window is closed (4 minutes)
+  const isBettingWindowClosed = bettingLimitEnabled && isInGame && gameTimeMinutes >= 4;
 
   const [teamDragons, setTeamDragons] = useState(2);
   const [enemyDragons, setEnemyDragons] = useState(1);
@@ -104,6 +114,12 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
 
     if (!isInGame || !activePlayer) {
       setError("Aucune game en cours");
+      return;
+    }
+
+    // Check betting window (4 minutes)
+    if (isBettingWindowClosed) {
+      setError("Paris fermés après 4 minutes");
       return;
     }
 
@@ -366,7 +382,7 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
         {/* Place Bet Button */}
         <button
           onClick={handlePlaceBet}
-          disabled={!isInGame || !amount || loading || !user || isSelfBetting || maxDragonBetsReached}
+          disabled={!isInGame || !amount || loading || !user || isSelfBetting || isBettingWindowClosed || maxDragonBetsReached}
           className="w-full py-3 bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 hover:opacity-90 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
@@ -381,6 +397,8 @@ const DragonScoreBet: React.FC<DragonScoreBetProps> = ({ player }) => {
               <UserX className="w-4 h-4" />
               Tu ne peux pas parier sur toi
             </>
+          ) : isBettingWindowClosed ? (
+            'Paris fermés (4 min)'
           ) : (
             <>
               <Flame className="w-4 h-4" />
