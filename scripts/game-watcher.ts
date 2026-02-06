@@ -130,8 +130,10 @@ const QUEUE_NAMES: Record<number, string> = {
 // Only allow bets on these queues (Solo/Duo and Flex)
 const ALLOWED_QUEUE_IDS = [420, 440];
 
-// Champion name from ID (loaded from Data Dragon)
-let CHAMPIONS: Record<number, string> = {};
+// Champion data from Data Dragon
+let CHAMPIONS: Record<number, string> = {}; // ID -> display name (e.g., "Wukong")
+let CHAMPION_KEYS: Record<number, string> = {}; // ID -> internal key for images (e.g., "MonkeyKing")
+let DDRAGON_VERSION = '14.1.1'; // Will be updated to latest
 
 // Fetch champion data from Data Dragon
 async function loadChampionData(): Promise<void> {
@@ -139,26 +141,24 @@ async function loadChampionData(): Promise<void> {
     // Get latest version
     const versionsRes = await fetch('https://ddragon.leagueoflegends.com/api/versions.json');
     const versions = await versionsRes.json();
-    const latestVersion = versions[0];
+    DDRAGON_VERSION = versions[0];
 
     // Fetch champion data
-    const champRes = await fetch(`https://ddragon.leagueoflegends.com/cdn/${latestVersion}/data/en_US/champion.json`);
+    const champRes = await fetch(`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/data/en_US/champion.json`);
     const champData = await champRes.json();
 
-    // Build ID -> name mapping
-    for (const [name, data] of Object.entries(champData.data)) {
-      const champ = data as { key: string; name: string };
-      CHAMPIONS[parseInt(champ.key, 10)] = champ.name;
+    // Build ID -> name and ID -> key mappings
+    for (const [internalKey, data] of Object.entries(champData.data)) {
+      const champ = data as { key: string; name: string; id: string };
+      const champId = parseInt(champ.key, 10);
+      CHAMPIONS[champId] = champ.name; // Display name (e.g., "Wukong")
+      CHAMPION_KEYS[champId] = internalKey; // Internal key for URLs (e.g., "MonkeyKing")
     }
 
-    console.log(`✅ Loaded ${Object.keys(CHAMPIONS).length} champions from Data Dragon (v${latestVersion})`);
+    console.log(`✅ Loaded ${Object.keys(CHAMPIONS).length} champions from Data Dragon (v${DDRAGON_VERSION})`);
   } catch (error) {
     console.error('Failed to load champion data:', error);
-    // Fallback to basic champions
-    CHAMPIONS = {
-      1: 'Annie', 2: 'Olaf', 3: 'Galio', 4: 'Twisted Fate', 5: 'Xin Zhao',
-      6: 'Urgot', 7: 'LeBlanc', 8: 'Vladimir', 9: 'Fiddlesticks', 10: 'Kayle'
-    };
+    // Keep default version and empty mappings - will use fallback in getChampionImageUrl
   }
 }
 
@@ -238,16 +238,34 @@ async function checkCurrentGame(puuid: string, region: string, retries = 2): Pro
   }
 }
 
-function getChampionImageUrl(championName: string): string {
-  const normalized = championName.replace(/['\s.]/g, '');
-  return `https://ddragon.leagueoflegends.com/cdn/14.1.1/img/champion/${normalized}.png`;
+function getChampionImageUrl(championNameOrId: string | number): string {
+  // If it's a champion ID, use the internal key mapping
+  if (typeof championNameOrId === 'number') {
+    const key = CHAMPION_KEYS[championNameOrId];
+    if (key) {
+      return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${key}.png`;
+    }
+    // Fallback: try to use the name from CHAMPIONS
+    const name = CHAMPIONS[championNameOrId];
+    if (name) {
+      const normalized = name.replace(/['\s.]/g, '');
+      return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalized}.png`;
+    }
+    // Ultimate fallback: default icon
+    return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`;
+  }
+
+  // If it's a string (champion name), normalize it
+  const normalized = championNameOrId.replace(/['\s.]/g, '');
+  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalized}.png`;
 }
 
 async function sendDiscordNotification(
   playerNames: string[],
   championNames: string[],
   gameMode: string,
-  gameId: number
+  gameId: number,
+  championIds: number[] = []
 ): Promise<void> {
   if (!DISCORD_WEBHOOK_URL) {
     console.log('No Discord webhook configured');
@@ -280,13 +298,16 @@ async function sendDiscordNotification(
     { name: '🔗 Parier maintenant', value: '[Ouvrir JohnnyFF15](https://johnnyff15.fr/#/dashboard)', inline: false }
   );
 
-  const thumbnailUrl = championNames.length > 0
-    ? getChampionImageUrl(championNames[0])
-    : 'https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/4644.png';
+  // Use champion ID for thumbnail if available (more reliable for new champions)
+  const thumbnailUrl = championIds.length > 0 && championIds[0] > 0
+    ? getChampionImageUrl(championIds[0])
+    : championNames.length > 0
+      ? getChampionImageUrl(championNames[0])
+      : `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`;
 
   const payload = {
     username: 'JohnnyFF15 Bot',
-    avatar_url: 'https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/4644.png',
+    avatar_url: `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`,
     content: '<@&1466416446094442578>',
     embeds: [{
       title: isMultiple
@@ -1136,7 +1157,8 @@ async function sendGameEndNotification(
   kills: number,
   deaths: number,
   assists: number,
-  gameMode: string
+  gameMode: string,
+  championId: number = 0
 ): Promise<void> {
   if (!DISCORD_WEBHOOK_URL) return;
 
@@ -1144,9 +1166,14 @@ async function sendGameEndNotification(
   const color = win ? 0x22c55e : 0xef4444;
   const kda = `${kills}/${deaths}/${assists}`;
 
+  // Use champion ID for image if available (more reliable for new champions)
+  const thumbnailUrl = championId > 0
+    ? getChampionImageUrl(championId)
+    : getChampionImageUrl(championName);
+
   const payload = {
     username: 'JohnnyFF15 Bot',
-    avatar_url: 'https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/4644.png',
+    avatar_url: `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`,
     embeds: [{
       title: `${result} - ${playerName.toUpperCase()}`,
       description: `La game de **${playerName}** est terminée !\n\nLes paris ont été résolus automatiquement.`,
@@ -1156,7 +1183,7 @@ async function sendGameEndNotification(
         { name: '🏆 Champion', value: championName, inline: true },
         { name: '📊 KDA', value: kda, inline: true },
       ],
-      thumbnail: { url: getChampionImageUrl(championName) },
+      thumbnail: { url: thumbnailUrl },
       footer: { text: 'JohnnyFF15 - Les paris sont résolus' },
       timestamp: new Date().toISOString(),
     }],
@@ -1849,7 +1876,8 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
     playerStats.kills,
     playerStats.deaths,
     playerStats.assists,
-    gameMode
+    gameMode,
+    playerStats.championId
   );
 }
 
@@ -1867,7 +1895,7 @@ async function checkAllPlayers(): Promise<void> {
   }
 
   // Group players by game
-  const gameGroups = new Map<number, { players: TrackedPlayer[]; game: CurrentGameInfo; champions: string[] }>();
+  const gameGroups = new Map<number, { players: TrackedPlayer[]; game: CurrentGameInfo; champions: string[]; championIds: number[] }>();
 
   // Track players whose games ended (to handle after the loop)
   const gameEndedPlayers: { player: TrackedPlayer; previousGameId: string }[] = [];
@@ -1896,15 +1924,17 @@ async function checkAllPlayers(): Promise<void> {
         previousGameState.set(player.id, { isInGame: false, gameId: null });
       } else {
         const participant = game.participants.find(p => p.puuid === player.puuid);
-        const championName = participant ? (CHAMPIONS[participant.championId] || `Champion${participant.championId}`) : '';
+        const championId = participant?.championId || 0;
+        const championName = participant ? (CHAMPIONS[championId] || `Champion${championId}`) : '';
 
         if (!gameGroups.has(gameId)) {
-          gameGroups.set(gameId, { players: [], game, champions: [] });
+          gameGroups.set(gameId, { players: [], game, champions: [], championIds: [] });
         }
 
         const group = gameGroups.get(gameId)!;
         group.players.push(player);
         group.champions.push(championName);
+        group.championIds.push(championId);
 
         console.log(`  🎮 ${name} is in game (${queueName})`);
         await updateGameStatusInSupabase(player.id, true, String(gameId), game);
@@ -1932,7 +1962,7 @@ async function checkAllPlayers(): Promise<void> {
   }
 
   // Send notifications for new games
-  for (const [gameId, { players: gamePlayers, game, champions }] of gameGroups) {
+  for (const [gameId, { players: gamePlayers, game, champions, championIds }] of gameGroups) {
     const notifKey = `${gameId}`;
 
     if (!notifiedGames.has(notifKey)) {
@@ -1941,7 +1971,7 @@ async function checkAllPlayers(): Promise<void> {
       const playerNames = gamePlayers.map(p => p.display_name || p.game_name || 'Joueur').filter(Boolean);
       const gameMode = QUEUE_NAMES[game.gameQueueConfigId] || 'Normal';
 
-      await sendDiscordNotification(playerNames, champions, gameMode, gameId);
+      await sendDiscordNotification(playerNames, champions, gameMode, gameId, championIds);
 
       // Clean up old notifications after 1 hour
       setTimeout(() => notifiedGames.delete(notifKey), 60 * 60 * 1000);
