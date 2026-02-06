@@ -187,7 +187,7 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
       <div className="flex flex-col items-center text-center">
         {style.icon}
         <div
-          className={`w-16 h-16 mt-4 mb-3 overflow-hidden relative ${rank === 1 ? 'ring-4 ring-gold/50' : ''}`}
+          className="w-16 h-16 mt-4 mb-3 overflow-hidden relative"
         >
           {user.avatar_url ? (
             <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full object-cover" />
