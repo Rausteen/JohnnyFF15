@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Layers, TrendingUp, AlertCircle, CheckCircle, Loader2, Trash2, UserX } from 'lucide-react';
 import { useComboStore } from '../services/comboStore';
 import { useStore } from '../services/store';
@@ -13,7 +13,7 @@ interface ComboBetSlipProps {
 }
 
 const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
-  const { selections, totalOdds, removeFromCombo, clearCombo } = useComboStore();
+  const { selections, totalOdds, removeFromCombo, clearCombo, lastError, clearError } = useComboStore();
   const { placeBet } = useStore();
   const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
@@ -47,6 +47,14 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
   const credits = profile?.credits || 0;
   const combinedOdds = totalOdds();
   const potentialGain = amount ? Math.floor(parseInt(amount) * combinedOdds) : 0;
+
+  // Auto-clear combo store error after 3 seconds
+  useEffect(() => {
+    if (lastError) {
+      const timer = setTimeout(() => clearError(), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [lastError, clearError]);
 
   const handlePlaceCombo = async () => {
     setError(null);
@@ -276,10 +284,10 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
             )}
 
             {/* Error message */}
-            {error && (
+            {(error || lastError) && (
               <div className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                {error}
+                {error || lastError}
               </div>
             )}
 

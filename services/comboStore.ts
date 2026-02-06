@@ -10,23 +10,107 @@ export interface ComboSelection {
   gameId?: string;       // The game ID at time of adding
 }
 
+// ============================================
+// CORRELATED PROPS - Cannot be combined
+// ============================================
+
+// Groups of props that imply each other (can't combine within same group)
+const CORRELATED_GROUPS: string[][] = [
+  // KDA hierarchy: if KDA > 3, then KDA ≥ 2 and KDA ≥ 1
+  ['kda6', 'kda9', 'sp2'],  // KDA ≥ 1, KDA ≥ 2, KDA > 3
+
+  // Death hierarchy: 15+ deaths implies 10+ and 5+
+  ['early3', 'kda1', 'kda2'],  // 5+ morts, 10+ morts, 15+ morts
+
+  // 0 kills conflicts with multi-kills
+  ['kda4', 'kda7', 'kda8', 'sp6'],  // 0 kill, double, triple, penta
+
+  // 0 deaths conflicts with death-based props
+  ['early4', 'early3', 'kda1', 'kda2'],  // 0 mort, 5+ morts, 10+ morts, 15+ morts
+];
+
+// Props that are highly correlated (statistically, not logically)
+// Victory is correlated with good performance
+const WIN_CORRELATED_PROPS = ['kda6', 'kda9', 'sp2', 'kda7', 'kda8', 'sp3', 'gp8'];
+const LOSS_CORRELATED_PROPS = ['kda1', 'kda2', 'kda3', 'early3', 'gp4', 'gp5', 'gp6'];
+
+// Check if two props conflict
+function arePropsCorrelated(propId1: string, propId2: string): boolean {
+  // Same prop
+  if (propId1 === propId2) return true;
+
+  // Check correlated groups
+  for (const group of CORRELATED_GROUPS) {
+    if (group.includes(propId1) && group.includes(propId2)) {
+      return true;
+    }
+  }
+
+  // Victory + good performance props
+  if (propId1 === 'out3' && WIN_CORRELATED_PROPS.includes(propId2)) return true;
+  if (propId2 === 'out3' && WIN_CORRELATED_PROPS.includes(propId1)) return true;
+
+  // Defeat + bad performance props
+  if (propId1 === 'out2' && LOSS_CORRELATED_PROPS.includes(propId2)) return true;
+  if (propId2 === 'out2' && LOSS_CORRELATED_PROPS.includes(propId1)) return true;
+
+  return false;
+}
+
+// Get human-readable reason for correlation
+function getCorrelationReason(propId1: string, propId2: string): string | null {
+  // KDA hierarchy
+  if (['kda6', 'kda9', 'sp2'].includes(propId1) && ['kda6', 'kda9', 'sp2'].includes(propId2)) {
+    return 'Ces paris KDA sont redondants';
+  }
+
+  // Death hierarchy
+  if (['early3', 'kda1', 'kda2', 'early4'].some(p => p === propId1 || p === propId2) &&
+      ['early3', 'kda1', 'kda2', 'early4'].some(p => p === propId1 || p === propId2)) {
+    return 'Ces paris sur les morts sont incompatibles';
+  }
+
+  // Victory correlations
+  if ((propId1 === 'out3' || propId2 === 'out3') &&
+      (WIN_CORRELATED_PROPS.includes(propId1) || WIN_CORRELATED_PROPS.includes(propId2))) {
+    return 'Victoire est trop corrélée avec une bonne perf';
+  }
+
+  // Defeat correlations
+  if ((propId1 === 'out2' || propId2 === 'out2') &&
+      (LOSS_CORRELATED_PROPS.includes(propId1) || LOSS_CORRELATED_PROPS.includes(propId2))) {
+    return 'Défaite est trop corrélée avec une mauvaise perf';
+  }
+
+  // Kill-related
+  if (['kda4', 'kda7', 'kda8', 'sp6'].includes(propId1) && ['kda4', 'kda7', 'kda8', 'sp6'].includes(propId2)) {
+    return 'Ces paris sur les kills sont incompatibles';
+  }
+
+  return null;
+}
+
 interface ComboState {
   selections: ComboSelection[];
+  lastError: string | null;
 
   // Computed
   totalOdds: () => number;
 
   // Actions
-  addToCombo: (prop: Prop, adjustedOdds: number, playerPuuid?: string, playerName?: string, gameId?: string) => void;
+  addToCombo: (prop: Prop, adjustedOdds: number, playerPuuid?: string, playerName?: string, gameId?: string) => boolean;
   removeFromCombo: (propId: string) => void;
   clearCombo: () => void;
   isInCombo: (propId: string) => boolean;
+  canAddProp: (propId: string) => { canAdd: boolean; reason?: string };
   canAddPlayer: (playerPuuid?: string) => boolean;
   getComboPlayerPuuid: () => string | undefined;
+  clearError: () => void;
 }
 
 export const useComboStore = create<ComboState>((set, get) => ({
   selections: [],
+  lastError: null,
 
   totalOdds: () => {
     const { selections } = get();
@@ -40,40 +124,71 @@ export const useComboStore = create<ComboState>((set, get) => ({
   },
 
   addToCombo: (prop: Prop, adjustedOdds: number, playerPuuid?: string, playerName?: string, gameId?: string) => {
-    const { selections, isInCombo } = get();
+    const { selections, isInCombo, canAddProp } = get();
 
     // Max 4 selections in a combo (anti-abuse measure)
-    if (selections.length >= 4) return;
+    if (selections.length >= 4) {
+      set({ lastError: 'Maximum 4 paris par combiné' });
+      return false;
+    }
 
     // Don't add duplicates
-    if (isInCombo(prop.id)) return;
+    if (isInCombo(prop.id)) {
+      set({ lastError: 'Ce pari est déjà dans le combiné' });
+      return false;
+    }
+
+    // Check for correlated props
+    const { canAdd, reason } = canAddProp(prop.id);
+    if (!canAdd) {
+      set({ lastError: reason || 'Paris incompatibles' });
+      return false;
+    }
 
     // Don't allow combining bets from different players
     if (selections.length > 0 && playerPuuid) {
       const firstPlayerPuuid = selections[0].playerPuuid;
       if (firstPlayerPuuid && firstPlayerPuuid !== playerPuuid) {
-        return; // Can't combine bets from different players
+        set({ lastError: 'Un combo doit concerner le même joueur' });
+        return false;
       }
     }
 
     set({
-      selections: [...selections, { prop, adjustedOdds, addedAt: Date.now(), playerPuuid, playerName, gameId }]
+      selections: [...selections, { prop, adjustedOdds, addedAt: Date.now(), playerPuuid, playerName, gameId }],
+      lastError: null
     });
+    return true;
   },
 
   removeFromCombo: (propId: string) => {
     set((state) => ({
-      selections: state.selections.filter(s => s.prop.id !== propId)
+      selections: state.selections.filter(s => s.prop.id !== propId),
+      lastError: null
     }));
   },
 
   clearCombo: () => {
-    set({ selections: [] });
+    set({ selections: [], lastError: null });
   },
 
   isInCombo: (propId: string) => {
     const { selections } = get();
     return selections.some(s => s.prop.id === propId);
+  },
+
+  canAddProp: (propId: string) => {
+    const { selections } = get();
+
+    // Check against all existing selections
+    for (const sel of selections) {
+      if (arePropsCorrelated(propId, sel.prop.id)) {
+        const reason = getCorrelationReason(propId, sel.prop.id);
+        return { canAdd: false, reason: reason || 'Paris corrélés non autorisés' };
+      }
+    }
+
+    return { canAdd: true };
   },
 
   canAddPlayer: (playerPuuid?: string) => {
@@ -92,5 +207,9 @@ export const useComboStore = create<ComboState>((set, get) => ({
     const { selections } = get();
     if (selections.length === 0) return undefined;
     return selections[0].playerPuuid;
+  },
+
+  clearError: () => {
+    set({ lastError: null });
   }
 }));
