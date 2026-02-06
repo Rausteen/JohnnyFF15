@@ -214,9 +214,34 @@ export const BORDERS: CosmeticItem[] = [
 // All cosmetics combined
 export const ALL_COSMETICS: CosmeticItem[] = [...BADGES, ...TITLES, ...BORDERS];
 
-// Get cosmetic by ID
+// Get cosmetic by ID (includes case-exclusive items)
 export function getCosmeticById(id: string): CosmeticItem | undefined {
-  return ALL_COSMETICS.find(c => c.id === id);
+  // First check shop cosmetics
+  const shopItem = ALL_COSMETICS.find(c => c.id === id);
+  if (shopItem) return shopItem;
+
+  // Check case-exclusive cosmetics
+  if (id.startsWith('case_')) {
+    // Import case cosmetics dynamically to avoid circular imports
+    const { getCaseExclusiveCosmetic } = require('./casesData');
+    const caseItem = getCaseExclusiveCosmetic(id);
+    if (caseItem) {
+      // Convert to CosmeticItem format
+      return {
+        id: caseItem.id,
+        name: caseItem.name,
+        description: caseItem.caseExclusive ? 'Exclusif aux caisses' : '',
+        type: caseItem.type as CosmeticType,
+        price: 0, // Not purchasable
+        rarity: caseItem.rarity === 'uncommon' ? 'common' :
+                caseItem.rarity === 'mythic' ? 'legendary' : caseItem.rarity as any,
+        icon: caseItem.icon,
+        gradient: caseItem.gradient,
+      };
+    }
+  }
+
+  return undefined;
 }
 
 // Get rarity color

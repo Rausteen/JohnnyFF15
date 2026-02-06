@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift, Trophy, Swords, ShoppingBag } from 'lucide-react';
+import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift, Trophy, Swords, ShoppingBag, Package } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { getCosmeticById } from '../services/shopData';
@@ -23,6 +23,7 @@ const navLinks = [
   { path: '/history', label: 'Musée', icon: History },
   { path: '/leaderboard', label: 'Classement', icon: Trophy },
   { path: '/shop', label: 'Boutique', icon: ShoppingBag },
+  { path: '/cases', label: 'Caisses', icon: Package },
   ...(isAdmin ? [
     { path: '/team-balancer', label: '5v5', icon: Swords },
     { path: '/admin', label: 'Admin', icon: ShieldAlert }
