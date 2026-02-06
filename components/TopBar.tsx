@@ -95,7 +95,7 @@ const navLinks = [
                 to="/profile"
                 className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition cursor-pointer"
               >
-                <div className="w-6 h-6 overflow-hidden relative">
+                <div className="w-6 h-6 relative">
                   {profile?.avatar_url ? (
                     <img src={profile.avatar_url} alt={displayName} className="w-full h-full object-cover" />
                   ) : (
@@ -107,7 +107,7 @@ const navLinks = [
                     <img
                       src={equippedBorder.image_url}
                       alt=""
-                      className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover"
+                      className="absolute -inset-0.5 w-[calc(100%+4px)] h-[calc(100%+4px)] pointer-events-none z-10 object-cover"
                     />
                   )}
                 </div>
@@ -153,7 +153,7 @@ const navLinks = [
           {user && profile && (
             <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-zinc-900 to-black border border-gold/20 mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 overflow-hidden relative">
+                <div className="w-10 h-10 relative">
                   {profile?.avatar_url ? (
                     <img src={profile.avatar_url} alt={displayName} className="w-full h-full object-cover" />
                   ) : (
@@ -165,7 +165,7 @@ const navLinks = [
                     <img
                       src={equippedBorder.image_url}
                       alt=""
-                      className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover"
+                      className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] pointer-events-none z-10 object-cover"
                     />
                   )}
                 </div>

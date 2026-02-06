@@ -187,7 +187,7 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
       <div className="flex flex-col items-center text-center">
         {style.icon}
         <div
-          className="w-16 h-16 mt-4 mb-3 overflow-hidden relative"
+          className="w-16 h-16 mt-4 mb-3 relative"
         >
           {user.avatar_url ? (
             <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full object-cover" />
@@ -200,7 +200,7 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
             <img
               src={border.image_url}
               alt=""
-              className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover"
+              className="absolute -inset-1.5 w-[calc(100%+12px)] h-[calc(100%+12px)] pointer-events-none z-10 object-cover"
             />
           )}
         </div>
@@ -233,7 +233,7 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
       <div className="col-span-1 text-center font-bold text-zinc-500">{rank}</div>
       <div className="col-span-4 flex items-center gap-3">
         <div
-          className="w-10 h-10 flex-shrink-0 overflow-hidden relative"
+          className="w-10 h-10 flex-shrink-0 relative"
         >
           {user.avatar_url ? (
             <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full object-cover" />
@@ -246,7 +246,7 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
             <img
               src={border.image_url}
               alt=""
-              className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover"
+              className="absolute -inset-1 w-[calc(100%+8px)] h-[calc(100%+8px)] pointer-events-none z-10 object-cover"
             />
           )}
         </div>

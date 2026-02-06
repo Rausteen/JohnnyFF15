@@ -191,7 +191,7 @@ const PublicProfile = () => {
         <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
           {/* Avatar */}
           <div className="relative">
-            <div className="w-32 h-32 shadow-lg shadow-primary/30 overflow-hidden relative">
+            <div className="w-32 h-32 shadow-lg shadow-primary/30 relative">
               {profile.avatar_url ? (
                 <img
                   src={profile.avatar_url}
@@ -207,7 +207,7 @@ const PublicProfile = () => {
                 <img
                   src={equippedBorder.image_url}
                   alt=""
-                  className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover"
+                  className="absolute -inset-3 w-[calc(100%+24px)] h-[calc(100%+24px)] pointer-events-none z-10 object-cover"
                 />
               )}
             </div>
