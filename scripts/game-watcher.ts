@@ -35,6 +35,9 @@ const DISCORD_WEBHOOK_URL = process.env.VITE_DISCORD_WEBHOOK_URL || process.env.
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 const CHECK_INTERVAL = 45000; // 45 seconds
+const WEALTH_TAX_CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
+const WEALTH_TAX_THRESHOLD = 100000; // 100k JC
+const WEALTH_TAX_RATE = 0.10; // 10%
 
 // Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1954,11 +1957,134 @@ async function checkAllPlayers(): Promise<void> {
   }
 }
 
+// ============================================
+// WEEKLY WEALTH TAX
+// ============================================
+
+async function checkAndApplyWeeklyWealthTax(): Promise<void> {
+  // Check if it's Sunday
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0 = Sunday
+
+  if (dayOfWeek !== 0) {
+    return; // Only run on Sundays
+  }
+
+  // Check if we already ran today (using a simple flag in Supabase)
+  const todayKey = `wealth_tax_${now.toISOString().slice(0, 10)}`; // e.g., "wealth_tax_2026-02-08"
+
+  const { data: existing } = await supabase
+    .from('admin_commands')
+    .select('id')
+    .eq('command', todayKey)
+    .eq('status', 'completed')
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return; // Already ran today
+  }
+
+  console.log('\n🏦 WEEKLY WEALTH TAX - Running...');
+  console.log(`   Threshold: ${WEALTH_TAX_THRESHOLD.toLocaleString()} JC`);
+  console.log(`   Tax rate: ${WEALTH_TAX_RATE * 100}%`);
+
+  // Fetch all users with credits above threshold
+  const { data: richUsers, error: fetchError } = await supabase
+    .from('profiles')
+    .select('id, pseudo, credits')
+    .gt('credits', WEALTH_TAX_THRESHOLD)
+    .order('credits', { ascending: false });
+
+  if (fetchError) {
+    console.error('❌ Error fetching profiles:', fetchError);
+    return;
+  }
+
+  if (!richUsers || richUsers.length === 0) {
+    console.log('✅ No users above wealth tax threshold.');
+
+    // Mark as completed
+    await supabase.from('admin_commands').insert([{
+      command: todayKey,
+      params: { users_taxed: 0, total_collected: 0 },
+      status: 'completed',
+      result: { message: 'No users above threshold' }
+    }]);
+    return;
+  }
+
+  console.log(`   Found ${richUsers.length} users above threshold`);
+
+  let totalTaxCollected = 0;
+  let usersProcessed = 0;
+
+  for (const user of richUsers) {
+    const taxAmount = Math.floor(user.credits * WEALTH_TAX_RATE);
+    const newCredits = user.credits - taxAmount;
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ credits: newCredits })
+      .eq('id', user.id);
+
+    if (!updateError) {
+      console.log(`   💰 ${user.pseudo}: ${user.credits.toLocaleString()} → ${newCredits.toLocaleString()} JC (-${taxAmount.toLocaleString()})`);
+      totalTaxCollected += taxAmount;
+      usersProcessed++;
+    } else {
+      console.error(`   ❌ Error taxing ${user.pseudo}:`, updateError);
+    }
+  }
+
+  console.log(`\n   ═══════════════════════════════════`);
+  console.log(`   📊 Users taxed: ${usersProcessed}`);
+  console.log(`   💵 Total collected: ${totalTaxCollected.toLocaleString()} JC`);
+  console.log(`   ═══════════════════════════════════\n`);
+
+  // Mark as completed in admin_commands
+  await supabase.from('admin_commands').insert([{
+    command: todayKey,
+    params: { users_taxed: usersProcessed, total_collected: totalTaxCollected },
+    status: 'completed',
+    result: { success: true, users_taxed: usersProcessed, total_collected: totalTaxCollected }
+  }]);
+
+  // Send Discord notification
+  if (DISCORD_WEBHOOK_URL && usersProcessed > 0) {
+    const payload = {
+      username: 'JohnnyFF15 Bot',
+      avatar_url: 'https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/4644.png',
+      embeds: [{
+        title: '🏦 TAXE HEBDOMADAIRE APPLIQUÉE',
+        description: `La taxe de ${WEALTH_TAX_RATE * 100}% sur les portefeuilles > ${WEALTH_TAX_THRESHOLD.toLocaleString()} JC a été prélevée.`,
+        color: 0xf59e0b,
+        fields: [
+          { name: '👥 Joueurs taxés', value: `${usersProcessed}`, inline: true },
+          { name: '💵 Total collecté', value: `${totalTaxCollected.toLocaleString()} JC`, inline: true },
+        ],
+        footer: { text: 'JohnnyFF15 - Chaque dimanche à minuit' },
+        timestamp: new Date().toISOString(),
+      }],
+    };
+
+    try {
+      await fetch(DISCORD_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      console.error('Discord notification error:', err);
+    }
+  }
+}
+
 // Main loop
 async function main(): Promise<void> {
   console.log('🎰 JohnnyFF15 Game Watcher Started');
   console.log(`   Game check: every ${CHECK_INTERVAL / 1000} seconds`);
   console.log(`   Command check: every ${COMMAND_CHECK_INTERVAL / 1000} seconds`);
+  console.log(`   Wealth tax check: every hour (runs on Sundays)`);
   console.log('   Press Ctrl+C to stop\n');
 
   // Validate config
@@ -1982,6 +2108,10 @@ async function main(): Promise<void> {
 
   // Schedule command processing
   setInterval(processCommands, COMMAND_CHECK_INTERVAL);
+
+  // Check wealth tax on startup and schedule periodic checks
+  await checkAndApplyWeeklyWealthTax();
+  setInterval(checkAndApplyWeeklyWealthTax, WEALTH_TAX_CHECK_INTERVAL);
 }
 
 main().catch(console.error);
