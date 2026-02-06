@@ -21,10 +21,10 @@ const PROP_TYPES: Record<string, PropType> = {
   'kda5': 'NEGATIVE',      // 0 Assist toute la game
   'out1': 'NEGATIVE',      // FF avant 20 min
   'gp5': 'NEGATIVE',       // Moins d'or que le support
-  'kda2': 'NEGATIVE',      // Le 0/15 Legendaire
-  'sp1': 'NEGATIVE',       // Le Perfect Int
+  'kda2': 'NEGATIVE',      // 15 morts ou plus
 
   // POSITIVE props (good things - skilled players more likely)
+  'gp9': 'POSITIVE',       // KP > 70%
   'early6': 'POSITIVE',    // 4 morts ou moins
   'gp7': 'POSITIVE',       // CS > 9.5/min
   'kda6': 'POSITIVE',      // KDA >= 1

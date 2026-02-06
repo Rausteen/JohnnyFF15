@@ -110,7 +110,9 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
       return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dégâts`;
     case 'gp5': // Moins d'or que le support
       return `${stats.goldEarned} or (min équipe: ${lowestTeammateGold})`;
-    case 'gp6': // Participation < 15%
+    case 'gp6': // Participation < 25%
+      return `${killParticipation.toFixed(0)}% KP`;
+    case 'gp9': // KP > 70%
       return `${killParticipation.toFixed(0)}% KP`;
 
     // ========== RÉSULTAT ==========
@@ -124,8 +126,6 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
       return `Durée: ${gameDurationMin}min`;
 
     // ========== LÉGENDAIRES ==========
-    case 'sp1': // Le Perfect Int
-      return `${stats.deaths} morts, ${stats.kills} kills, ${stats.win ? 'Win' : 'Défaite'}`;
     case 'sp2': // Le Miracle KDA
       return `KDA: ${kda.toFixed(2)}`;
     case 'sp3': // Le Carry Mystique
@@ -284,6 +284,9 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'gp6': // Participation < 25%
       return killParticipation < 25;
 
+    case 'gp9': // KP > 70%
+      return killParticipation > 70;
+
     // ========== RÉSULTAT ==========
     case 'out1': // FF avant 20 min (any surrender before 20 min)
       return stats.gameEndedInSurrender && match.info.gameDuration < 1200;
@@ -298,9 +301,6 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
       return match.info.gameDuration > 2400;
 
     // ========== LÉGENDAIRES ==========
-    case 'sp1': // Le Perfect Int (10+ morts, 0 kill, défaite)
-      return stats.deaths >= 10 && stats.kills === 0 && !stats.win;
-
     case 'sp2': // Le Miracle KDA (KDA > 3.0)
       return kda > 3.0;
 

@@ -13,7 +13,7 @@ interface DragonScoreBetProps {
 }
 
 // Fixed odds for all dragon scores
-const DRAGON_SCORE_ODDS = 36;
+const DRAGON_SCORE_ODDS = 50;
 
 // Max bets per game
 const MAX_DRAGON_BETS = 2;

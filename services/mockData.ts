@@ -30,7 +30,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'gp1',
     title: "CS de la honte (<4/min)",
     description: "Moins de 4 CS par minute.",
-    odds: 3.0,
+    odds: 10.0,
     category: 'GAMEPLAY'
   },
 
@@ -83,14 +83,14 @@ export const MOCK_PROPS: Prop[] = [
     id: 'kda4',
     title: "0 Kill toute la game",
     description: "{player} termine sans aucun kill.",
-    odds: 4.0,
+    odds: 13.0,
     category: 'KDA'
   },
   {
     id: 'kda5',
     title: "0 Assist toute la game",
     description: "{player} termine sans aucune assist.",
-    odds: 7.0,
+    odds: 15.0,
     category: 'KDA'
   },
   {
@@ -111,16 +111,9 @@ export const MOCK_PROPS: Prop[] = [
   // ========== LEGENDARY / THROW ==========
   {
     id: 'kda2',
-    title: "Le 0/15 Légendaire",
-    description: "15 morts ou plus.",
-    odds: 5.0,
-    category: 'KDA'
-  },
-  {
-    id: 'sp1',
-    title: "Le Perfect Int",
-    description: "10+ morts, 0 kill, défaite.",
-    odds: 7.0,
+    title: "15 morts ou plus",
+    description: "{player} termine avec 15 morts ou plus.",
+    odds: 15.0,
     category: 'KDA'
   },
   // ========== MIRACLES ==========
@@ -165,7 +158,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'sk3',
     title: "0 Solo Kill",
     description: "{player} ne fait aucun solo kill.",
-    odds: 1.8,
+    odds: 2.0,
     category: 'KDA'
   },
 
@@ -197,7 +190,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'kda7',
     title: "Double kill ou plus",
     description: "{player} fait un double kill.",
-    odds: 3.5,
+    odds: 3.0,
     category: 'KDA'
   },
   {
@@ -218,7 +211,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'sp2',
     title: "Le Miracle KDA",
     description: "{player} termine avec un KDA > 3.0.",
-    odds: 8.0,
+    odds: 5.0,
     category: 'LATE'
   },
   {
@@ -236,10 +229,17 @@ export const MOCK_PROPS: Prop[] = [
     category: 'GAMEPLAY'
   },
   {
+    id: 'gp9',
+    title: "KP > 70%",
+    description: "{player} participe à plus de 70% des kills de l'équipe.",
+    odds: 4.0,
+    category: 'GAMEPLAY'
+  },
+  {
     id: 'sp6',
     title: "Le Pentakill",
     description: "{player} fait un pentakill.",
-    odds: 50.0,
+    odds: 200.0,
     category: 'LATE'
   }
 ];

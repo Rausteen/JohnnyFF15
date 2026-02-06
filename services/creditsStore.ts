@@ -59,9 +59,16 @@ export const TRANSFER_LIMITS = {
   MIN_BALANCE: TRANSFER_MIN_BALANCE
 };
 
-const DAILY_BONUS_AMOUNT = 1000;
 const DAILY_BONUS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 const DAILY_BONUS_MAX_CREDITS = 15000; // Can't claim if you have more than this
+const DAILY_BONUS_THRESHOLD = 10000; // Below this: 1000 bonus, above: 500 bonus
+
+// Get daily bonus amount based on current credits
+function getDailyBonusAmount(credits: number): number {
+  if (credits >= DAILY_BONUS_MAX_CREDITS) return 0;
+  if (credits < DAILY_BONUS_THRESHOLD) return 1000;
+  return 500;
+}
 
 export const useCreditsStore = create<CreditsState>((set, get) => ({
   profile: null,
@@ -267,7 +274,8 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
     if (!canClaimDailyBonus()) return { success: false, error: 'Bonus deja reclame aujourd\'hui' };
 
     try {
-      const newCredits = profile.credits + DAILY_BONUS_AMOUNT;
+      const bonusAmount = getDailyBonusAmount(profile.credits);
+      const newCredits = profile.credits + bonusAmount;
       const now = new Date().toISOString();
 
       const { error } = await supabase

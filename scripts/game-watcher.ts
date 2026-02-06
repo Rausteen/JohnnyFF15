@@ -1338,6 +1338,8 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
       return stats.goldEarned < lowestTeammateGold;
     case 'gp6': // Participation < 25%
       return killParticipation < 25;
+    case 'gp9': // KP > 70%
+      return killParticipation > 70;
 
     // ========== RÉSULTAT ==========
     case 'out1': // FF avant 20 min
@@ -1350,8 +1352,6 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
       return match.info.gameDuration > 2400;
 
     // ========== LÉGENDAIRES ==========
-    case 'sp1': // Le Perfect Int (10+ morts, 0 kill, défaite)
-      return stats.deaths >= 10 && stats.kills === 0 && !stats.win;
     case 'sp2': // Le Miracle KDA (KDA > 3.0)
       return kda > 3.0;
     case 'sp3': // Le Carry Mystique (top damage de l'équipe)
@@ -1430,11 +1430,11 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
     case 'gp4': return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dégâts`;
     case 'gp5': return `${stats.goldEarned} or (min équipe: ${lowestTeammateGold})`;
     case 'gp6': return `${killParticipation.toFixed(0)}% KP`;
+    case 'gp9': return `${killParticipation.toFixed(0)}% KP`;
     case 'out1': return `${stats.gameEndedInSurrender || match.info.gameEndedInSurrender ? 'FF' : 'Pas FF'} à ${gameDurationMin}min`;
     case 'out2': return stats.win ? 'Victoire' : 'Défaite';
     case 'out3': return stats.win ? 'Victoire' : 'Défaite';
     case 'out4': return `Durée: ${gameDurationMin}min`;
-    case 'sp1': return `${stats.deaths} morts, ${stats.kills} kills, ${stats.win ? 'Win' : 'Défaite'}`;
     case 'sp2': return `KDA: ${kda.toFixed(2)}`;
     case 'sp3': {
       const maxDmg = Math.max(...team.map(p => p.totalDamageDealtToChampions));
