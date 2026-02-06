@@ -200,7 +200,11 @@ const DamageRankingBet: React.FC = () => {
         .map(rp => `${rp.player.puuid?.slice(-8)}:${rp.position}`)
         .join('_');
       const propId = `damage_ranking_${rankedPlayers.length}_${rankingEncoded}`;
-      const propTitle = `🔥 Classement Dégâts (${rankedPlayers.length} joueurs)`;
+      const rankingDetail = rankedPlayers
+        .sort((a, b) => a.position - b.position)
+        .map(rp => `${rp.position}.${rp.player.displayName}`)
+        .join(' ');
+      const propTitle = `🔥 Classement Dégâts: ${rankingDetail}`;
 
       const bet = await placeBet(
         propId, propTitle, currentOdds, val,
