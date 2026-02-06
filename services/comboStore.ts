@@ -29,11 +29,6 @@ const CORRELATED_GROUPS: string[][] = [
   ['early4', 'early3', 'kda1', 'kda2'],  // 0 mort, 5+ morts, 10+ morts, 15+ morts
 ];
 
-// Props that are highly correlated (statistically, not logically)
-// Victory is correlated with good performance
-const WIN_CORRELATED_PROPS = ['kda6', 'kda9', 'sp2', 'kda7', 'kda8', 'sp3', 'gp8'];
-const LOSS_CORRELATED_PROPS = ['kda1', 'kda2', 'kda3', 'early3', 'gp4', 'gp5', 'gp6'];
-
 // Check if two props conflict
 function arePropsCorrelated(propId1: string, propId2: string): boolean {
   // Same prop
@@ -45,14 +40,6 @@ function arePropsCorrelated(propId1: string, propId2: string): boolean {
       return true;
     }
   }
-
-  // Victory + good performance props
-  if (propId1 === 'out3' && WIN_CORRELATED_PROPS.includes(propId2)) return true;
-  if (propId2 === 'out3' && WIN_CORRELATED_PROPS.includes(propId1)) return true;
-
-  // Defeat + bad performance props
-  if (propId1 === 'out2' && LOSS_CORRELATED_PROPS.includes(propId2)) return true;
-  if (propId2 === 'out2' && LOSS_CORRELATED_PROPS.includes(propId1)) return true;
 
   return false;
 }
@@ -68,18 +55,6 @@ function getCorrelationReason(propId1: string, propId2: string): string | null {
   if (['early3', 'kda1', 'kda2', 'early4'].some(p => p === propId1 || p === propId2) &&
       ['early3', 'kda1', 'kda2', 'early4'].some(p => p === propId1 || p === propId2)) {
     return 'Ces paris sur les morts sont incompatibles';
-  }
-
-  // Victory correlations
-  if ((propId1 === 'out3' || propId2 === 'out3') &&
-      (WIN_CORRELATED_PROPS.includes(propId1) || WIN_CORRELATED_PROPS.includes(propId2))) {
-    return 'Victoire est trop corrélée avec une bonne perf';
-  }
-
-  // Defeat correlations
-  if ((propId1 === 'out2' || propId2 === 'out2') &&
-      (LOSS_CORRELATED_PROPS.includes(propId1) || LOSS_CORRELATED_PROPS.includes(propId2))) {
-    return 'Défaite est trop corrélée avec une mauvaise perf';
   }
 
   // Kill-related

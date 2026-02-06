@@ -63,20 +63,33 @@ const Cases = () => {
       const result = rollLoot(selectedCase);
       setWonItem(result);
 
-      // Generate roulette items
-      const items = generateRouletteItems(selectedCase, result, 50);
+      // Generate roulette items (winning item is placed at ~75-80% position)
+      const itemCount = 50;
+      const items = generateRouletteItems(selectedCase, result, itemCount);
       setRouletteItems(items);
 
-      // Find winning position
-      const winIndex = items.findIndex(item => item.id === result.id && items.indexOf(item) > 30);
-      const itemWidth = 120; // Width of each item in pixels
+      // Find the winning item position (it's placed between 75-80% of the array)
+      let winIndex = -1;
+      for (let i = Math.floor(itemCount * 0.7); i < itemCount; i++) {
+        if (items[i].id === result.id) {
+          winIndex = i;
+          break;
+        }
+      }
+      if (winIndex === -1) winIndex = Math.floor(itemCount * 0.75); // Fallback
+
+      // Calculate position (item width 116px + gap 8px = 124px per item)
+      const itemTotalWidth = 124; // 116px width + 8px gap
       const containerWidth = rouletteRef.current?.offsetWidth || 600;
-      const targetPosition = (winIndex * itemWidth) - (containerWidth / 2) + (itemWidth / 2);
+      const targetPosition = (winIndex * itemTotalWidth) - (containerWidth / 2) + (116 / 2);
+
+      // Small random offset for more natural feel
+      const randomOffset = Math.random() * 60 - 30;
 
       // Animate roulette
       setRoulettePosition(0);
-      await new Promise(resolve => setTimeout(resolve, 100));
-      setRoulettePosition(-targetPosition);
+      await new Promise(resolve => setTimeout(resolve, 50));
+      setRoulettePosition(-(targetPosition + randomOffset));
 
       // Wait for animation to complete
       await new Promise(resolve => setTimeout(resolve, 4000));
@@ -314,19 +327,24 @@ const Cases = () => {
                 style={{ height: '140px' }}
               >
                 <div
-                  className="flex items-center gap-2 py-2 transition-transform duration-[4000ms] ease-out"
-                  style={{ transform: `translateX(${roulettePosition}px)` }}
+                  className="flex items-center gap-2 py-2 px-2 transition-transform ease-out"
+                  style={{
+                    transform: `translateX(${roulettePosition}px)`,
+                    transitionDuration: isOpening && !showResult ? '4000ms' : '0ms',
+                    transitionTimingFunction: 'cubic-bezier(0.15, 0.85, 0.35, 1)'
+                  }}
                 >
                   {rouletteItems.map((item, idx) => {
                     const style = getRarityStyle(item.rarity);
+                    const isWinningItem = showResult && wonItem && item.id === wonItem.id && idx >= Math.floor(rouletteItems.length * 0.7);
                     return (
                       <div
                         key={idx}
                         className={`flex-shrink-0 w-[116px] h-[120px] rounded-xl ${style.bg} border-2 ${
-                          showResult && wonItem?.id === item.id && idx === rouletteItems.findIndex((i, index) => i.id === item.id && index > 30)
-                            ? 'border-primary shadow-lg shadow-primary/50'
+                          isWinningItem
+                            ? 'border-primary shadow-lg shadow-primary/50 scale-105'
                             : 'border-white/10'
-                        } flex flex-col items-center justify-center p-2`}
+                        } flex flex-col items-center justify-center p-2 transition-all duration-300`}
                       >
                         <div className="text-3xl mb-1">
                           {item.type === 'jc' ? '💰' : item.icon || '🎁'}
