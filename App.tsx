@@ -16,6 +16,7 @@ const Profile = lazy(() => import('./pages/Profile'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 const PublicProfile = lazy(() => import('./pages/PublicProfile'));
 const TeamBalancer = lazy(() => import('./pages/TeamBalancer'));
+const Shop = lazy(() => import('./pages/Shop'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -83,6 +84,7 @@ const App = () => {
             <Route path="profile" element={<Profile />} />
             <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="team-balancer" element={<TeamBalancer />} />
+            <Route path="shop" element={<Shop />} />
             <Route path="user/:userId" element={<PublicProfile />} />
           </Route>
         </Routes>
