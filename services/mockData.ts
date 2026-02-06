@@ -39,7 +39,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'gp7',
     title: "CS > 9.5/min",
     description: "Plus de 9.5 CS par minute. Farm de Challenger.",
-    odds: 5.0,
+    odds: 10.0,
     category: 'GAMEPLAY'
   },
   {
@@ -60,14 +60,14 @@ export const MOCK_PROPS: Prop[] = [
     id: 'gp4',
     title: "Moins de 8k dégâts",
     description: "Moins de 8000 dégâts aux champions.",
-    odds: 2.0,
+    odds: 5.0,
     category: 'GAMEPLAY'
   },
   {
     id: 'gp6',
     title: "Participation < 25%",
     description: "Participe à moins de 25% des kills.",
-    odds: 2.5,
+    odds: 3.5,
     category: 'GAMEPLAY'
   },
   {
@@ -104,7 +104,7 @@ export const MOCK_PROPS: Prop[] = [
     id: 'gp5',
     title: "Moins d'or que le support",
     description: "{player} finit avec moins d'or que le support allié.",
-    odds: 4.0,
+    odds: 7.0,
     category: 'GAMEPLAY'
   },
 

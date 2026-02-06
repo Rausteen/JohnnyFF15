@@ -1274,6 +1274,45 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
     return actualK === predictedK;
   }
 
+  // Handle Damage Ranking bets (format: damage_ranking_[count]_[puuid:pos]_[puuid:pos]_...)
+  if (propId.startsWith('damage_ranking_')) {
+    const parts = propId.split('_');
+    const count = parseInt(parts[2], 10);
+
+    // Get all tracked players in this match and sort by damage
+    const teamParticipants = match.info.participants.filter(p => p.teamId === stats.teamId);
+    const sortedByDamage = [...teamParticipants].sort(
+      (a, b) => b.totalDamageDealtToChampions - a.totalDamageDealtToChampions
+    );
+
+    // Create actual ranking map (puuid last 8 chars -> position 1-5)
+    const actualRanking = new Map<string, number>();
+    sortedByDamage.forEach((p, idx) => {
+      actualRanking.set(p.puuid.slice(-8), idx + 1);
+    });
+
+    // Parse predicted rankings from propId
+    // Format: damage_ranking_3_abc12345:1_def67890:2_ghi11111:3
+    let allCorrect = true;
+    for (let i = 3; i < 3 + count; i++) {
+      const rankPart = parts[i];
+      if (!rankPart) {
+        allCorrect = false;
+        break;
+      }
+      const [puuidShort, posStr] = rankPart.split(':');
+      const predictedPos = parseInt(posStr, 10);
+      const actualPos = actualRanking.get(puuidShort);
+
+      if (actualPos !== predictedPos) {
+        allCorrect = false;
+        break;
+      }
+    }
+
+    return allCorrect;
+  }
+
   switch (propId) {
     // ========== EARLY GAME ==========
     case 'early1': // First Blood victime
@@ -1400,6 +1439,18 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
   if (propId.startsWith('exact_damage_')) {
     const damageK = Math.floor(stats.totalDamageDealtToChampions / 1000);
     return `⚔️ Dégâts: ${damageK}k`;
+  }
+
+  // Handle Damage Ranking bets
+  if (propId.startsWith('damage_ranking_')) {
+    const sortedByDamage = [...team].sort(
+      (a, b) => b.totalDamageDealtToChampions - a.totalDamageDealtToChampions
+    );
+    const ranking = sortedByDamage
+      .slice(0, 5)
+      .map((p, i) => `${i + 1}. ${(p.totalDamageDealtToChampions / 1000).toFixed(0)}k`)
+      .join(' | ');
+    return `🔥 Classement: ${ranking}`;
   }
 
   switch (propId) {
