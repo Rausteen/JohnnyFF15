@@ -23,8 +23,8 @@ const navLinks = [
   { path: '/history', label: 'Musée', icon: History },
   { path: '/leaderboard', label: 'Classement', icon: Trophy },
   { path: '/shop', label: 'Boutique', icon: ShoppingBag },
-  { path: '/team-balancer', label: '5v5', icon: Swords },
   ...(isAdmin ? [
+    { path: '/team-balancer', label: '5v5', icon: Swords },
     { path: '/admin', label: 'Admin', icon: ShieldAlert }
   ] : []),
 ];
