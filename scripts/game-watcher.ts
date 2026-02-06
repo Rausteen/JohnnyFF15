@@ -124,6 +124,9 @@ const QUEUE_NAMES: Record<number, string> = {
   1700: 'Arena',
 };
 
+// Only allow bets on these queues (Solo/Duo and Flex)
+const ALLOWED_QUEUE_IDS = [420, 440];
+
 // Champion name from ID (loaded from Data Dragon)
 let CHAMPIONS: Record<number, string> = {};
 
@@ -1785,23 +1788,34 @@ async function checkAllPlayers(): Promise<void> {
 
     if (game) {
       const gameId = game.gameId;
-      const participant = game.participants.find(p => p.puuid === player.puuid);
-      const championName = participant ? (CHAMPIONS[participant.championId] || `Champion${participant.championId}`) : '';
-
-      if (!gameGroups.has(gameId)) {
-        gameGroups.set(gameId, { players: [], game, champions: [] });
-      }
-
-      const group = gameGroups.get(gameId)!;
-      group.players.push(player);
-      group.champions.push(championName);
-
+      const queueId = game.gameQueueConfigId;
+      const queueName = QUEUE_NAMES[queueId] || 'Unknown';
       const name = player.display_name || player.game_name || 'Unknown';
-      console.log(`  🎮 ${name} is in game (${QUEUE_NAMES[game.gameQueueConfigId] || 'Unknown'})`);
-      await updateGameStatusInSupabase(player.id, true, String(gameId), game);
 
-      // Update previous state
-      previousGameState.set(player.id, { isInGame: true, gameId: String(gameId) });
+      // Check if this is an allowed queue (Solo/Duo or Flex)
+      if (!ALLOWED_QUEUE_IDS.includes(queueId)) {
+        console.log(`  ⏭️  ${name} is in ${queueName} (ignored - not ranked)`);
+        // Treat as not in game for betting purposes
+        await updateGameStatusInSupabase(player.id, false, null, null);
+        previousGameState.set(player.id, { isInGame: false, gameId: null });
+      } else {
+        const participant = game.participants.find(p => p.puuid === player.puuid);
+        const championName = participant ? (CHAMPIONS[participant.championId] || `Champion${participant.championId}`) : '';
+
+        if (!gameGroups.has(gameId)) {
+          gameGroups.set(gameId, { players: [], game, champions: [] });
+        }
+
+        const group = gameGroups.get(gameId)!;
+        group.players.push(player);
+        group.champions.push(championName);
+
+        console.log(`  🎮 ${name} is in game (${queueName})`);
+        await updateGameStatusInSupabase(player.id, true, String(gameId), game);
+
+        // Update previous state
+        previousGameState.set(player.id, { isInGame: true, gameId: String(gameId) });
+      }
     } else {
       const name = player.display_name || player.game_name || 'Unknown';
       console.log(`  ⏸️  ${name} not in game`);
