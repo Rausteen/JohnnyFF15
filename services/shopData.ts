@@ -158,6 +158,15 @@ export const BORDERS: CosmeticItem[] = [
     gradient: 'conic-gradient(from 0deg, #ff5a00, #ffcc00, #ff004c, #ff5a00)',
   },
   {
+    id: 'border_steam_challenger',
+    name: 'Bordure Steam Challenger',
+    description: 'Bordure exclusive Steam. Gratuite pour tous.',
+    type: 'border',
+    price: 0,
+    rarity: 'legendary',
+    gradient: 'url(https://cdn.fastly.steamstatic.com/steamcommunity/public/images/items/1260320/42e90873bde7d23ba8605e2c873263aef5ed0880.png) center/cover no-repeat',
+  },
+  {
     id: 'border_bronze',
     name: 'Bordure Bronze',
     description: 'Simple mais efficace',
