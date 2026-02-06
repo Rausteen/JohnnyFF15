@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore, TRANSFER_LIMITS } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
-import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, ShoppingBag } from 'lucide-react';
+import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, ShoppingBag, Camera, X } from 'lucide-react';
 import { getCosmeticById } from '../services/shopData';
 
 interface UserOption {
@@ -24,6 +24,11 @@ const Profile = () => {
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferMessage, setTransferMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [allUsers, setAllUsers] = useState<UserOption[]>([]);
+
+  // Avatar upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   // Update countdown timer
   useEffect(() => {
@@ -96,6 +101,94 @@ const Profile = () => {
   // Get current transfer limits
   const transferLimits = getTransferLimits();
 
+  // Avatar upload handler
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('Le fichier doit être une image');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError('Image trop grande (max 2 Mo)');
+      return;
+    }
+
+    setAvatarUploading(true);
+    setAvatarError(null);
+
+    try {
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `avatars/${fileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      // Update profile with avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      // Reload profile to reflect changes
+      const { loadProfile } = useCreditsStore.getState();
+      await loadProfile(user.id);
+
+    } catch (err: any) {
+      console.error('Avatar upload error:', err);
+      setAvatarError(err.message || 'Erreur lors de l\'upload');
+    } finally {
+      setAvatarUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Remove avatar handler
+  const handleRemoveAvatar = async () => {
+    if (!user || !profile?.avatar_url) return;
+
+    setAvatarUploading(true);
+    setAvatarError(null);
+
+    try {
+      // Update profile to remove avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      // Reload profile
+      const { loadProfile } = useCreditsStore.getState();
+      await loadProfile(user.id);
+
+    } catch (err: any) {
+      console.error('Remove avatar error:', err);
+      setAvatarError(err.message || 'Erreur lors de la suppression');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center p-4">
@@ -137,14 +230,57 @@ const Profile = () => {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
-        <div
-          className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30"
-          style={equippedBorder?.gradient ? { background: equippedBorder.gradient, padding: '4px' } : undefined}
-        >
-          <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
-            <span className="text-3xl font-black text-white">{displayName.charAt(0).toUpperCase()}</span>
+        {/* Avatar with upload */}
+        <div className="relative group">
+          <div
+            className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30"
+            style={equippedBorder?.gradient ? { background: equippedBorder.gradient, padding: '4px' } : undefined}
+          >
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={displayName}
+                className={`w-full h-full object-cover ${equippedBorder ? 'rounded-xl' : 'rounded-2xl'}`}
+              />
+            ) : (
+              <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
+                <span className="text-3xl font-black text-white">{displayName.charAt(0).toUpperCase()}</span>
+              </div>
+            )}
           </div>
+
+          {/* Upload overlay */}
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="absolute inset-0 rounded-2xl bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"
+          >
+            {avatarUploading ? (
+              <Loader2 className="w-6 h-6 text-white animate-spin" />
+            ) : (
+              <Camera className="w-6 h-6 text-white" />
+            )}
+          </div>
+
+          {/* Remove avatar button */}
+          {profile?.avatar_url && !avatarUploading && (
+            <button
+              onClick={handleRemoveAvatar}
+              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+              title="Supprimer la photo"
+            >
+              <X className="w-4 h-4 text-white" />
+            </button>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarUpload}
+            className="hidden"
+          />
         </div>
+
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-black text-white">{displayName}</h1>
@@ -154,6 +290,9 @@ const Profile = () => {
             <p className="text-zinc-400 italic">"{equippedTitle.name}"</p>
           ) : (
             <p className="text-zinc-400">Joueur du Casino du Throw</p>
+          )}
+          {avatarError && (
+            <p className="text-red-400 text-sm mt-1">{avatarError}</p>
           )}
         </div>
       </div>

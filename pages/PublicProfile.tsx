@@ -17,6 +17,7 @@ interface PublicUser {
   jc_won: number;
   jc_lost: number;
   created_at: string;
+  avatar_url?: string | null;
   equipped_badge?: string | null;
   equipped_title?: string | null;
   equipped_border?: string | null;
@@ -190,12 +191,20 @@ const PublicProfile = () => {
           {/* Avatar */}
           <div className="relative">
             <div
-              className="w-32 h-32 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30"
+              className="w-32 h-32 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 overflow-hidden"
               style={equippedBorder?.gradient ? { background: equippedBorder.gradient, padding: '5px' } : undefined}
             >
-              <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
-                <span className="text-5xl font-black text-white">{profile.pseudo.charAt(0).toUpperCase()}</span>
-              </div>
+              {profile.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile.pseudo}
+                  className={`w-full h-full object-cover ${equippedBorder ? 'rounded-xl' : 'rounded-2xl'}`}
+                />
+              ) : (
+                <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
+                  <span className="text-5xl font-black text-white">{profile.pseudo.charAt(0).toUpperCase()}</span>
+                </div>
+              )}
             </div>
             {rank && rank <= 3 && (
               <div className="absolute -top-3 -right-3 w-10 h-10 rounded-full bg-gold flex items-center justify-center shadow-lg">

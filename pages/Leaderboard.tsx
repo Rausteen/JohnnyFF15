@@ -16,6 +16,7 @@ interface LeaderboardUser {
   jc_won: number;
   jc_lost: number;
   created_at: string;
+  avatar_url?: string | null;
   equipped_badge?: string | null;
   equipped_title?: string | null;
   equipped_border?: string | null;
@@ -186,12 +187,16 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
       <div className="flex flex-col items-center text-center">
         {style.icon}
         <div
-          className={`w-16 h-16 rounded-full flex items-center justify-center mt-4 mb-3 ${rank === 1 ? 'ring-4 ring-gold/50' : ''}`}
+          className={`w-16 h-16 rounded-full flex items-center justify-center mt-4 mb-3 overflow-hidden ${rank === 1 ? 'ring-4 ring-gold/50' : ''}`}
           style={border?.gradient ? { background: border.gradient, padding: '3px' } : undefined}
         >
-          <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-            <span className="text-2xl font-black text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
-          </div>
+          {user.avatar_url ? (
+            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full rounded-full object-cover" />
+          ) : (
+            <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+              <span className="text-2xl font-black text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <h3 className="font-bold text-white text-lg truncate max-w-full">{user.pseudo}</h3>
@@ -223,12 +228,16 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
       <div className="col-span-1 text-center font-bold text-zinc-500">{rank}</div>
       <div className="col-span-4 flex items-center gap-3">
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
           style={border?.gradient ? { background: border.gradient, padding: '2px' } : undefined}
         >
-          <div className={`w-full h-full rounded-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center ${!border ? '' : ''}`}>
-            <span className="font-bold text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
-          </div>
+          {user.avatar_url ? (
+            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full rounded-full object-cover" />
+          ) : (
+            <div className="w-full h-full rounded-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center">
+              <span className="font-bold text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
+            </div>
+          )}
         </div>
         <span className="font-bold text-white truncate">{user.pseudo}</span>
         {badge?.icon && <span title={badge.name}>{badge.icon}</span>}

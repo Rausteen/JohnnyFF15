@@ -16,6 +16,12 @@ interface UserProfile {
   last_transfer_at: string | null;
   daily_transfer_total: number;
   daily_transfer_date: string | null;
+  // Cosmetics
+  avatar_url?: string | null;
+  owned_cosmetics?: string[];
+  equipped_badge?: string | null;
+  equipped_title?: string | null;
+  equipped_border?: string | null;
 }
 
 // Transfer limits
