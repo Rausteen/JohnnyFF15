@@ -12,7 +12,7 @@ import {
   getRarityBg,
   getRarityLabel,
 } from '../services/shopData';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../services/supabase';
 
 type TabType = 'badges' | 'titles' | 'borders';
 
