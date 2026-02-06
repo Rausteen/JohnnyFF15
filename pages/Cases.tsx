@@ -3,7 +3,7 @@ import { Package, Sparkles, Loader2, Volume2, VolumeX, ChevronRight, Gift, Info,
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
-import { CASES, Case, LootItem, RARITY_CONFIG, rollLoot, generateRouletteItems, getCaseExclusiveCosmetic, CASE_BADGES, CASE_TITLES, CASE_BORDERS } from '../services/casesData';
+import { CASES, Case, LootItem, RARITY_CONFIG, rollLoot, rollBonusCosmetic, generateRouletteItems, getCaseExclusiveCosmetic, CASE_BADGES, CASE_TITLES, CASE_BORDERS } from '../services/casesData';
 import { ALL_COSMETICS } from '../services/shopData';
 
 // Helper to get cosmetic info from ID
@@ -42,6 +42,7 @@ const Cases = () => {
   const [isOpening, setIsOpening] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [wonItem, setWonItem] = useState<LootItem | null>(null);
+  const [bonusItem, setBonusItem] = useState<LootItem | null>(null);
   const [rouletteItems, setRouletteItems] = useState<LootItem[]>([]);
   const [roulettePosition, setRoulettePosition] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -145,6 +146,7 @@ const Cases = () => {
     setIsOpening(true);
     setShowResult(false);
     setWonItem(null);
+    setBonusItem(null);
 
     try {
       // Deduct credits first
@@ -155,19 +157,34 @@ const Cases = () => {
 
       if (deductError) throw deductError;
 
-      // Roll the loot
+      // Roll the main loot table
       const result = rollLoot(selectedCase);
-      setWonItem(result);
 
-      // Generate roulette items (winning item is placed at ~75-80% position)
+      // Determine cosmetic + bonus
+      let cosmetic: LootItem;
+      let bonus: LootItem | null = null;
+
+      if (result.type === 'badge' || result.type === 'title' || result.type === 'border') {
+        // Rolled a cosmetic directly → no bonus
+        cosmetic = result;
+      } else {
+        // Rolled coins (jc) or IRL → this is the bonus, roll a separate cosmetic
+        bonus = result;
+        cosmetic = rollBonusCosmetic(selectedCase);
+      }
+
+      setWonItem(cosmetic);
+      setBonusItem(bonus);
+
+      // Generate roulette items (roulette shows cosmetics, stops on won cosmetic)
       const itemCount = 50;
-      const items = generateRouletteItems(selectedCase, result, itemCount);
+      const items = generateRouletteItems(selectedCase, cosmetic, itemCount);
       setRouletteItems(items);
 
-      // Find the winning item position (it's placed between 75-80% of the array)
+      // Find the winning cosmetic position (placed between 75-80% of the array)
       let winIndex = -1;
       for (let i = Math.floor(itemCount * 0.7); i < itemCount; i++) {
-        if (items[i].id === result.id) {
+        if (items[i].id === cosmetic.id) {
           winIndex = i;
           break;
         }
@@ -190,32 +207,31 @@ const Cases = () => {
       // Wait for animation to complete
       await new Promise(resolve => setTimeout(resolve, 4000));
 
-      // Award the prize
-      if (result.type === 'jc' && result.jcAmount) {
+      // Always award the cosmetic
+      const currentCosmetics = profile.owned_cosmetics || [];
+      if (!currentCosmetics.includes(cosmetic.id)) {
+        const { error: cosmeticError } = await supabase
+          .from('profiles')
+          .update({ owned_cosmetics: [...currentCosmetics, cosmetic.id] })
+          .eq('id', user.id);
+        if (cosmeticError) throw cosmeticError;
+      }
+
+      // Award bonus coins if applicable
+      if (bonus?.type === 'jc' && bonus.jcAmount) {
         const { error: awardError } = await supabase
           .from('profiles')
-          .update({ credits: profile.credits - selectedCase.price + result.jcAmount })
+          .update({ credits: profile.credits - selectedCase.price + bonus.jcAmount })
           .eq('id', user.id);
         if (awardError) throw awardError;
-      } else if (result.type === 'badge' || result.type === 'title' || result.type === 'border') {
-        // Add cosmetic to owned_cosmetics
-        const currentCosmetics = profile.owned_cosmetics || [];
-        if (!currentCosmetics.includes(result.id)) {
-          const { error: cosmeticError } = await supabase
-            .from('profiles')
-            .update({ owned_cosmetics: [...currentCosmetics, result.id] })
-            .eq('id', user.id);
-          if (cosmeticError) throw cosmeticError;
-        }
-      } else if (result.type === 'ticket') {
-        // Give a free case (handled elsewhere)
       }
+      // IRL rewards are tracked/displayed only (manual fulfillment)
 
       // Reload profile
       await loadProfile(user.id);
 
-      // Save to recent drops
-      saveRecentDrop(profile.pseudo, result, selectedCase.id);
+      // Save cosmetic to recent drops
+      saveRecentDrop(profile.pseudo, cosmetic, selectedCase.id);
 
       setShowResult(true);
     } catch (err: any) {
@@ -231,6 +247,7 @@ const Cases = () => {
   const closeResult = () => {
     setShowResult(false);
     setWonItem(null);
+    setBonusItem(null);
     setRouletteItems([]);
     setRoulettePosition(0);
   };
@@ -480,27 +497,51 @@ const Cases = () => {
               <Info className="w-5 h-5 text-zinc-400" />
               <h3 className="font-bold text-white">Contenu possible</h3>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-              {selectedCase.lootTable.slice(0, 12).map((item, idx) => {
-                const style = getRarityStyle(item.rarity);
-                return (
-                  <div
-                    key={idx}
-                    className={`p-3 rounded-xl ${style.bg} border border-white/5 text-center`}
-                  >
-                    <div className="text-2xl mb-1">
-                      {item.type === 'jc' ? '💰' : item.icon || '🎁'}
-                    </div>
-                    <div className={`text-xs font-bold ${style.color} truncate`}>
-                      {item.name}
-                    </div>
-                    <div className="text-[10px] text-zinc-500">
-                      {item.dropRate}%
-                    </div>
-                  </div>
-                );
-              })}
+
+            {/* IRL + Coins bonus summary */}
+            <div className="flex flex-wrap gap-3 mb-4">
+              <div className="px-3 py-2 rounded-lg bg-pink-500/10 border border-pink-500/20 text-sm">
+                <span className="text-pink-300 font-bold">🎮 Steam Game 50€</span>
+                <span className="text-zinc-500 ml-2">0.01%</span>
+              </div>
+              <div className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm">
+                <span className="text-amber-300 font-bold">🏆 100 RP LoL</span>
+                <span className="text-zinc-500 ml-2">0.10%</span>
+              </div>
+              <div className="px-3 py-2 rounded-lg bg-gold/10 border border-gold/20 text-sm">
+                <span className="text-gold font-bold">💰 Coins bonus</span>
+                <span className="text-zinc-500 ml-2">35%</span>
+              </div>
             </div>
+
+            {/* Cosmetics grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {selectedCase.lootTable
+                .filter(item => item.type === 'badge' || item.type === 'title' || item.type === 'border')
+                .map((item, idx) => {
+                  const style = getRarityStyle(item.rarity);
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-xl ${style.bg} border border-white/5 text-center`}
+                    >
+                      <div className="text-2xl mb-1">
+                        {item.type === 'border' ? '🔲' : item.icon || '📜'}
+                      </div>
+                      <div className={`text-xs font-bold ${style.color} truncate`}>
+                        {item.name}
+                      </div>
+                      <div className="text-[10px] text-zinc-500">
+                        {item.dropRate}%
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+
+            <p className="text-xs text-zinc-500 mt-4 text-center">
+              Chaque ouverture donne toujours au moins 1 cosmétique. Les coins bonus s'ajoutent en plus!
+            </p>
           </div>
         </div>
       )}
@@ -542,7 +583,7 @@ const Cases = () => {
                         } flex flex-col items-center justify-center p-2 transition-all duration-300`}
                       >
                         <div className="text-3xl mb-1">
-                          {item.type === 'jc' ? '💰' : item.icon || '🎁'}
+                          {item.type === 'border' ? '🔲' : item.icon || '📜'}
                         </div>
                         <div className={`text-xs font-bold ${style.color} text-center truncate w-full`}>
                           {item.name}
@@ -560,28 +601,46 @@ const Cases = () => {
             {/* Result */}
             {showResult && wonItem && (
               <div className="text-center animate-bounce-in">
+                {/* Cosmetic always shown */}
                 <div className={`inline-block px-4 py-2 rounded-full text-sm font-bold mb-4 ${getRarityStyle(wonItem.rarity).bg} ${getRarityStyle(wonItem.rarity).color}`}>
                   {getRarityStyle(wonItem.rarity).label}
                 </div>
                 <h2 className="text-3xl font-black text-white mb-2">
-                  {wonItem.type === 'jc' ? '💰' : wonItem.icon || '🎁'} {wonItem.name}
+                  {wonItem.icon || '🎁'} {wonItem.name}
                 </h2>
-                {wonItem.type === 'jc' && wonItem.jcAmount && (
-                  <p className="text-gold text-xl font-mono font-bold mb-4">
-                    +{wonItem.jcAmount.toLocaleString('fr-FR')} Johnny Coins
-                  </p>
+                <p className="text-zinc-400 mb-2">
+                  Ajouté à ton inventaire!
+                </p>
+
+                {/* Bonus coins */}
+                {bonusItem?.type === 'jc' && bonusItem.jcAmount && (
+                  <div className="mt-3 p-3 rounded-xl bg-gold/10 border border-gold/30 inline-block">
+                    <p className="text-gold text-xl font-mono font-bold">
+                      💰 {bonusItem.name} bonus!
+                    </p>
+                  </div>
                 )}
-                {wonItem.type !== 'jc' && (
-                  <p className="text-zinc-400 mb-4">
-                    Ajouté à ton inventaire!
-                  </p>
+
+                {/* IRL reward */}
+                {bonusItem?.type === 'irl' && (
+                  <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/30 inline-block">
+                    <p className="text-2xl font-black text-white mb-1">
+                      🎉 {bonusItem.icon} {bonusItem.name}
+                    </p>
+                    <p className="text-pink-300 text-sm font-bold">
+                      Lot IRL! Contacte un admin pour récupérer ton prix!
+                    </p>
+                  </div>
                 )}
-                <button
-                  onClick={closeResult}
-                  className="px-8 py-3 bg-primary rounded-xl text-white font-bold hover:bg-primary/80 transition"
-                >
-                  Continuer
-                </button>
+
+                <div className="mt-6">
+                  <button
+                    onClick={closeResult}
+                    className="px-8 py-3 bg-primary rounded-xl text-white font-bold hover:bg-primary/80 transition"
+                  >
+                    Continuer
+                  </button>
+                </div>
               </div>
             )}
 
@@ -613,7 +672,7 @@ const Cases = () => {
                 >
                   <div className="text-xs text-zinc-400 mb-1 truncate">{drop.pseudo}</div>
                   <div className="text-2xl mb-1">
-                    {drop.item.type === 'jc' ? '💰' : drop.item.icon || '🎁'}
+                    {drop.item.type === 'border' ? '🔲' : drop.item.icon || '📜'}
                   </div>
                   <div className={`text-xs font-bold ${style.color} truncate`}>
                     {drop.item.name}

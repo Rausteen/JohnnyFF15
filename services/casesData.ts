@@ -4,7 +4,7 @@ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'my
 
 export interface LootItem {
   id: string;
-  type: 'jc' | 'badge' | 'title' | 'border' | 'ticket';
+  type: 'jc' | 'badge' | 'title' | 'border' | 'ticket' | 'irl';
   name: string;
   icon?: string;
   gradient?: string;
@@ -102,47 +102,55 @@ export const CASES: Case[] = [
     color: 'from-orange-500 via-red-600 to-purple-700',
     glowColor: 'shadow-orange-500/50',
     lootTable: [
-      // JC Rewards (53%)
-      { id: 'chall_jc_2000', type: 'jc', name: '2 000 JC', jcAmount: 2000, rarity: 'common', dropRate: 19 },
-      { id: 'chall_jc_5000', type: 'jc', name: '5 000 JC', jcAmount: 5000, rarity: 'common', dropRate: 14 },
-      { id: 'chall_jc_8000', type: 'jc', name: '8 000 JC', jcAmount: 8000, rarity: 'uncommon', dropRate: 10 },
-      { id: 'chall_jc_12000', type: 'jc', name: '12 000 JC', jcAmount: 12000, rarity: 'uncommon', dropRate: 7 },
-      { id: 'chall_jc_20000', type: 'jc', name: '20 000 JC', jcAmount: 20000, rarity: 'rare', dropRate: 3 },
-      // Common Cosmetics (10%)
-      { ...CASE_BADGES[0], dropRate: 5 },  // Dés Chanceux
-      { ...CASE_BADGES[1], dropRate: 5 },  // Trèfle
-      // Uncommon Cosmetics (7%)
-      { ...CASE_BADGES[2], dropRate: 4 },  // Machine à Sous
-      { ...CASE_BADGES[3], dropRate: 3 },  // Liasse
-      // Rare Cosmetics (9%)
-      { ...CASE_BADGES[4], dropRate: 3 },  // Diamant Brut
-      { ...CASE_BADGES[5], dropRate: 2.5 }, // To The Moon
-      { ...CASE_TITLES[0], dropRate: 2 },  // Le Chanceux
-      { ...CASE_TITLES[1], dropRate: 1.5 }, // Parieur Fou
-      // Epic Cosmetics (7.3%)
-      { ...CASE_BADGES[6], dropRate: 2 },  // En Feu
-      { ...CASE_BADGES[7], dropRate: 1.5 }, // Étoile Filante
-      { ...CASE_TITLES[2], dropRate: 1.5 }, // Whale Officiel
-      { ...CASE_TITLES[3], dropRate: 1 },  // RNG Manipulateur
-      { ...CASE_BORDERS[0], dropRate: 0.8 }, // Néon
-      { ...CASE_BORDERS[1], dropRate: 0.5 }, // Coucher de Soleil
-      // Legendary (3.9%)
-      { ...CASE_BADGES[8], dropRate: 0.8 },  // Couronne Divine
-      { ...CASE_BADGES[9], dropRate: 0.6 },  // Orbe Mystique
-      { ...CASE_TITLES[4], dropRate: 0.5 },  // Touché par la Grâce
-      { ...CASE_TITLES[5], dropRate: 0.3 },  // Le Millionnaire
-      { ...CASE_BORDERS[2], dropRate: 0.4 },  // Arc-en-ciel
-      { ...CASE_BORDERS[3], dropRate: 0.3 },  // Inferno
-      { id: 'chall_jc_50000', type: 'jc', name: '50 000 JC', jcAmount: 50000, rarity: 'legendary', dropRate: 1 },
-      // Mythic (0.8%)
-      { ...CASE_BADGES[10], dropRate: 0.15 }, // Crâne du Throw
-      { ...CASE_BADGES[11], dropRate: 0.1 },  // Étoile Cosmique
-      { ...CASE_TITLES[6], dropRate: 0.1 },   // Maître du Casino
-      { ...CASE_TITLES[7], dropRate: 0.05 },  // Dieu du Throw
-      { ...CASE_BORDERS[5], dropRate: 0.1 },  // Cosmos
-      { ...CASE_BORDERS[6], dropRate: 0.05 }, // Divin
-      { id: 'chall_jc_100000', type: 'jc', name: '100 000 JC', jcAmount: 100000, rarity: 'mythic', dropRate: 0.2 },
-      { ...CASE_BORDERS[4], dropRate: 0.05 }, // Glacial
+      // ==========================================
+      // IRL Rewards (0.11%) — no pity
+      // ==========================================
+      { id: 'irl_steam_50', type: 'irl', name: 'Steam Game 50€', icon: '🎮', rarity: 'mythic', dropRate: 0.01 },
+      { id: 'irl_rp_100', type: 'irl', name: '100 RP LoL', icon: '🏆', rarity: 'legendary', dropRate: 0.10 },
+
+      // ==========================================
+      // Bonus Coins (35.0%) — toujours EN PLUS d'un cosmétique
+      // ==========================================
+      { id: 'bonus_3000', type: 'jc', name: '+3 000 JC', jcAmount: 3000, rarity: 'common', dropRate: 14 },
+      { id: 'bonus_6000', type: 'jc', name: '+6 000 JC', jcAmount: 6000, rarity: 'uncommon', dropRate: 10 },
+      { id: 'bonus_10000', type: 'jc', name: '+10 000 JC', jcAmount: 10000, rarity: 'rare', dropRate: 7 },
+      { id: 'bonus_20000', type: 'jc', name: '+20 000 JC', jcAmount: 20000, rarity: 'epic', dropRate: 3.5 },
+      { id: 'bonus_100000', type: 'jc', name: '+100 000 JC', jcAmount: 100000, rarity: 'legendary', dropRate: 0.5 },
+
+      // ==========================================
+      // Cosmétiques (64.89%) — toujours au moins 1
+      // ==========================================
+
+      // Rare (28.0%)
+      { ...CASE_BADGES[4], dropRate: 7 },   // Diamant Brut 💎
+      { ...CASE_BADGES[5], dropRate: 7 },   // To The Moon 🚀
+      { ...CASE_TITLES[0], dropRate: 7 },   // Le Chanceux
+      { ...CASE_TITLES[1], dropRate: 7 },   // Parieur Fou
+
+      // Epic (20.0%)
+      { ...CASE_BADGES[6], dropRate: 4 },   // En Feu 🔥
+      { ...CASE_BADGES[7], dropRate: 4 },   // Étoile Filante ⭐
+      { ...CASE_TITLES[2], dropRate: 4 },   // Whale Officiel
+      { ...CASE_TITLES[3], dropRate: 3 },   // RNG Manipulateur
+      { ...CASE_BORDERS[0], dropRate: 3 },  // Néon
+      { ...CASE_BORDERS[1], dropRate: 2 },  // Coucher de Soleil
+
+      // Legendary (12.0%)
+      { ...CASE_BADGES[8], dropRate: 2.5 },  // Couronne Divine 👑
+      { ...CASE_BADGES[9], dropRate: 2.5 },  // Orbe Mystique 🔮
+      { ...CASE_TITLES[4], dropRate: 2 },    // Touché par la Grâce
+      { ...CASE_TITLES[5], dropRate: 1.5 },  // Le Millionnaire
+      { ...CASE_BORDERS[2], dropRate: 1.5 }, // Arc-en-ciel
+      { ...CASE_BORDERS[3], dropRate: 1 },   // Inferno
+      { ...CASE_BORDERS[4], dropRate: 1 },   // Glacial
+
+      // Mythic (4.89%)
+      { ...CASE_BADGES[10], dropRate: 1.2 },  // Crâne du Throw 💀
+      { ...CASE_BADGES[11], dropRate: 1 },    // Étoile Cosmique 🌟
+      { ...CASE_TITLES[6], dropRate: 0.89 },  // Maître du Casino
+      { ...CASE_TITLES[7], dropRate: 0.7 },   // Dieu du Throw
+      { ...CASE_BORDERS[5], dropRate: 0.6 },  // Cosmos
+      { ...CASE_BORDERS[6], dropRate: 0.5 },  // Divin
     ],
   },
 ];
@@ -170,16 +178,31 @@ export function rollLoot(caseData: Case): LootItem {
   return caseData.lootTable[0];
 }
 
-export function generateRouletteItems(caseData: Case, winningItem: LootItem, count: number = 50): LootItem[] {
+// Roll a random cosmetic from the case's cosmetic entries (weighted by dropRate)
+export function rollBonusCosmetic(caseData: Case): LootItem {
+  const cosmetics = caseData.lootTable.filter(
+    item => item.type === 'badge' || item.type === 'title' || item.type === 'border'
+  );
+  const totalRate = cosmetics.reduce((sum, item) => sum + item.dropRate, 0);
+  const roll = Math.random() * totalRate;
+  let cumulative = 0;
+  for (const item of cosmetics) {
+    cumulative += item.dropRate;
+    if (roll < cumulative) return item;
+  }
+  return cosmetics[0];
+}
+
+export function generateRouletteItems(caseData: Case, winningCosmetic: LootItem, count: number = 50): LootItem[] {
   const items: LootItem[] = [];
   const winPosition = Math.floor(count * 0.75) + Math.floor(Math.random() * 5); // Win at ~75-80% through
 
   for (let i = 0; i < count; i++) {
     if (i === winPosition) {
-      items.push(winningItem);
+      items.push(winningCosmetic);
     } else {
-      // Pick random item weighted by drop rate
-      items.push(rollLoot(caseData));
+      // Only show cosmetics in the roulette
+      items.push(rollBonusCosmetic(caseData));
     }
   }
 
