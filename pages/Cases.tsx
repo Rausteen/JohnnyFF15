@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Package, Sparkles, Loader2, Gift, Info, Backpack, Check, Coins } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Package, Sparkles, Loader2, Gift, Info, Backpack, Check, Coins, Minus, Plus } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
@@ -9,29 +9,29 @@ import {
   CosmeticItem, CaseReward, rollCase, generateRouletteItems
 } from '../services/casesData';
 
+interface RouletteSlot {
+  items: CaseReward[];
+  position: number;
+  reward: CaseReward;
+}
+
+const ANIM_DURATION = 4000;
+
 const Cases = () => {
   const { user } = useAuthStore();
   const { profile, loadProfile } = useCreditsStore();
   const [isOpening, setIsOpening] = useState(false);
   const [showResult, setShowResult] = useState(false);
-  const [reward, setReward] = useState<CaseReward | null>(null);
-  const [rouletteItems, setRouletteItems] = useState<CaseReward[]>([]);
-  const [roulettePosition, setRoulettePosition] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [cosmetics, setCosmetics] = useState<CosmeticItem[]>([]);
   const [showInventory, setShowInventory] = useState(false);
   const [equipping, setEquipping] = useState<string | null>(null);
 
-  // Multi-case hold state
-  const [multiRewards, setMultiRewards] = useState<CaseReward[]>([]);
-  const [caseCount, setCaseCount] = useState(0);
-  const [isHolding, setIsHolding] = useState(false);
-  const [animSpeed, setAnimSpeed] = useState(4000);
+  // Multi-case state
+  const [quantity, setQuantity] = useState(1);
+  const [slots, setSlots] = useState<RouletteSlot[]>([]);
 
-  const rouletteRef = useRef<HTMLDivElement>(null);
-  const holdingRef = useRef(false);
-  const openingRef = useRef(false);
-  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rouletteContainerRef = useRef<HTMLDivElement>(null);
 
   // Load cosmetics from Supabase (paginated to get all rows)
   useEffect(() => {
@@ -56,7 +56,6 @@ const Cases = () => {
         : 'equipped_border';
       const newValue = isCurrentlyEquipped ? null : itemId;
 
-      // Optimistic: update store immediately so Layout picks up background change instantly
       const { setProfile } = useCreditsStore.getState();
       setProfile({ ...profile, [updateField]: newValue });
 
@@ -66,7 +65,6 @@ const Cases = () => {
         .eq('id', user.id);
 
       if (updateError) {
-        // Rollback on error
         setProfile(profile);
         throw updateError;
       }
@@ -78,90 +76,86 @@ const Cases = () => {
     }
   };
 
-  // Core: open a single case, returns the reward. fast = shorter animation.
-  const openSingleCase = useCallback(async (fast: boolean): Promise<CaseReward | null> => {
-    if (!user || !profile) return null;
-
-    const currentProfile = useCreditsStore.getState().profile;
-    if (!currentProfile) return null;
-
-    // Deduct credits (skip if free)
-    if (CHALLENGER_CASE.price > 0) {
-      if (currentProfile.credits < CHALLENGER_CASE.price) return null;
-      const { error: deductError } = await supabase
-        .from('profiles')
-        .update({ credits: currentProfile.credits - CHALLENGER_CASE.price })
-        .eq('id', user.id);
-      if (deductError) throw deductError;
-    }
-
-    // Roll
-    const result = rollCase(cosmetics);
-    setReward(result);
-
-    // Generate roulette
-    const itemCount = 50;
-    const items = generateRouletteItems(cosmetics, result, itemCount);
-    setRouletteItems(items);
-
-    // Find winning position
-    let winIndex = Math.floor(itemCount * 0.75);
-    for (let i = Math.floor(itemCount * 0.7); i < itemCount; i++) {
-      if (items[i] === result) { winIndex = i; break; }
-    }
-
-    // Animate
-    const speed = fast ? 2000 : 4000;
-    setAnimSpeed(speed);
-    const itemTotalWidth = 124;
-    const containerWidth = rouletteRef.current?.offsetWidth || 600;
-    const targetPosition = (winIndex * itemTotalWidth) - (containerWidth / 2) + (116 / 2);
-    const randomOffset = Math.random() * 60 - 30;
-
-    setRoulettePosition(0);
-    await new Promise(resolve => setTimeout(resolve, 50));
-    setRoulettePosition(-(targetPosition + randomOffset));
-    await new Promise(resolve => setTimeout(resolve, speed));
-
-    // Award cosmetic to inventory
-    if (result.kind === 'cosmetic' && result.cosmetic) {
-      const latestProfile = useCreditsStore.getState().profile;
-      const current = latestProfile?.owned_cosmetics || [];
-      if (!current.includes(result.cosmetic.id)) {
-        const { error: cosmeticError } = await supabase
-          .from('profiles')
-          .update({ owned_cosmetics: [...current, result.cosmetic.id] })
-          .eq('id', user.id);
-        if (cosmeticError) throw cosmeticError;
-      }
-    }
-
-    return result;
-  }, [user, profile, cosmetics]);
-
-  // Single click: open one case
-  const openCase = async () => {
+  // Open N cases simultaneously
+  const openCases = async () => {
     if (!user || !profile || isOpening) return;
 
-    if (CHALLENGER_CASE.price > 0 && profile.credits < CHALLENGER_CASE.price) {
-      setError(`Pas assez de JC! Il te faut ${CHALLENGER_CASE.price.toLocaleString('fr-FR')} JC`);
+    const totalCost = CHALLENGER_CASE.price * quantity;
+    if (CHALLENGER_CASE.price > 0 && profile.credits < totalCost) {
+      setError(`Pas assez de JC! Il te faut ${totalCost.toLocaleString('fr-FR')} JC`);
       return;
     }
 
     setError(null);
     setIsOpening(true);
-    openingRef.current = true;
     setShowResult(false);
-    setReward(null);
-    setMultiRewards([]);
-    setCaseCount(0);
 
     try {
-      const result = await openSingleCase(false);
-      if (result) {
-        setMultiRewards([result]);
-        setCaseCount(1);
+      // Deduct total credits (skip if free)
+      if (CHALLENGER_CASE.price > 0) {
+        const { error: deductError } = await supabase
+          .from('profiles')
+          .update({ credits: profile.credits - totalCost })
+          .eq('id', user.id);
+        if (deductError) throw deductError;
       }
+
+      // Roll all cases at once
+      const containerWidth = rouletteContainerRef.current?.offsetWidth || 600;
+      const itemTotalWidth = 124;
+      const itemCount = 50;
+
+      const newSlots: RouletteSlot[] = [];
+      for (let i = 0; i < quantity; i++) {
+        const reward = rollCase(cosmetics);
+        const items = generateRouletteItems(cosmetics, reward, itemCount);
+
+        let winIndex = Math.floor(itemCount * 0.75);
+        for (let j = Math.floor(itemCount * 0.7); j < itemCount; j++) {
+          if (items[j] === reward) { winIndex = j; break; }
+        }
+
+        const targetPosition = (winIndex * itemTotalWidth) - (containerWidth / 2) + (116 / 2);
+        const randomOffset = Math.random() * 60 - 30;
+
+        newSlots.push({
+          items,
+          position: -(targetPosition + randomOffset),
+          reward,
+        });
+      }
+
+      // Set slots at position 0 first
+      setSlots(newSlots.map(s => ({ ...s, position: 0 })));
+
+      // After a frame, animate all to their target positions simultaneously
+      await new Promise(resolve => setTimeout(resolve, 50));
+      setSlots(newSlots);
+
+      // Wait for animation
+      await new Promise(resolve => setTimeout(resolve, ANIM_DURATION));
+
+      // Award all cosmetics
+      const currentProfile = useCreditsStore.getState().profile;
+      const currentOwned = [...(currentProfile?.owned_cosmetics || [])];
+      const newCosmetics: string[] = [];
+
+      for (const slot of newSlots) {
+        if (slot.reward.kind === 'cosmetic' && slot.reward.cosmetic) {
+          if (!currentOwned.includes(slot.reward.cosmetic.id) && !newCosmetics.includes(slot.reward.cosmetic.id)) {
+            newCosmetics.push(slot.reward.cosmetic.id);
+          }
+        }
+      }
+
+      if (newCosmetics.length > 0) {
+        const { error: cosmeticError } = await supabase
+          .from('profiles')
+          .update({ owned_cosmetics: [...currentOwned, ...newCosmetics] })
+          .eq('id', user.id);
+        if (cosmeticError) throw cosmeticError;
+      }
+
       await loadProfile(user.id);
       setShowResult(true);
     } catch (err: any) {
@@ -170,113 +164,12 @@ const Cases = () => {
       await loadProfile(user.id);
     } finally {
       setIsOpening(false);
-      openingRef.current = false;
     }
   };
 
-  // Hold: open cases continuously
-  const startHoldOpen = useCallback(async () => {
-    if (!user || !profile || openingRef.current) return;
-
-    const currentProfile = useCreditsStore.getState().profile;
-    if (!currentProfile) return;
-    if (CHALLENGER_CASE.price > 0 && currentProfile.credits < CHALLENGER_CASE.price) return;
-
-    setError(null);
-    setIsOpening(true);
-    openingRef.current = true;
-    setShowResult(false);
-    setReward(null);
-    setMultiRewards([]);
-    setCaseCount(0);
-
-    const rewards: CaseReward[] = [];
-    let count = 0;
-
-    try {
-      // Keep opening while button is held
-      while (holdingRef.current) {
-        const result = await openSingleCase(count > 0);
-        if (!result) break;
-
-        rewards.push(result);
-        count++;
-        setMultiRewards([...rewards]);
-        setCaseCount(count);
-
-        // Brief pause to show result before next case
-        if (holdingRef.current) {
-          await new Promise(resolve => setTimeout(resolve, 600));
-        }
-
-        // Check credits for next case
-        if (CHALLENGER_CASE.price > 0) {
-          const p = useCreditsStore.getState().profile;
-          if (!p || p.credits < CHALLENGER_CASE.price) break;
-        }
-      }
-
-      await loadProfile(user.id);
-      setShowResult(true);
-    } catch (err: any) {
-      console.error('Case opening error:', err);
-      setError(err.message || "Erreur lors de l'ouverture");
-      await loadProfile(user.id);
-      setShowResult(true);
-    } finally {
-      setIsOpening(false);
-      openingRef.current = false;
-    }
-  }, [user, profile, openSingleCase, loadProfile]);
-
-  // Hold handlers
-  const handlePointerDown = useCallback(() => {
-    if (openingRef.current || !profile) return;
-    if (CHALLENGER_CASE.price > 0 && profile.credits < CHALLENGER_CASE.price) return;
-
-    holdingRef.current = true;
-    setIsHolding(true);
-
-    // Start multi-open after a short hold delay (400ms) to distinguish from click
-    holdTimerRef.current = setTimeout(() => {
-      if (holdingRef.current) {
-        startHoldOpen();
-      }
-    }, 400);
-  }, [profile, startHoldOpen]);
-
-  const handlePointerUp = useCallback(() => {
-    const wasHolding = holdingRef.current;
-    holdingRef.current = false;
-    setIsHolding(false);
-
-    // Cancel hold timer if released before 400ms (= simple click)
-    if (holdTimerRef.current) {
-      clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
-
-    // If we weren't already opening (hold didn't trigger), treat as single click
-    if (!openingRef.current && wasHolding) {
-      openCase();
-    }
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      holdingRef.current = false;
-      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
-    };
-  }, []);
-
   const closeResult = () => {
     setShowResult(false);
-    setReward(null);
-    setMultiRewards([]);
-    setCaseCount(0);
-    setRouletteItems([]);
-    setRoulettePosition(0);
+    setSlots([]);
   };
 
   // Helper: get display info for a CaseReward
@@ -307,7 +200,11 @@ const Cases = () => {
   const bordersCount = cosmetics.filter(c => c.type === 'border').length;
   const backgroundsCount = cosmetics.filter(c => c.type === 'background').length;
 
-  const canOpen = profile && (CHALLENGER_CASE.price === 0 || profile.credits >= CHALLENGER_CASE.price);
+  const totalCost = CHALLENGER_CASE.price * quantity;
+  const canOpen = profile && (CHALLENGER_CASE.price === 0 || profile.credits >= totalCost);
+
+  // Quantity presets
+  const quantityPresets = [1, 3, 5, 10];
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -453,19 +350,51 @@ const Cases = () => {
             </div>
           </div>
 
-          {/* Open Button */}
+          {/* Quantity + Open Button */}
           <div className="flex flex-col items-center gap-4">
+            {/* Quantity selector */}
+            <div className="flex items-center gap-2">
+              {quantityPresets.map(q => (
+                <button
+                  key={q}
+                  onClick={() => setQuantity(q)}
+                  disabled={isOpening}
+                  className={`w-10 h-10 rounded-lg font-bold text-sm transition-all ${
+                    quantity === q
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                  } disabled:opacity-50`}
+                >
+                  {q}
+                </button>
+              ))}
+              <div className="flex items-center gap-1 ml-1">
+                <button
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={isOpening || quantity <= 1}
+                  className="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 flex items-center justify-center disabled:opacity-50"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="w-8 text-center text-white font-mono font-bold text-sm">{quantity}</span>
+                <button
+                  onClick={() => setQuantity(Math.min(20, quantity + 1))}
+                  disabled={isOpening || quantity >= 20}
+                  className="w-8 h-8 rounded-lg bg-zinc-800 text-zinc-400 hover:bg-zinc-700 flex items-center justify-center disabled:opacity-50"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
             <button
-              onPointerDown={handlePointerDown}
-              onPointerUp={handlePointerUp}
-              onPointerLeave={handlePointerUp}
-              onContextMenu={(e) => e.preventDefault()}
+              onClick={openCases}
               disabled={isOpening || !canOpen}
-              className={`px-8 py-4 rounded-xl font-black text-xl transition-all select-none ${
+              className={`px-8 py-4 rounded-xl font-black text-xl transition-all ${
                 isOpening
                   ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                   : canOpen
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30 active:scale-95'
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30'
                   : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
               }`}
             >
@@ -477,7 +406,7 @@ const Cases = () => {
               ) : (
                 <span className="flex items-center gap-2">
                   <Gift className="w-6 h-6" />
-                  Ouvrir
+                  Ouvrir {quantity > 1 ? `x${quantity}` : ''}
                 </span>
               )}
             </button>
@@ -485,12 +414,11 @@ const Cases = () => {
               {CHALLENGER_CASE.price > 0 ? (
                 <div className="flex items-center gap-2 text-gold font-mono font-bold">
                   <Sparkles className="w-4 h-4" />
-                  {CHALLENGER_CASE.price.toLocaleString('fr-FR')} JC
+                  {totalCost.toLocaleString('fr-FR')} JC
                 </div>
               ) : (
                 <div className="text-green-400 font-bold text-sm">GRATUIT</div>
               )}
-              <p className="text-zinc-600 text-[10px] mt-1">Maintiens pour ouvrir en rafale</p>
             </div>
           </div>
         </div>
@@ -569,119 +497,118 @@ const Cases = () => {
       </div>
 
       {/* ===== ROULETTE MODAL ===== */}
-      {(isOpening || showResult) && (
+      {(isOpening || showResult) && slots.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 rounded-3xl border border-zinc-700 p-8 max-w-3xl w-full mx-4 shadow-2xl">
-            {/* Case counter */}
-            {caseCount > 0 && (
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <span className="px-4 py-1.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 font-mono font-bold text-sm">
-                  {showResult ? `${caseCount} caisse${caseCount > 1 ? 's' : ''} ouverte${caseCount > 1 ? 's' : ''}` : `Caisse #${caseCount}`}
-                </span>
-                {isOpening && holdingRef.current && (
-                  <span className="text-zinc-500 text-xs animate-pulse">Relâche pour arrêter</span>
-                )}
-              </div>
-            )}
-
-            {/* Roulette */}
-            <div className="relative mb-8">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-full bg-gradient-to-b from-primary via-primary to-transparent z-10" />
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[16px] border-t-primary z-10" />
-
-              <div
-                ref={rouletteRef}
-                className="overflow-hidden rounded-2xl bg-zinc-800 border border-zinc-700"
-                style={{ height: '140px' }}
-              >
-                <div
-                  className="flex items-center gap-2 py-2 px-2 transition-transform ease-out"
-                  style={{
-                    transform: `translateX(${roulettePosition}px)`,
-                    transitionDuration: isOpening && !showResult ? `${animSpeed}ms` : '0ms',
-                    transitionTimingFunction: 'cubic-bezier(0.15, 0.85, 0.35, 1)'
-                  }}
-                >
-                  {rouletteItems.map((item, idx) => {
-                    const display = getRewardDisplay(item);
-                    const isWinning = showResult && reward && item === reward && idx >= Math.floor(rouletteItems.length * 0.7);
-                    return (
-                      <div
-                        key={idx}
-                        className={`flex-shrink-0 w-[116px] h-[120px] rounded-xl ${display.bg} border-2 ${
-                          isWinning
-                            ? 'border-primary shadow-lg shadow-primary/50 scale-105'
-                            : 'border-white/10'
-                        } flex flex-col items-center justify-center p-2 transition-all duration-300`}
-                      >
-                        {item.kind === 'cosmetic' && item.cosmetic?.image_url ? (
-                          item.cosmetic.type === 'background' ? (
-                            <video src={item.cosmetic.image_url} preload="metadata" muted className="w-16 h-16 object-cover rounded mb-1" />
-                          ) : (
-                            <img src={item.cosmetic.preview_url || item.cosmetic.image_url} alt={item.cosmetic.name} className="w-16 h-16 object-contain mb-1" />
-                          )
-                        ) : (
-                          <div className="text-3xl mb-1">{display.icon}</div>
-                        )}
-                        <div className={`text-xs font-bold ${display.color} text-center truncate w-full`}>
-                          {display.name}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+          <div className="bg-zinc-900 rounded-3xl border border-zinc-700 p-6 sm:p-8 max-w-3xl w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            {/* Title */}
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <span className="px-4 py-1.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 font-mono font-bold text-sm">
+                {slots.length} caisse{slots.length > 1 ? 's' : ''}
+              </span>
             </div>
 
-            {/* Result / Summary */}
-            {showResult && multiRewards.length > 0 && (
+            {/* All roulettes stacked */}
+            <div className="space-y-3 mb-6">
+              {slots.map((slot, slotIdx) => (
+                <div key={slotIdx} className="relative">
+                  {/* Center indicator */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-full bg-gradient-to-b from-primary via-primary to-transparent z-10 pointer-events-none" />
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-t-[10px] border-t-primary z-10 pointer-events-none" />
+
+                  <div
+                    ref={slotIdx === 0 ? rouletteContainerRef : undefined}
+                    className="overflow-hidden rounded-xl bg-zinc-800 border border-zinc-700"
+                    style={{ height: slots.length > 5 ? '100px' : '120px' }}
+                  >
+                    <div
+                      className="flex items-center gap-2 py-1.5 px-2 transition-transform ease-out"
+                      style={{
+                        transform: `translateX(${slot.position}px)`,
+                        transitionDuration: isOpening && !showResult ? `${ANIM_DURATION}ms` : '0ms',
+                        transitionTimingFunction: 'cubic-bezier(0.15, 0.85, 0.35, 1)'
+                      }}
+                    >
+                      {slot.items.map((item, idx) => {
+                        const display = getRewardDisplay(item);
+                        const isWinning = showResult && item === slot.reward && idx >= Math.floor(slot.items.length * 0.7);
+                        const compact = slots.length > 5;
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex-shrink-0 ${compact ? 'w-[90px] h-[88px]' : 'w-[116px] h-[108px]'} rounded-lg ${display.bg} border-2 ${
+                              isWinning
+                                ? 'border-primary shadow-lg shadow-primary/50 scale-105'
+                                : 'border-white/10'
+                            } flex flex-col items-center justify-center p-1.5 transition-all duration-300`}
+                          >
+                            {item.kind === 'cosmetic' && item.cosmetic?.image_url ? (
+                              item.cosmetic.type === 'background' ? (
+                                <video src={item.cosmetic.image_url} preload="metadata" muted className={`${compact ? 'w-10 h-10' : 'w-14 h-14'} object-cover rounded mb-0.5`} />
+                              ) : (
+                                <img src={item.cosmetic.preview_url || item.cosmetic.image_url} alt={item.cosmetic.name} className={`${compact ? 'w-10 h-10' : 'w-14 h-14'} object-contain mb-0.5`} />
+                              )
+                            ) : (
+                              <div className={`${compact ? 'text-2xl' : 'text-3xl'} mb-0.5`}>{display.icon}</div>
+                            )}
+                            <div className={`${compact ? 'text-[9px]' : 'text-[10px]'} font-bold ${display.color} text-center truncate w-full`}>
+                              {display.name}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Results */}
+            {showResult && (
               <div className="text-center animate-bounce-in">
-                {multiRewards.length === 1 ? (
-                  // Single case result
-                  <>
-                    {(() => {
-                      const display = getRewardDisplay(multiRewards[0]);
-                      return (
-                        <>
-                          <h2 className="text-3xl font-black text-white mb-2">
-                            {display.icon} {display.name}
-                          </h2>
-                          {multiRewards[0].kind === 'cosmetic' && (
-                            <div className="mb-4">
-                              {multiRewards[0].cosmetic?.type === 'background' && multiRewards[0].cosmetic.image_url && (
-                                <video src={multiRewards[0].cosmetic.image_url} autoPlay loop muted playsInline className="w-48 h-28 object-cover rounded-xl mx-auto mb-3 border border-white/20" />
-                              )}
-                              <p className="text-zinc-400">Ajouté à ton inventaire!</p>
-                            </div>
-                          )}
-                          {multiRewards[0].kind === 'irl' && (
-                            <div className="mt-2 mb-4 p-4 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/30 inline-block">
-                              <p className="text-pink-300 text-sm font-bold">
-                                Lot IRL! Contacte un admin pour récupérer ton prix!
-                              </p>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </>
+                {slots.length === 1 ? (
+                  // Single result
+                  (() => {
+                    const display = getRewardDisplay(slots[0].reward);
+                    return (
+                      <>
+                        <h2 className="text-3xl font-black text-white mb-2">
+                          {display.icon} {display.name}
+                        </h2>
+                        {slots[0].reward.kind === 'cosmetic' && (
+                          <div className="mb-4">
+                            {slots[0].reward.cosmetic?.type === 'background' && slots[0].reward.cosmetic.image_url && (
+                              <video src={slots[0].reward.cosmetic.image_url} autoPlay loop muted playsInline className="w-48 h-28 object-cover rounded-xl mx-auto mb-3 border border-white/20" />
+                            )}
+                            <p className="text-zinc-400">Ajouté à ton inventaire!</p>
+                          </div>
+                        )}
+                        {slots[0].reward.kind === 'irl' && (
+                          <div className="mt-2 mb-4 p-4 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/30 inline-block">
+                            <p className="text-pink-300 text-sm font-bold">
+                              Lot IRL! Contacte un admin pour récupérer ton prix!
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()
                 ) : (
-                  // Multi-case summary
+                  // Multi results summary
                   <>
-                    <h2 className="text-2xl font-black text-white mb-4">
-                      Résultat — {multiRewards.length} caisses
+                    <h2 className="text-xl font-black text-white mb-3">
+                      {slots.length} caisses ouvertes
                     </h2>
-                    <div className="max-h-60 overflow-y-auto mb-4 space-y-2">
-                      {multiRewards.map((r, i) => {
-                        const display = getRewardDisplay(r);
+                    <div className="max-h-48 overflow-y-auto mb-3 space-y-1.5">
+                      {slots.map((slot, i) => {
+                        const display = getRewardDisplay(slot.reward);
                         return (
                           <div key={i} className={`flex items-center gap-3 px-4 py-2 rounded-xl ${display.bg} border border-white/10`}>
                             <span className="text-zinc-500 font-mono text-xs w-6">#{i + 1}</span>
-                            {r.kind === 'cosmetic' && r.cosmetic?.image_url ? (
-                              r.cosmetic.type === 'background' ? (
-                                <video src={r.cosmetic.image_url} preload="metadata" muted className="w-8 h-8 object-cover rounded" />
+                            {slot.reward.kind === 'cosmetic' && slot.reward.cosmetic?.image_url ? (
+                              slot.reward.cosmetic.type === 'background' ? (
+                                <video src={slot.reward.cosmetic.image_url} preload="metadata" muted className="w-8 h-8 object-cover rounded" />
                               ) : (
-                                <img src={r.cosmetic.preview_url || r.cosmetic.image_url} alt={r.cosmetic.name} className="w-8 h-8 object-contain rounded" />
+                                <img src={slot.reward.cosmetic.preview_url || slot.reward.cosmetic.image_url} alt={slot.reward.cosmetic.name} className="w-8 h-8 object-contain rounded" />
                               )
                             ) : (
                               <span className="text-xl w-8 text-center">{display.icon}</span>
@@ -694,7 +621,8 @@ const Cases = () => {
                     {/* Deduplicated count */}
                     {(() => {
                       const counts = new Map<string, { reward: CaseReward; count: number }>();
-                      multiRewards.forEach(r => {
+                      slots.forEach(s => {
+                        const r = s.reward;
                         const key = r.kind === 'cosmetic' ? r.cosmetic?.id || 'unknown' : r.kind === 'irl' ? (r.irlName || 'irl') : `coins-${r.coinsAmount}`;
                         const existing = counts.get(key);
                         if (existing) existing.count++;
