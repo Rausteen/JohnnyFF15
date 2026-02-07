@@ -226,23 +226,9 @@ const Profile = () => {
 
   const equippedTitle = getCosmetic(profile?.equipped_title);
   const equippedBorder = getCosmetic(profile?.equipped_border);
-  const equippedBackground = getCosmetic(profile?.equipped_background);
 
   return (
-    <div className="relative min-h-screen">
-      {/* Video background full page */}
-      {equippedBackground?.image_url && (
-        <video
-          src={equippedBackground.image_url}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="fixed inset-0 w-full h-full object-cover pointer-events-none z-0"
-        />
-      )}
-
-      <div className="relative z-10 container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         {/* Avatar with upload */}
@@ -566,7 +552,6 @@ const Profile = () => {
             Se déconnecter
           </button>
         </div>
-      </div>
       </div>
     </div>
   );
