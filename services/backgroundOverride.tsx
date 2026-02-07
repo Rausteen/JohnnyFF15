@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 
 interface BackgroundOverrideContextType {
   overrideBackgroundUrl: string | null;
@@ -17,8 +17,14 @@ export const BackgroundOverrideProvider: React.FC<{ children: React.ReactNode }>
     setOverrideBackgroundUrl(url);
   }, []);
 
+  // Stable context value — only creates a new object when the URL actually changes
+  const value = useMemo(
+    () => ({ overrideBackgroundUrl, setOverrideBackgroundUrl: setOverride }),
+    [overrideBackgroundUrl, setOverride]
+  );
+
   return (
-    <BackgroundOverrideContext.Provider value={{ overrideBackgroundUrl, setOverrideBackgroundUrl: setOverride }}>
+    <BackgroundOverrideContext.Provider value={value}>
       {children}
     </BackgroundOverrideContext.Provider>
   );

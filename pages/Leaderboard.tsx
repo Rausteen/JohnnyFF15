@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, memo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Medal, Sparkles, TrendingUp, TrendingDown, Crown, Award, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabase';
@@ -31,28 +31,30 @@ const Leaderboard = () => {
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(currentUser?.id || '');
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('credits', { ascending: false });
+
+      if (error) throw error;
+      setUsers(data as LeaderboardUser[]);
+    } catch (err: any) {
+      console.error('Error fetching leaderboard:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('credits', { ascending: false });
-
-        if (error) throw error;
-        setUsers(data as LeaderboardUser[]);
-      } catch (err: any) {
-        console.error('Error fetching leaderboard:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+    setLoading(true);
     fetchLeaderboard();
 
-    // Real-time subscription
+    // Debounced realtime subscription — coalesce rapid profile changes
     const subscription = supabase
       .channel('leaderboard-changes')
       .on(
@@ -62,12 +64,18 @@ const Leaderboard = () => {
           schema: 'public',
           table: 'profiles'
         },
-        () => fetchLeaderboard()
+        () => {
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = setTimeout(fetchLeaderboard, 5000);
+        }
       )
       .subscribe();
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      subscription.unsubscribe();
+    };
+  }, [fetchLeaderboard]);
 
   if (loading) {
     return (
@@ -168,8 +176,8 @@ const Leaderboard = () => {
   );
 };
 
-// Podium Card
-const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank: number; isCurrentUser: boolean }) => {
+// Podium Card — memoized to avoid re-renders on parent state changes
+const PodiumCard = memo(({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank: number; isCurrentUser: boolean }) => {
   const winRate = user.total_bets > 0 ? Math.round((user.bets_won / user.total_bets) * 100) : 0;
   const { getCosmetic } = useCosmeticsLookup();
   const title = getCosmetic(user.equipped_title);
@@ -186,6 +194,7 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
       to={`/user/${user.id}`}
       className={`block p-6 rounded-2xl border relative overflow-hidden ${style.bg} ${style.border} ${isCurrentUser ? 'ring-2 ring-primary' : ''} hover:scale-105 transition-transform`}
     >
+      {/* Use preload=none + poster preview instead of auto-playing 3 videos simultaneously */}
       {background?.image_url && (
         <video
           src={background.image_url}
@@ -193,16 +202,15 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
           loop
           muted
           playsInline
+          preload="none"
           className="absolute inset-0 w-full h-full object-cover opacity-25 pointer-events-none"
         />
       )}
       <div className="relative z-10 flex flex-col items-center text-center">
         {style.icon}
-        <div
-          className="w-16 h-16 mt-4 mb-3 relative"
-        >
+        <div className="w-16 h-16 mt-4 mb-3 relative">
           {user.avatar_url ? (
-            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full object-cover" />
+            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full object-cover" loading="lazy" />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <span className="text-2xl font-black text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
@@ -213,6 +221,7 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
               src={border.image_url}
               alt=""
               className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
+              loading="lazy"
             />
           )}
         </div>
@@ -230,10 +239,10 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
       </div>
     </Link>
   );
-};
+});
 
-// Leaderboard Row
-const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentUser: boolean }> = ({ user, rank, isCurrentUser }) => {
+// Leaderboard Row — memoized to skip re-render when parent re-fetches but row data unchanged
+const LeaderboardRow = memo(({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank: number; isCurrentUser: boolean }) => {
   const winRate = user.total_bets > 0 ? Math.round((user.bets_won / user.total_bets) * 100) : 0;
   const { getCosmetic } = useCosmeticsLookup();
   const border = getCosmetic(user.equipped_border);
@@ -244,11 +253,9 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
     >
       <div className="col-span-1 text-center font-bold text-zinc-500">{rank}</div>
       <div className="col-span-4 flex items-center gap-3">
-        <div
-          className="w-10 h-10 flex-shrink-0 relative"
-        >
+        <div className="w-10 h-10 flex-shrink-0 relative">
           {user.avatar_url ? (
-            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full object-cover" />
+            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full object-cover" loading="lazy" />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center">
               <span className="font-bold text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
@@ -259,6 +266,7 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
               src={border.image_url}
               alt=""
               className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
+              loading="lazy"
             />
           )}
         </div>
@@ -288,6 +296,6 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
       </div>
     </Link>
   );
-};
+});
 
 export default Leaderboard;

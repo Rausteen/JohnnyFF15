@@ -33,6 +33,34 @@ const CATEGORY_INFO = {
 // Popular props (most bet on)
 const POPULAR_PROP_IDS = ['kda1', 'out2', 'early1', 'kda3', 'out1', 'gp1'];
 
+// Self-contained cancel timer — owns its own 1-second interval so Dashboard doesn't re-render
+const CancelTimer = ({ timestamp, onCancel }: { timestamp: number; onCancel: () => void }) => {
+  const [secsLeft, setSecsLeft] = React.useState(() => Math.max(0, 60 - Math.floor((Date.now() - timestamp) / 1000)));
+
+  React.useEffect(() => {
+    if (secsLeft <= 0) return;
+    const id = setInterval(() => {
+      const left = Math.max(0, 60 - Math.floor((Date.now() - timestamp) / 1000));
+      setSecsLeft(left);
+      if (left <= 0) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [timestamp]);
+
+  if (secsLeft <= 0) return <span className="text-zinc-600 text-xs">🔒</span>;
+
+  return (
+    <button
+      onClick={onCancel}
+      className="text-red-400 hover:text-red-300 p-1 flex items-center gap-1"
+      title={`${secsLeft}s pour annuler`}
+    >
+      <span className="text-zinc-500 text-xs">{secsLeft}s</span>
+      ✕
+    </button>
+  );
+};
+
 const Dashboard = () => {
   const { cancelBet } = useStore();
   const { user } = useAuthStore();
@@ -52,7 +80,7 @@ const Dashboard = () => {
   } = useGameStore();
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('POPULAR');
-  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [currentTime, setCurrentTime] = useState(Date.now);  // used only for game time display
   const [showPlayerSelector, setShowPlayerSelector] = useState(false);
 
   // Supabase pending bets
@@ -134,22 +162,11 @@ const Dashboard = () => {
     return () => window.removeEventListener('betPlaced', handleBetPlaced);
   }, [user?.id]);
 
-  // Update current time every second for cancel button countdown
+  // Update current time every 60s for game time display (cancel timers are self-contained)
   useEffect(() => {
-    const interval = setInterval(() => setCurrentTime(Date.now()), 1000);
+    const interval = setInterval(() => setCurrentTime(Date.now()), 60000);
     return () => clearInterval(interval);
   }, []);
-
-  // Check if a bet can still be cancelled (within 1 minute)
-  const canCancelBet = (betTimestamp: number) => {
-    return currentTime - betTimestamp < 60 * 1000;
-  };
-
-  // Get remaining seconds to cancel
-  const getCancelTimeLeft = (betTimestamp: number) => {
-    const timeLeft = 60 - Math.floor((currentTime - betTimestamp) / 1000);
-    return Math.max(0, timeLeft);
-  };
 
   // Get props with custom odds applied
   const allProps = getProps();
@@ -507,28 +524,20 @@ const Dashboard = () => {
                           <span className="text-zinc-500">
                             {group.totalAmount} → <span className="text-gold font-bold">{group.potentialPayout} JC</span>
                           </span>
-                          {canCancelBet(group.timestamp) ? (
-                            <button
-                              onClick={async () => {
-                                let allCancelled = true;
-                                for (const bet of group.bets) {
-                                  const success = await cancelBet(bet.id, bet.amount, bet.timestamp);
-                                  if (!success) allCancelled = false;
-                                }
-                                if (allCancelled) {
-                                  await addCredits(group.totalAmount);
-                                  loadPendingBets();
-                                }
-                              }}
-                              className="text-red-400 hover:text-red-300 p-1 flex items-center gap-1"
-                              title={`${getCancelTimeLeft(group.timestamp)}s pour annuler`}
-                            >
-                              <span className="text-zinc-500 text-xs">{getCancelTimeLeft(group.timestamp)}s</span>
-                              ✕
-                            </button>
-                          ) : (
-                            <span className="text-zinc-600 text-xs">🔒</span>
-                          )}
+                          <CancelTimer
+                            timestamp={group.timestamp}
+                            onCancel={async () => {
+                              let allCancelled = true;
+                              for (const bet of group.bets) {
+                                const success = await cancelBet(bet.id, bet.amount, bet.timestamp);
+                                if (!success) allCancelled = false;
+                              }
+                              if (allCancelled) {
+                                await addCredits(group.totalAmount);
+                                loadPendingBets();
+                              }
+                            }}
+                          />
                         </div>
                       </>
                     ) : (
@@ -560,25 +569,17 @@ const Dashboard = () => {
                           <span className="text-zinc-500">
                             {group.totalAmount} → <span className="text-gold font-bold">{group.potentialPayout} JC</span>
                           </span>
-                          {canCancelBet(group.timestamp) ? (
-                            <button
-                              onClick={async () => {
-                                const bet = group.bets[0];
-                                const success = await cancelBet(bet.id, bet.amount, bet.timestamp);
-                                if (success) {
-                                  await addCredits(bet.amount);
-                                  loadPendingBets();
-                                }
-                              }}
-                              className="text-red-400 hover:text-red-300 p-1 flex items-center gap-1"
-                              title={`${getCancelTimeLeft(group.timestamp)}s pour annuler`}
-                            >
-                              <span className="text-zinc-500 text-xs">{getCancelTimeLeft(group.timestamp)}s</span>
-                              ✕
-                            </button>
-                          ) : (
-                            <span className="text-zinc-600 text-xs">🔒</span>
-                          )}
+                          <CancelTimer
+                            timestamp={group.timestamp}
+                            onCancel={async () => {
+                              const bet = group.bets[0];
+                              const success = await cancelBet(bet.id, bet.amount, bet.timestamp);
+                              if (success) {
+                                await addCredits(bet.amount);
+                                loadPendingBets();
+                              }
+                            }}
+                          />
                         </div>
                       </>
                     )}
