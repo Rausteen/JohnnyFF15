@@ -178,7 +178,23 @@ const PublicProfile = () => {
   const equippedBackground = getCosmetic(profile.equipped_background);
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="relative min-h-screen">
+      {/* Video background full page */}
+      {equippedBackground?.image_url && (
+        <>
+          <video
+            src={equippedBackground.image_url}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="fixed inset-0 w-full h-full object-cover opacity-20 pointer-events-none z-0"
+          />
+          <div className="fixed inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none z-0" />
+        </>
+      )}
+
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-4xl">
       {/* Back button */}
       <Link
         to="/leaderboard"
@@ -189,17 +205,7 @@ const PublicProfile = () => {
       </Link>
 
       {/* Profile Header */}
-      <div className="relative bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 rounded-3xl border border-zinc-800 p-8 mb-8 overflow-hidden">
-        {equippedBackground?.image_url && (
-          <video
-            src={equippedBackground.image_url}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
-          />
-        )}
+      <div className="bg-gradient-to-br from-zinc-900/80 via-zinc-900/80 to-zinc-800/80 backdrop-blur-sm rounded-3xl border border-zinc-800 p-8 mb-8">
         <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
           {/* Avatar */}
           <div className="relative">
@@ -299,7 +305,7 @@ const PublicProfile = () => {
 
       {/* JC Stats */}
       <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl border border-zinc-800 p-6">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-gold" />
             Johnny Coins gagnés
@@ -310,7 +316,7 @@ const PublicProfile = () => {
           <p className="text-zinc-500 text-sm mt-2">Total des gains sur les paris</p>
         </div>
 
-        <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl border border-zinc-800 p-6">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-red-400" />
             Johnny Coins perdus
@@ -350,12 +356,12 @@ const PublicProfile = () => {
         </div>
 
         {betsLoading ? (
-          <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-8 text-center">
+          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl border border-zinc-800 p-8 text-center">
             <Loader2 className="w-8 h-8 text-zinc-500 animate-spin mx-auto mb-4" />
             <p className="text-zinc-500">Chargement des paris...</p>
           </div>
         ) : groupedBets.length === 0 ? (
-          <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-8 text-center">
+          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl border border-zinc-800 p-8 text-center">
             <Swords className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
             <p className="text-zinc-500">Aucun pari enregistré</p>
           </div>
@@ -381,7 +387,7 @@ const PublicProfile = () => {
               return (
                 <div
                   key={matchId}
-                  className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden"
+                  className="bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800 overflow-hidden"
                 >
                   {/* Game header */}
                   <button
@@ -539,6 +545,7 @@ const PublicProfile = () => {
           </div>
         )}
       </div>
+      </div>
     </div>
   );
 };
@@ -553,7 +560,7 @@ const StatCard = ({ icon, label, value, color }: { icon: React.ReactNode; label:
   };
 
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center">
+    <div className="bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800 p-6 text-center">
       <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-zinc-800 ${colorClasses[color]} mb-3`}>
         {icon}
       </div>
