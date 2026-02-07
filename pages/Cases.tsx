@@ -256,7 +256,11 @@ const Cases = () => {
                       </div>
                     )}
                     {item.image_url ? (
-                      <img src={item.image_url} alt={item.name} className="w-12 h-12 mx-auto mb-2 rounded-lg object-cover" />
+                      item.type === 'background' ? (
+                        <video src={item.image_url} preload="metadata" muted className="w-12 h-12 mx-auto mb-2 rounded-lg object-cover" />
+                      ) : (
+                        <img src={item.image_url} alt={item.name} className="w-12 h-12 mx-auto mb-2 rounded-lg object-cover" />
+                      )
                     ) : (
                       <div className="text-3xl mb-2">🎁</div>
                     )}
@@ -444,7 +448,11 @@ const Cases = () => {
                         } flex flex-col items-center justify-center p-2 transition-all duration-300`}
                       >
                         {item.kind === 'cosmetic' && item.cosmetic?.image_url ? (
-                          <img src={item.cosmetic.preview_url || item.cosmetic.image_url} alt={item.cosmetic.name} className="w-16 h-16 object-contain mb-1" />
+                          item.cosmetic.type === 'background' ? (
+                            <video src={item.cosmetic.image_url} preload="metadata" muted className="w-16 h-16 object-cover rounded mb-1" />
+                          ) : (
+                            <img src={item.cosmetic.preview_url || item.cosmetic.image_url} alt={item.cosmetic.name} className="w-16 h-16 object-contain mb-1" />
+                          )
                         ) : (
                           <div className="text-3xl mb-1">{display.icon}</div>
                         )}
@@ -468,7 +476,12 @@ const Cases = () => {
                   </h2>
 
                   {reward.kind === 'cosmetic' && (
-                    <p className="text-zinc-400 mb-4">Ajouté à ton inventaire!</p>
+                    <div className="mb-4">
+                      {reward.cosmetic?.type === 'background' && reward.cosmetic.image_url && (
+                        <video src={reward.cosmetic.image_url} autoPlay loop muted playsInline className="w-48 h-28 object-cover rounded-xl mx-auto mb-3 border border-white/20" />
+                      )}
+                      <p className="text-zinc-400">Ajouté à ton inventaire!</p>
+                    </div>
                   )}
                   {reward.kind === 'coins' && (
                     <p className="text-gold text-xl font-mono font-bold mb-4">
