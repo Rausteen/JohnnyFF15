@@ -258,7 +258,7 @@ const Dashboard = () => {
         <div className="relative">
           <button
             onClick={() => setShowPlayerSelector(!showPlayerSelector)}
-            className="w-full sm:w-auto flex items-center justify-between gap-3 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl hover:border-zinc-600 transition"
+            className="w-full sm:w-auto flex items-center justify-between gap-3 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:border-zinc-600 transition"
           >
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
@@ -305,10 +305,10 @@ const Dashboard = () => {
       )}
 
       {/* Game Status Banner */}
-      <section className="relative overflow-hidden rounded-2xl border border-white/10">
+      <section className="relative overflow-hidden rounded-2xl border border-zinc-800">
         {isInGame && testMode && testMatchData && testPlayer ? (
           // TEST MODE BANNER
-          <div className="bg-gradient-to-r from-purple-900/30 via-purple-800/20 to-fuchsia-900/30 p-4 sm:p-5">
+          <div className="bg-gradient-to-r from-purple-950 via-zinc-900 to-fuchsia-950 p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className="relative shrink-0">
@@ -329,13 +329,13 @@ const Dashboard = () => {
               <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto">
                 {testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid) && (
                   <>
-                    <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-white/10 rounded-xl shrink-0">
+                    <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-zinc-800 rounded-xl shrink-0">
                       <div className="text-xs sm:text-sm font-bold text-white">
                         {testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid)?.championName}
                       </div>
                       <div className="text-xs text-purple-300">Champion</div>
                     </div>
-                    <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-white/10 rounded-xl shrink-0">
+                    <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-zinc-800 rounded-xl shrink-0">
                       <div className="text-xs sm:text-sm font-bold text-white font-mono">
                         {testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid)?.kills}/
                         {testMatchData.info.participants.find(p => p.puuid === testPlayer.puuid)?.deaths}/
@@ -350,7 +350,7 @@ const Dashboard = () => {
           </div>
         ) : isInGame && activePlayer ? (
           // LIVE GAME BANNER
-          <div className="bg-gradient-to-r from-green-900/30 via-green-800/20 to-emerald-900/30 p-4 sm:p-5">
+          <div className="bg-gradient-to-r from-green-950 via-zinc-900 to-emerald-950 p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className="relative shrink-0">
@@ -372,17 +372,17 @@ const Dashboard = () => {
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto">
-                <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-white/10 rounded-xl shrink-0">
+                <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-zinc-800 rounded-xl shrink-0">
                   <div className="text-lg sm:text-xl font-mono font-bold text-white">{gameTimeMinutes}'</div>
                   <div className="text-xs text-green-300">Temps</div>
                 </div>
                 {playerInGame && (
-                  <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-white/10 rounded-xl shrink-0">
+                  <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-zinc-800 rounded-xl shrink-0">
                     <div className="text-xs sm:text-sm font-bold text-white">{getChampionName(playerInGame.championId)}</div>
                     <div className="text-xs text-green-300">Champion</div>
                   </div>
                 )}
-                <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-white/10 rounded-xl shrink-0">
+                <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-zinc-800 rounded-xl shrink-0">
                   <div className="text-xs sm:text-sm font-bold text-white">{allProps.length}</div>
                   <div className="text-xs text-green-300">Paris</div>
                 </div>
@@ -391,7 +391,7 @@ const Dashboard = () => {
           </div>
         ) : (
           // OFFLINE BANNER
-          <div className="bg-gradient-to-r from-zinc-900/80 via-zinc-800/50 to-zinc-900/80 p-4 sm:p-5">
+          <div className="bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 p-4 sm:p-5">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-3 sm:gap-4">
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-zinc-800 flex items-center justify-center border border-zinc-700 shrink-0">
@@ -426,7 +426,7 @@ const Dashboard = () => {
 
             {/* Show last match stats for selected player */}
             {selectedPlayer?.puuid && playerStates.get(selectedPlayer.puuid)?.lastMatchStats && (
-              <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
+              <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap items-center gap-2 sm:gap-4 text-sm">
                 <span className="text-zinc-500">Dernière ({selectedPlayer.displayName}):</span>
                 <span className={`font-bold ${playerStates.get(selectedPlayer.puuid)?.lastMatchStats?.win ? 'text-green-400' : 'text-red-400'}`}>
                   {playerStates.get(selectedPlayer.puuid)?.lastMatchStats?.win ? 'Victoire' : 'Défaite'}
@@ -445,7 +445,7 @@ const Dashboard = () => {
 
       {/* Login prompt */}
       {!user && (
-        <div className="bg-gradient-to-r from-primary/10 via-accent/10 to-primary/10 border border-primary/20 rounded-xl p-4 flex items-center justify-between flex-wrap gap-4">
+        <div className="bg-zinc-900 border border-primary/30 rounded-xl p-4 flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-primary" />
             <span className="text-white font-medium">Connecte-toi pour parier</span>
@@ -472,7 +472,7 @@ const Dashboard = () => {
             )}
           </div>
 
-          <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl border border-zinc-800 overflow-hidden lg:sticky lg:top-4">
+          <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden lg:sticky lg:top-4">
             {!user ? (
               <div className="p-4 sm:p-6 text-center text-zinc-500 text-sm">
                 <Users className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-2 opacity-50" />
@@ -486,7 +486,7 @@ const Dashboard = () => {
             ) : (
               <div className="divide-y divide-zinc-800 max-h-[30vh] lg:max-h-[50vh] overflow-y-auto">
                 {groupedBets.map(group => (
-                  <div key={group.comboId || group.bets[0].id} className="p-3 hover:bg-zinc-800/50 transition-colors">
+                  <div key={group.comboId || group.bets[0].id} className="p-3 hover:bg-zinc-800 transition-colors">
                     {group.type === 'combo' ? (
                       // Combo bet display
                       <>
@@ -640,7 +640,7 @@ const Dashboard = () => {
 
           {/* Props Grid */}
           {!isInGame && (
-            <div className="p-3 sm:p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
+            <div className="p-3 sm:p-4 rounded-xl border border-amber-500/30 bg-zinc-900 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
               <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
               <div>
                 <p className="text-amber-400 font-bold text-xs sm:text-sm">Paris fermés</p>
@@ -650,7 +650,7 @@ const Dashboard = () => {
           )}
           {/* Betting window closed message (disabled for testing - set to 999 minutes) */}
           {isInGame && gameTimeMinutes >= 999 && (
-            <div className="p-3 sm:p-4 rounded-xl border border-red-500/30 bg-red-500/5 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
+            <div className="p-3 sm:p-4 rounded-xl border border-red-500/30 bg-zinc-900 mb-3 sm:mb-4 flex items-center gap-2 sm:gap-3">
               <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 shrink-0" />
               <div>
                 <p className="text-red-400 font-bold text-xs sm:text-sm">Fenêtre de paris fermée</p>
@@ -706,8 +706,8 @@ const Dashboard = () => {
                 const totalPotentiel = userBets.reduce((sum, b) => sum + b.potentialPayout, 0);
 
                 return (
-                  <div key={pseudo} className="bg-zinc-900/95 backdrop-blur-sm rounded-xl border border-zinc-800 overflow-hidden">
-                    <div className="p-3 bg-gradient-to-r from-primary/10 to-transparent border-b border-zinc-800 flex items-center justify-between">
+                  <div key={pseudo} className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                    <div className="p-3 bg-zinc-800 border-b border-zinc-700 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                           <span className="text-primary font-bold text-sm">{pseudo.charAt(0).toUpperCase()}</span>
@@ -717,9 +717,9 @@ const Dashboard = () => {
                       <span className="text-xs text-zinc-400">{userBets.length} paris</span>
                     </div>
 
-                    <div className="divide-y divide-zinc-800/50 max-h-48 overflow-y-auto">
+                    <div className="divide-y divide-zinc-800 max-h-48 overflow-y-auto">
                       {userBets.slice(0, 5).map(bet => (
-                        <div key={bet.id} className="p-2.5 hover:bg-zinc-800/30 transition-colors">
+                        <div key={bet.id} className="p-2.5 hover:bg-zinc-800 transition-colors">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               {(bet.playerName || bet.championName) && (
@@ -755,7 +755,7 @@ const Dashboard = () => {
                       )}
                     </div>
 
-                    <div className="p-2.5 bg-zinc-800/50 border-t border-zinc-800 flex items-center justify-between text-xs">
+                    <div className="p-2.5 bg-zinc-800 border-t border-zinc-700 flex items-center justify-between text-xs">
                       <span className="text-zinc-400">Total misé: <span className="text-white font-mono">{totalMise} JC</span></span>
                       <span className="text-gold font-bold">→ {totalPotentiel} JC</span>
                     </div>

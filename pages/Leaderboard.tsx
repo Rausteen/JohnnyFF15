@@ -100,7 +100,7 @@ const Leaderboard = () => {
       </div>
 
       {error && (
-        <div className="mb-6 p-4 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 text-center">
+        <div className="mb-6 p-4 rounded-xl bg-red-950 border border-red-900 text-red-400 text-center">
           Erreur: {error}
         </div>
       )}
@@ -122,7 +122,7 @@ const Leaderboard = () => {
 
       {/* Rest of the leaderboard */}
       <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden mb-10">
-        <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-zinc-800/50 text-sm font-bold text-zinc-400 uppercase tracking-wide">
+        <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-zinc-800 text-sm font-bold text-zinc-400 uppercase tracking-wide">
           <div className="col-span-1 text-center">#</div>
           <div className="col-span-4">Joueur</div>
           <div className="col-span-3 text-right">Johnny Coins</div>
@@ -157,7 +157,7 @@ const Leaderboard = () => {
           <select
             value={selectedPlayerId}
             onChange={(e) => setSelectedPlayerId(e.target.value)}
-            className="p-2 rounded-md bg-zinc-800 text-white border border-white/20"
+            className="p-2 rounded-md bg-zinc-800 text-white border border-zinc-700"
           >
             {users.map((user) => (
               <option key={user.id} value={user.id}>
@@ -184,9 +184,9 @@ const PodiumCard = memo(({ user, rank, isCurrentUser }: { user: LeaderboardUser;
   const border = getCosmetic(user.equipped_border);
   const background = getCosmetic(user.equipped_background);
   const rankStyles = {
-    1: { bg: 'bg-gradient-to-b from-gold/20 via-amber-900/10 to-zinc-900', border: 'border-gold/50', icon: <Crown className="w-8 h-8 text-gold" />, text: 'text-gold' },
-    2: { bg: 'bg-gradient-to-b from-zinc-400/20 via-zinc-600/10 to-zinc-900', border: 'border-zinc-400/50', icon: <Medal className="w-7 h-7 text-zinc-300" />, text: 'text-zinc-300' },
-    3: { bg: 'bg-gradient-to-b from-amber-700/20 via-amber-900/10 to-zinc-900', border: 'border-amber-700/50', icon: <Award className="w-6 h-6 text-amber-600" />, text: 'text-amber-600' }
+    1: { bg: 'bg-gradient-to-b from-amber-900 via-zinc-900 to-zinc-900', border: 'border-gold', icon: <Crown className="w-8 h-8 text-gold" />, text: 'text-gold' },
+    2: { bg: 'bg-gradient-to-b from-zinc-700 via-zinc-900 to-zinc-900', border: 'border-zinc-400', icon: <Medal className="w-7 h-7 text-zinc-300" />, text: 'text-zinc-300' },
+    3: { bg: 'bg-gradient-to-b from-amber-950 via-zinc-900 to-zinc-900', border: 'border-amber-700', icon: <Award className="w-6 h-6 text-amber-600" />, text: 'text-amber-600' }
   };
   const style = rankStyles[rank as keyof typeof rankStyles];
   return (
@@ -249,7 +249,7 @@ const LeaderboardRow = memo(({ user, rank, isCurrentUser }: { user: LeaderboardU
   return (
     <Link
       to={`/user/${user.id}`}
-      className={`grid grid-cols-12 gap-4 px-6 py-4 hover:bg-zinc-800/50 transition-colors ${isCurrentUser ? 'bg-primary/10 border-l-4 border-primary' : ''}`}
+      className={`grid grid-cols-12 gap-4 px-6 py-4 hover:bg-zinc-800 transition-colors ${isCurrentUser ? 'bg-zinc-800 border-l-4 border-primary' : ''}`}
     >
       <div className="col-span-1 text-center font-bold text-zinc-500">{rank}</div>
       <div className="col-span-4 flex items-center gap-3">

@@ -198,10 +198,10 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
   const quickBets = [50, 100, 500];
 
   return (
-    <div className={`group relative rounded-xl sm:rounded-2xl border bg-zinc-900/95 backdrop-blur-sm p-3 sm:p-5 transition-all ${
+    <div className={`group relative rounded-xl sm:rounded-2xl border bg-zinc-900 p-3 sm:p-5 transition-all ${
       canBetOnProp()
-        ? 'border-zinc-800 hover:border-primary/50 hover:bg-zinc-900'
-        : 'border-zinc-800/50 opacity-60'
+        ? 'border-zinc-800 hover:border-primary/50 hover:bg-zinc-800'
+        : 'border-zinc-800 opacity-60'
     }`}>
       {/* Prop header */}
       <div className="flex justify-between items-start mb-3 sm:mb-4 gap-2">
