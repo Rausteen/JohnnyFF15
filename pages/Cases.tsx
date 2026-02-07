@@ -233,7 +233,8 @@ const Cases = () => {
               {inventoryItems.map((item) => {
                 const isEquipped =
                   (item.type === 'title' && profile?.equipped_title === item.id) ||
-                  (item.type === 'border' && profile?.equipped_border === item.id);
+                  (item.type === 'border' && profile?.equipped_border === item.id) ||
+                  (item.type === 'background' && profile?.equipped_background === item.id);
                 const isEquippingThis = equipping === item.id;
 
                 return (

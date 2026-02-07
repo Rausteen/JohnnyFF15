@@ -22,6 +22,7 @@ interface UserProfile {
   equipped_badge?: string | null;
   equipped_title?: string | null;
   equipped_border?: string | null;
+  equipped_background?: string | null;
 }
 
 // Transfer limits

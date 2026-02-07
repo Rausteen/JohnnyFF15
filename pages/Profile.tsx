@@ -226,13 +226,27 @@ const Profile = () => {
 
   const equippedTitle = getCosmetic(profile?.equipped_title);
   const equippedBorder = getCosmetic(profile?.equipped_border);
+  const equippedBackground = getCosmetic(profile?.equipped_background);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
+      <div className="relative flex items-center gap-4 mb-8 rounded-2xl p-4 overflow-hidden">
+        {equippedBackground?.image_url && (
+          <>
+            <video
+              src={equippedBackground.image_url}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent pointer-events-none" />
+          </>
+        )}
         {/* Avatar with upload */}
-        <div className="relative group">
+        <div className="relative group z-10">
           <div className="w-20 h-20 shadow-lg shadow-primary/30 relative">
             {profile?.avatar_url ? (
               <img
@@ -286,7 +300,7 @@ const Profile = () => {
           />
         </div>
 
-        <div>
+        <div className="relative z-10">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-black text-white">{displayName}</h1>
           </div>

@@ -20,6 +20,7 @@ interface LeaderboardUser {
   equipped_badge?: string | null;
   equipped_title?: string | null;
   equipped_border?: string | null;
+  equipped_background?: string | null;
 }
 
 const Leaderboard = () => {
@@ -173,6 +174,7 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
   const { getCosmetic } = useCosmeticsLookup();
   const title = getCosmetic(user.equipped_title);
   const border = getCosmetic(user.equipped_border);
+  const background = getCosmetic(user.equipped_background);
   const rankStyles = {
     1: { bg: 'bg-gradient-to-b from-gold/20 via-amber-900/10 to-zinc-900', border: 'border-gold/50', icon: <Crown className="w-8 h-8 text-gold" />, text: 'text-gold' },
     2: { bg: 'bg-gradient-to-b from-zinc-400/20 via-zinc-600/10 to-zinc-900', border: 'border-zinc-400/50', icon: <Medal className="w-7 h-7 text-zinc-300" />, text: 'text-zinc-300' },
@@ -182,9 +184,19 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
   return (
     <Link
       to={`/user/${user.id}`}
-      className={`block p-6 rounded-2xl border ${style.bg} ${style.border} ${isCurrentUser ? 'ring-2 ring-primary' : ''} hover:scale-105 transition-transform`}
+      className={`block p-6 rounded-2xl border relative overflow-hidden ${style.bg} ${style.border} ${isCurrentUser ? 'ring-2 ring-primary' : ''} hover:scale-105 transition-transform`}
     >
-      <div className="flex flex-col items-center text-center">
+      {background?.image_url && (
+        <video
+          src={background.image_url}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover opacity-25 pointer-events-none"
+        />
+      )}
+      <div className="relative z-10 flex flex-col items-center text-center">
         {style.icon}
         <div
           className="w-16 h-16 mt-4 mb-3 relative"

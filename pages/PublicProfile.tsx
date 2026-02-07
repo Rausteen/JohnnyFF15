@@ -21,6 +21,7 @@ interface PublicUser {
   equipped_badge?: string | null;
   equipped_title?: string | null;
   equipped_border?: string | null;
+  equipped_background?: string | null;
 }
 
 const PublicProfile = () => {
@@ -174,6 +175,7 @@ const PublicProfile = () => {
 
   const equippedTitle = getCosmetic(profile.equipped_title);
   const equippedBorder = getCosmetic(profile.equipped_border);
+  const equippedBackground = getCosmetic(profile.equipped_background);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -187,8 +189,18 @@ const PublicProfile = () => {
       </Link>
 
       {/* Profile Header */}
-      <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 rounded-3xl border border-zinc-800 p-8 mb-8">
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+      <div className="relative bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 rounded-3xl border border-zinc-800 p-8 mb-8 overflow-hidden">
+        {equippedBackground?.image_url && (
+          <video
+            src={equippedBackground.image_url}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
+          />
+        )}
+        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
           {/* Avatar */}
           <div className="relative">
             <div className="w-32 h-32 shadow-lg shadow-primary/30 relative">
