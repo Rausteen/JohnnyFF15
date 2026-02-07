@@ -13,6 +13,7 @@ interface RouletteSlot {
   items: CaseReward[];
   position: number;
   reward: CaseReward;
+  winIndex: number;
 }
 
 const ANIM_DURATION = 4000;
@@ -30,6 +31,7 @@ const Cases = () => {
   // Multi-case state
   const [quantity, setQuantity] = useState(1);
   const [slots, setSlots] = useState<RouletteSlot[]>([]);
+  const [pendingAnimate, setPendingAnimate] = useState(false);
 
   const rouletteContainerRef = useRef<HTMLDivElement>(null);
 
@@ -37,6 +39,27 @@ const Cases = () => {
   useEffect(() => {
     fetchAllCosmetics().then(data => setCosmetics(data));
   }, []);
+
+  // After slots render at position 0, measure real container width and set target positions
+  useEffect(() => {
+    if (!pendingAnimate || slots.length === 0) return;
+    // Wait one frame so the DOM is fully laid out
+    requestAnimationFrame(() => {
+      const containerWidth = rouletteContainerRef.current?.offsetWidth || 600;
+      const compact = slots.length > 5;
+      const itemWidth = compact ? 90 : 116;
+      const gap = 8;
+      const padding = 8;
+      const itemTotalWidth = itemWidth + gap;
+
+      setSlots(prev => prev.map(slot => {
+        const itemCenter = padding + slot.winIndex * itemTotalWidth + itemWidth / 2;
+        const targetPosition = itemCenter - containerWidth / 2;
+        return { ...slot, position: -targetPosition };
+      }));
+      setPendingAnimate(false);
+    });
+  }, [pendingAnimate]);
 
   // Inventory items from profile
   const inventoryItems = useMemo(() => {
@@ -101,46 +124,34 @@ const Cases = () => {
       }
 
       // Roll all cases at once
-      const containerWidth = rouletteContainerRef.current?.offsetWidth || 600;
-      const compact = quantity > 5;
-      const itemWidth = compact ? 90 : 116;  // matches w-[116px] / w-[90px]
-      const gap = 8;                          // gap-2 = 8px
-      const padding = 8;                      // px-2 = 8px
-      const itemTotalWidth = itemWidth + gap;
       const itemCount = 50;
-
       const newSlots: RouletteSlot[] = [];
+
       for (let i = 0; i < quantity; i++) {
         const reward = rollCase(cosmetics);
         const items = generateRouletteItems(cosmetics, reward, itemCount);
 
-        let winIndex = Math.floor(itemCount * 0.75);
-        for (let j = Math.floor(itemCount * 0.7); j < itemCount; j++) {
+        // Find exact win position (generateRouletteItems places the reward by reference)
+        let winIndex = -1;
+        for (let j = 0; j < items.length; j++) {
           if (items[j] === reward) { winIndex = j; break; }
         }
-
-        // Center of winning item = padding + winIndex * (itemWidth + gap) + itemWidth / 2
-        const itemCenter = padding + winIndex * itemTotalWidth + itemWidth / 2;
-        const targetPosition = itemCenter - containerWidth / 2;
-        // Small random offset so each roulette looks slightly different (max ±10px, stays within item)
-        const randomOffset = Math.random() * 20 - 10;
+        if (winIndex === -1) winIndex = Math.floor(itemCount * 0.75);
 
         newSlots.push({
           items,
-          position: -(targetPosition + randomOffset),
+          position: 0, // start at 0, useEffect will calculate real position
           reward,
+          winIndex,
         });
       }
 
-      // Set slots at position 0 first
-      setSlots(newSlots.map(s => ({ ...s, position: 0 })));
-
-      // After a frame, animate all to their target positions simultaneously
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // Render slots at position 0, then trigger animation after measuring real container width
       setSlots(newSlots);
+      setPendingAnimate(true);
 
       // Wait for animation
-      await new Promise(resolve => setTimeout(resolve, ANIM_DURATION));
+      await new Promise(resolve => setTimeout(resolve, ANIM_DURATION + 100));
 
       // Award all cosmetics
       const currentProfile = useCreditsStore.getState().profile;
@@ -537,7 +548,7 @@ const Cases = () => {
                     >
                       {slot.items.map((item, idx) => {
                         const display = getRewardDisplay(item);
-                        const isWinning = showResult && item === slot.reward && idx >= Math.floor(slot.items.length * 0.7);
+                        const isWinning = showResult && idx === slot.winIndex;
                         const compact = slots.length > 5;
                         return (
                           <div
