@@ -102,7 +102,11 @@ const Cases = () => {
 
       // Roll all cases at once
       const containerWidth = rouletteContainerRef.current?.offsetWidth || 600;
-      const itemTotalWidth = 124;
+      const compact = quantity > 5;
+      const itemWidth = compact ? 90 : 116;  // matches w-[116px] / w-[90px]
+      const gap = 8;                          // gap-2 = 8px
+      const padding = 8;                      // px-2 = 8px
+      const itemTotalWidth = itemWidth + gap;
       const itemCount = 50;
 
       const newSlots: RouletteSlot[] = [];
@@ -115,8 +119,11 @@ const Cases = () => {
           if (items[j] === reward) { winIndex = j; break; }
         }
 
-        const targetPosition = (winIndex * itemTotalWidth) - (containerWidth / 2) + (116 / 2);
-        const randomOffset = Math.random() * 60 - 30;
+        // Center of winning item = padding + winIndex * (itemWidth + gap) + itemWidth / 2
+        const itemCenter = padding + winIndex * itemTotalWidth + itemWidth / 2;
+        const targetPosition = itemCenter - containerWidth / 2;
+        // Small random offset so each roulette looks slightly different (max ±10px, stays within item)
+        const randomOffset = Math.random() * 20 - 10;
 
         newSlots.push({
           items,
