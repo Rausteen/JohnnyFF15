@@ -11,6 +11,7 @@ import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
 import { getUserPendingBets, getAllPendingBetsWithPseudos, BetWithPseudo } from '../services/betsService';
+import { supabase } from '../services/supabase';
 import { Bet, TrackedPlayer } from '../types';
 import {
   Clock, Skull, Wifi, WifiOff, AlertTriangle,
@@ -143,13 +144,21 @@ const Dashboard = () => {
     loadPublicPendingBets();
   }, [user?.id]);
 
-  // Reload bets periodically to stay in sync
+  // Realtime subscription on bets table — replaces 30s polling
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadPendingBets();
-      loadPublicPendingBets();
-    }, 30000);
-    return () => clearInterval(interval);
+    const subscription = supabase
+      .channel('dashboard-bets')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bets' },
+        () => {
+          loadPendingBets();
+          loadPublicPendingBets();
+        }
+      )
+      .subscribe();
+
+    return () => { subscription.unsubscribe(); };
   }, [user?.id]);
 
   // Listen for bet placed events to refresh immediately

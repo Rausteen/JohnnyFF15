@@ -51,7 +51,8 @@ const Profile = () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, pseudo')
-        .order('pseudo');
+        .order('pseudo')
+        .limit(200);
 
       if (!error && data) {
         setAllUsers(data);

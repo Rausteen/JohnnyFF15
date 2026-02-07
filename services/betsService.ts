@@ -346,50 +346,59 @@ export interface BetWithPseudo extends Bet {
 }
 
 // Get all pending bets with user pseudos (for public view)
+// Uses a single JOIN query instead of two separate queries
 export async function getAllPendingBetsWithPseudos(): Promise<BetWithPseudo[]> {
   try {
-    // Get all pending bets
+    const { data, error } = await supabase
+      .from('bets')
+      .select('*, profiles!bets_user_id_fkey(pseudo)')
+      .eq('status', 'PENDING')
+      .order('timestamp', { ascending: false });
+
+    if (error) {
+      // Fallback to the two-query approach if the JOIN doesn't work (FK might not exist)
+      return getAllPendingBetsWithPseudosFallback();
+    }
+
+    if (!data || data.length === 0) return [];
+
+    return data.map((row: any) => ({
+      ...supabaseBetToLocal(row),
+      userPseudo: row.profiles?.pseudo || 'Inconnu'
+    }));
+  } catch (err) {
+    console.error('Error fetching pending bets with pseudos:', err);
+    return [];
+  }
+}
+
+// Fallback if FK-based JOIN is not available
+async function getAllPendingBetsWithPseudosFallback(): Promise<BetWithPseudo[]> {
+  try {
     const { data: bets, error: betsError } = await supabase
       .from('bets')
       .select('*')
       .eq('status', 'PENDING')
       .order('timestamp', { ascending: false });
 
-    if (betsError) {
-      console.error('Error fetching pending bets:', betsError);
-      return [];
-    }
+    if (betsError || !bets || bets.length === 0) return [];
 
-    if (!bets || bets.length === 0) {
-      return [];
-    }
-
-    // Get unique user IDs
     const userIds = [...new Set(bets.map(b => b.user_id).filter(Boolean))];
 
-    // Fetch user pseudos
-    const { data: profiles, error: profilesError } = await supabase
+    const { data: profiles } = await supabase
       .from('profiles')
       .select('id, pseudo')
       .in('id', userIds);
 
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
-    }
-
-    // Create a map of user ID to pseudo
     const pseudoMap = new Map<string, string>();
-    (profiles || []).forEach(p => {
-      pseudoMap.set(p.id, p.pseudo);
-    });
+    (profiles || []).forEach(p => pseudoMap.set(p.id, p.pseudo));
 
-    // Convert bets and add pseudos
     return bets.map(sb => ({
       ...supabaseBetToLocal(sb),
       userPseudo: pseudoMap.get(sb.user_id) || 'Inconnu'
     }));
   } catch (err) {
-    console.error('Error fetching pending bets with pseudos:', err);
+    console.error('Error fetching pending bets (fallback):', err);
     return [];
   }
 }
