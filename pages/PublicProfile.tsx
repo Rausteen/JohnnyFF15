@@ -188,9 +188,8 @@ const PublicProfile = () => {
             loop
             muted
             playsInline
-            className="fixed inset-0 w-full h-full object-cover opacity-20 pointer-events-none z-0"
+            className="fixed inset-0 w-full h-full object-cover pointer-events-none z-0"
           />
-          <div className="fixed inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none z-0" />
         </>
       )}
 
