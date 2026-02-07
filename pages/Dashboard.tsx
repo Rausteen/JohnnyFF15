@@ -455,7 +455,7 @@ const Dashboard = () => {
             )}
           </div>
 
-          <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden lg:sticky lg:top-4">
+          <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl border border-zinc-800 overflow-hidden lg:sticky lg:top-4">
             {!user ? (
               <div className="p-4 sm:p-6 text-center text-zinc-500 text-sm">
                 <Users className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-2 opacity-50" />
@@ -705,7 +705,7 @@ const Dashboard = () => {
                 const totalPotentiel = userBets.reduce((sum, b) => sum + b.potentialPayout, 0);
 
                 return (
-                  <div key={pseudo} className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                  <div key={pseudo} className="bg-zinc-900/95 backdrop-blur-sm rounded-xl border border-zinc-800 overflow-hidden">
                     <div className="p-3 bg-gradient-to-r from-primary/10 to-transparent border-b border-zinc-800 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">

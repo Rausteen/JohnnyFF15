@@ -6,6 +6,7 @@ import { useAuthStore } from '../services/authStore';
 import { getBetsByUserId } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
 import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
+import { useBackgroundOverride } from '../services/backgroundOverride';
 
 interface PublicUser {
   id: string;
@@ -41,6 +42,18 @@ const PublicProfile = () => {
 
   // Get equipped cosmetics from Supabase (must be before any early return)
   const { getCosmetic } = useCosmeticsLookup();
+  const { setOverrideBackgroundUrl } = useBackgroundOverride();
+
+  // Override the global background with this user's equipped background
+  const equippedBackground = getCosmetic(profile?.equipped_background);
+  useEffect(() => {
+    if (equippedBackground?.image_url) {
+      setOverrideBackgroundUrl(equippedBackground.image_url);
+    } else {
+      setOverrideBackgroundUrl(null);
+    }
+    return () => setOverrideBackgroundUrl(null);
+  }, [equippedBackground?.image_url, setOverrideBackgroundUrl]);
 
   // Load user bets from Supabase
   const loadUserBets = async () => {
@@ -188,7 +201,7 @@ const PublicProfile = () => {
       </Link>
 
       {/* Profile Header */}
-      <div className="bg-gradient-to-br from-zinc-900/80 via-zinc-900/80 to-zinc-800/80 backdrop-blur-sm rounded-3xl border border-zinc-800 p-8 mb-8">
+      <div className="bg-gradient-to-br from-zinc-900/95 via-zinc-900/95 to-zinc-800/95 backdrop-blur-sm rounded-3xl border border-zinc-800 p-8 mb-8">
         <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
           {/* Avatar */}
           <div className="relative">
@@ -288,7 +301,7 @@ const PublicProfile = () => {
 
       {/* JC Stats */}
       <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl border border-zinc-800 p-6">
+        <div className="bg-zinc-900/95 backdrop-blur-sm rounded-2xl border border-zinc-800 p-6">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-gold" />
             Johnny Coins gagnés
@@ -299,7 +312,7 @@ const PublicProfile = () => {
           <p className="text-zinc-500 text-sm mt-2">Total des gains sur les paris</p>
         </div>
 
-        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl border border-zinc-800 p-6">
+        <div className="bg-zinc-900/95 backdrop-blur-sm rounded-2xl border border-zinc-800 p-6">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-red-400" />
             Johnny Coins perdus
@@ -339,12 +352,12 @@ const PublicProfile = () => {
         </div>
 
         {betsLoading ? (
-          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl border border-zinc-800 p-8 text-center">
+          <div className="bg-zinc-900/95 backdrop-blur-sm rounded-2xl border border-zinc-800 p-8 text-center">
             <Loader2 className="w-8 h-8 text-zinc-500 animate-spin mx-auto mb-4" />
             <p className="text-zinc-500">Chargement des paris...</p>
           </div>
         ) : groupedBets.length === 0 ? (
-          <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl border border-zinc-800 p-8 text-center">
+          <div className="bg-zinc-900/95 backdrop-blur-sm rounded-2xl border border-zinc-800 p-8 text-center">
             <Swords className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
             <p className="text-zinc-500">Aucun pari enregistré</p>
           </div>
@@ -370,7 +383,7 @@ const PublicProfile = () => {
               return (
                 <div
                   key={matchId}
-                  className="bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800 overflow-hidden"
+                  className="bg-zinc-900/95 backdrop-blur-sm rounded-xl border border-zinc-800 overflow-hidden"
                 >
                   {/* Game header */}
                   <button
@@ -542,7 +555,7 @@ const StatCard = ({ icon, label, value, color }: { icon: React.ReactNode; label:
   };
 
   return (
-    <div className="bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-800 p-6 text-center">
+    <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl border border-zinc-800 p-6 text-center">
       <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-zinc-800 ${colorClasses[color]} mb-3`}>
         {icon}
       </div>

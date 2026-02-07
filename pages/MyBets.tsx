@@ -223,10 +223,10 @@ const MyBets = () => {
 
   const getStatusColors = (status: string) => {
     switch (status) {
-      case 'won': return 'from-green-500/20 to-green-600/5 border-green-500/30 text-green-400';
-      case 'lost': return 'from-red-500/20 to-red-600/5 border-red-500/30 text-red-400';
-      case 'pending': return 'from-amber-500/20 to-amber-600/5 border-amber-500/30 text-amber-400';
-      default: return 'from-purple-500/20 to-purple-600/5 border-purple-500/30 text-purple-400';
+      case 'won': return 'from-green-900/90 to-zinc-900/90 border-green-500/40 text-green-400';
+      case 'lost': return 'from-red-900/90 to-zinc-900/90 border-red-500/40 text-red-400';
+      case 'pending': return 'from-amber-900/90 to-zinc-900/90 border-amber-500/40 text-amber-400';
+      default: return 'from-purple-900/90 to-zinc-900/90 border-purple-500/40 text-purple-400';
     }
   };
 
@@ -376,12 +376,12 @@ const MyBets = () => {
       {/* Games List */}
       <div className="space-y-2 sm:space-y-3">
         {loading ? (
-          <div className="text-center py-10 sm:py-16 bg-zinc-900/30 rounded-xl sm:rounded-2xl border border-dashed border-zinc-800">
+          <div className="text-center py-10 sm:py-16 bg-zinc-900/90 rounded-xl sm:rounded-2xl border border-dashed border-zinc-800">
             <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-zinc-500 animate-spin" />
             <p className="text-zinc-500 font-medium text-sm sm:text-base">Chargement des paris...</p>
           </div>
         ) : gameGroups.length === 0 ? (
-          <div className="text-center py-10 sm:py-16 bg-zinc-900/30 rounded-xl sm:rounded-2xl border border-dashed border-zinc-800">
+          <div className="text-center py-10 sm:py-16 bg-zinc-900/90 rounded-xl sm:rounded-2xl border border-dashed border-zinc-800">
             <Swords className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-zinc-700" />
             <p className="text-zinc-500 font-medium text-sm sm:text-base">Aucun pari trouvé</p>
             <p className="text-xs sm:text-sm text-zinc-600 mt-1">Place des paris quand Johnny est en game !</p>
@@ -481,7 +481,7 @@ const MyBets = () => {
 
                 {/* Expanded Bets */}
                 {isExpanded && (
-                  <div className="border-t border-white/10 bg-black/20">
+                  <div className="border-t border-white/10 bg-black/60">
                     {group.bets.map((bet, index) => (
                       <div
                         key={bet.id}
