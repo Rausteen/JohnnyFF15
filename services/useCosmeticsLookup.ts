@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react';
-import { supabase } from './supabase';
+import { fetchAllCosmetics, SupabaseCosmetic } from './fetchAllCosmetics';
 
-export interface SupabaseCosmetic {
-  id: string;
-  name: string;
-  type: 'border' | 'background' | 'title';
-  image_url?: string;
-  preview_url?: string;
-}
+export type { SupabaseCosmetic };
 
 let cachedCosmetics: SupabaseCosmetic[] | null = null;
 
@@ -16,11 +10,9 @@ export function useCosmeticsLookup() {
 
   useEffect(() => {
     if (cachedCosmetics) return;
-    supabase.from('cosmetics').select('*').limit(5000).then(({ data }) => {
-      if (data) {
-        cachedCosmetics = data;
-        setCosmetics(data);
-      }
+    fetchAllCosmetics().then((data) => {
+      cachedCosmetics = data;
+      setCosmetics(data);
     });
   }, []);
 

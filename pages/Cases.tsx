@@ -3,6 +3,7 @@ import { Package, Sparkles, Loader2, Gift, Info, Backpack, Check, Coins } from '
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
+import { fetchAllCosmetics } from '../services/fetchAllCosmetics';
 import {
   CHALLENGER_CASE, ITEM_POOL_RATE, COINS_POOL_RATE, IRL_ITEMS, COIN_TIERS,
   CosmeticItem, CaseReward, rollCase, generateRouletteItems
@@ -23,13 +24,9 @@ const Cases = () => {
 
   const rouletteRef = useRef<HTMLDivElement>(null);
 
-  // Load cosmetics from Supabase
+  // Load cosmetics from Supabase (paginated to get all rows)
   useEffect(() => {
-    const loadCosmetics = async () => {
-      const { data } = await supabase.from('cosmetics').select('*').limit(5000);
-      if (data) setCosmetics(data);
-    };
-    loadCosmetics();
+    fetchAllCosmetics().then(data => setCosmetics(data));
   }, []);
 
   // Inventory items from profile
