@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Package, Sparkles, Loader2, Gift, Info, Backpack, Check, Coins } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
@@ -22,7 +22,16 @@ const Cases = () => {
   const [showInventory, setShowInventory] = useState(false);
   const [equipping, setEquipping] = useState<string | null>(null);
 
+  // Multi-case hold state
+  const [multiRewards, setMultiRewards] = useState<CaseReward[]>([]);
+  const [caseCount, setCaseCount] = useState(0);
+  const [isHolding, setIsHolding] = useState(false);
+  const [animSpeed, setAnimSpeed] = useState(4000);
+
   const rouletteRef = useRef<HTMLDivElement>(null);
+  const holdingRef = useRef(false);
+  const openingRef = useRef(false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load cosmetics from Supabase (paginated to get all rows)
   useEffect(() => {
@@ -69,69 +78,90 @@ const Cases = () => {
     }
   };
 
+  // Core: open a single case, returns the reward. fast = shorter animation.
+  const openSingleCase = useCallback(async (fast: boolean): Promise<CaseReward | null> => {
+    if (!user || !profile) return null;
+
+    const currentProfile = useCreditsStore.getState().profile;
+    if (!currentProfile) return null;
+
+    // Deduct credits (skip if free)
+    if (CHALLENGER_CASE.price > 0) {
+      if (currentProfile.credits < CHALLENGER_CASE.price) return null;
+      const { error: deductError } = await supabase
+        .from('profiles')
+        .update({ credits: currentProfile.credits - CHALLENGER_CASE.price })
+        .eq('id', user.id);
+      if (deductError) throw deductError;
+    }
+
+    // Roll
+    const result = rollCase(cosmetics);
+    setReward(result);
+
+    // Generate roulette
+    const itemCount = 50;
+    const items = generateRouletteItems(cosmetics, result, itemCount);
+    setRouletteItems(items);
+
+    // Find winning position
+    let winIndex = Math.floor(itemCount * 0.75);
+    for (let i = Math.floor(itemCount * 0.7); i < itemCount; i++) {
+      if (items[i] === result) { winIndex = i; break; }
+    }
+
+    // Animate
+    const speed = fast ? 2000 : 4000;
+    setAnimSpeed(speed);
+    const itemTotalWidth = 124;
+    const containerWidth = rouletteRef.current?.offsetWidth || 600;
+    const targetPosition = (winIndex * itemTotalWidth) - (containerWidth / 2) + (116 / 2);
+    const randomOffset = Math.random() * 60 - 30;
+
+    setRoulettePosition(0);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    setRoulettePosition(-(targetPosition + randomOffset));
+    await new Promise(resolve => setTimeout(resolve, speed));
+
+    // Award cosmetic to inventory
+    if (result.kind === 'cosmetic' && result.cosmetic) {
+      const latestProfile = useCreditsStore.getState().profile;
+      const current = latestProfile?.owned_cosmetics || [];
+      if (!current.includes(result.cosmetic.id)) {
+        const { error: cosmeticError } = await supabase
+          .from('profiles')
+          .update({ owned_cosmetics: [...current, result.cosmetic.id] })
+          .eq('id', user.id);
+        if (cosmeticError) throw cosmeticError;
+      }
+    }
+
+    return result;
+  }, [user, profile, cosmetics]);
+
+  // Single click: open one case
   const openCase = async () => {
     if (!user || !profile || isOpening) return;
 
-    if (profile.credits < CHALLENGER_CASE.price) {
+    if (CHALLENGER_CASE.price > 0 && profile.credits < CHALLENGER_CASE.price) {
       setError(`Pas assez de JC! Il te faut ${CHALLENGER_CASE.price.toLocaleString('fr-FR')} JC`);
       return;
     }
 
     setError(null);
     setIsOpening(true);
+    openingRef.current = true;
     setShowResult(false);
     setReward(null);
+    setMultiRewards([]);
+    setCaseCount(0);
 
     try {
-      // Deduct credits (skip if free)
-      if (CHALLENGER_CASE.price > 0) {
-        const { error: deductError } = await supabase
-          .from('profiles')
-          .update({ credits: profile.credits - CHALLENGER_CASE.price })
-          .eq('id', user.id);
-        if (deductError) throw deductError;
+      const result = await openSingleCase(false);
+      if (result) {
+        setMultiRewards([result]);
+        setCaseCount(1);
       }
-
-      // Roll
-      const result = rollCase(cosmetics);
-      setReward(result);
-
-      // Generate roulette
-      const itemCount = 50;
-      const items = generateRouletteItems(cosmetics, result, itemCount);
-      setRouletteItems(items);
-
-      // Find winning position
-      let winIndex = Math.floor(itemCount * 0.75);
-      for (let i = Math.floor(itemCount * 0.7); i < itemCount; i++) {
-        if (items[i] === result) { winIndex = i; break; }
-      }
-
-      // Animate
-      const itemTotalWidth = 124;
-      const containerWidth = rouletteRef.current?.offsetWidth || 600;
-      const targetPosition = (winIndex * itemTotalWidth) - (containerWidth / 2) + (116 / 2);
-      const randomOffset = Math.random() * 60 - 30;
-
-      setRoulettePosition(0);
-      await new Promise(resolve => setTimeout(resolve, 50));
-      setRoulettePosition(-(targetPosition + randomOffset));
-      await new Promise(resolve => setTimeout(resolve, 4000));
-
-      // Award
-      if (result.kind === 'cosmetic' && result.cosmetic) {
-        const current = profile.owned_cosmetics || [];
-        if (!current.includes(result.cosmetic.id)) {
-          const { error: cosmeticError } = await supabase
-            .from('profiles')
-            .update({ owned_cosmetics: [...current, result.cosmetic.id] })
-            .eq('id', user.id);
-          if (cosmeticError) throw cosmeticError;
-        }
-      }
-      // IRL rewards: display only (manual fulfillment)
-      // Coins: désactivés temporairement
-
       await loadProfile(user.id);
       setShowResult(true);
     } catch (err: any) {
@@ -140,12 +170,111 @@ const Cases = () => {
       await loadProfile(user.id);
     } finally {
       setIsOpening(false);
+      openingRef.current = false;
     }
   };
+
+  // Hold: open cases continuously
+  const startHoldOpen = useCallback(async () => {
+    if (!user || !profile || openingRef.current) return;
+
+    const currentProfile = useCreditsStore.getState().profile;
+    if (!currentProfile) return;
+    if (CHALLENGER_CASE.price > 0 && currentProfile.credits < CHALLENGER_CASE.price) return;
+
+    setError(null);
+    setIsOpening(true);
+    openingRef.current = true;
+    setShowResult(false);
+    setReward(null);
+    setMultiRewards([]);
+    setCaseCount(0);
+
+    const rewards: CaseReward[] = [];
+    let count = 0;
+
+    try {
+      // Keep opening while button is held
+      while (holdingRef.current) {
+        const result = await openSingleCase(count > 0);
+        if (!result) break;
+
+        rewards.push(result);
+        count++;
+        setMultiRewards([...rewards]);
+        setCaseCount(count);
+
+        // Brief pause to show result before next case
+        if (holdingRef.current) {
+          await new Promise(resolve => setTimeout(resolve, 600));
+        }
+
+        // Check credits for next case
+        if (CHALLENGER_CASE.price > 0) {
+          const p = useCreditsStore.getState().profile;
+          if (!p || p.credits < CHALLENGER_CASE.price) break;
+        }
+      }
+
+      await loadProfile(user.id);
+      setShowResult(true);
+    } catch (err: any) {
+      console.error('Case opening error:', err);
+      setError(err.message || "Erreur lors de l'ouverture");
+      await loadProfile(user.id);
+      setShowResult(true);
+    } finally {
+      setIsOpening(false);
+      openingRef.current = false;
+    }
+  }, [user, profile, openSingleCase, loadProfile]);
+
+  // Hold handlers
+  const handlePointerDown = useCallback(() => {
+    if (openingRef.current || !profile) return;
+    if (CHALLENGER_CASE.price > 0 && profile.credits < CHALLENGER_CASE.price) return;
+
+    holdingRef.current = true;
+    setIsHolding(true);
+
+    // Start multi-open after a short hold delay (400ms) to distinguish from click
+    holdTimerRef.current = setTimeout(() => {
+      if (holdingRef.current) {
+        startHoldOpen();
+      }
+    }, 400);
+  }, [profile, startHoldOpen]);
+
+  const handlePointerUp = useCallback(() => {
+    const wasHolding = holdingRef.current;
+    holdingRef.current = false;
+    setIsHolding(false);
+
+    // Cancel hold timer if released before 400ms (= simple click)
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+
+    // If we weren't already opening (hold didn't trigger), treat as single click
+    if (!openingRef.current && wasHolding) {
+      openCase();
+    }
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      holdingRef.current = false;
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    };
+  }, []);
 
   const closeResult = () => {
     setShowResult(false);
     setReward(null);
+    setMultiRewards([]);
+    setCaseCount(0);
     setRouletteItems([]);
     setRoulettePosition(0);
   };
@@ -177,6 +306,8 @@ const Cases = () => {
   const perCosmeticRate = cosmetics.length > 0 ? (cosmeticsRate / cosmetics.length) : 0;
   const bordersCount = cosmetics.filter(c => c.type === 'border').length;
   const backgroundsCount = cosmetics.filter(c => c.type === 'background').length;
+
+  const canOpen = profile && (CHALLENGER_CASE.price === 0 || profile.credits >= CHALLENGER_CASE.price);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -304,9 +435,11 @@ const Cases = () => {
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-500/20 text-purple-400">
                 🎁 Items {ITEM_POOL_RATE}%
               </span>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-gold/20 text-gold">
-                💰 Coins {COINS_POOL_RATE}%
-              </span>
+              {COINS_POOL_RATE > 0 && (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-gold/20 text-gold">
+                  💰 Coins {COINS_POOL_RATE}%
+                </span>
+              )}
               {bordersCount > 0 && (
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-zinc-700 text-zinc-300">
                   🖼️ {bordersCount} bordures
@@ -323,13 +456,16 @@ const Cases = () => {
           {/* Open Button */}
           <div className="flex flex-col items-center gap-4">
             <button
-              onClick={openCase}
-              disabled={isOpening || !profile || profile.credits < CHALLENGER_CASE.price}
-              className={`px-8 py-4 rounded-xl font-black text-xl transition-all ${
+              onPointerDown={handlePointerDown}
+              onPointerUp={handlePointerUp}
+              onPointerLeave={handlePointerUp}
+              onContextMenu={(e) => e.preventDefault()}
+              disabled={isOpening || !canOpen}
+              className={`px-8 py-4 rounded-xl font-black text-xl transition-all select-none ${
                 isOpening
                   ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                  : profile && profile.credits >= CHALLENGER_CASE.price
-                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30'
+                  : canOpen
+                  ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30 active:scale-95'
                   : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
               }`}
             >
@@ -345,9 +481,16 @@ const Cases = () => {
                 </span>
               )}
             </button>
-            <div className="flex items-center gap-2 text-gold font-mono font-bold">
-              <Sparkles className="w-4 h-4" />
-              {CHALLENGER_CASE.price.toLocaleString('fr-FR')} JC
+            <div className="text-center">
+              {CHALLENGER_CASE.price > 0 ? (
+                <div className="flex items-center gap-2 text-gold font-mono font-bold">
+                  <Sparkles className="w-4 h-4" />
+                  {CHALLENGER_CASE.price.toLocaleString('fr-FR')} JC
+                </div>
+              ) : (
+                <div className="text-green-400 font-bold text-sm">GRATUIT</div>
+              )}
+              <p className="text-zinc-600 text-[10px] mt-1">Maintiens pour ouvrir en rafale</p>
             </div>
           </div>
         </div>
@@ -359,7 +502,7 @@ const Cases = () => {
             <h3 className="font-bold text-white">Probabilités</h3>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className={`grid ${COINS_POOL_RATE > 0 ? 'md:grid-cols-2' : 'md:grid-cols-1 max-w-xl mx-auto'} gap-6`}>
             {/* Pool Items */}
             <div className="p-5 rounded-2xl bg-zinc-800/50 border border-zinc-700">
               <div className="flex items-center gap-2 mb-4">
@@ -393,29 +536,34 @@ const Cases = () => {
               </div>
             </div>
 
-            {/* Pool Coins */}
-            <div className="p-5 rounded-2xl bg-zinc-800/50 border border-zinc-700">
-              <div className="flex items-center gap-2 mb-4">
-                <Coins className="w-5 h-5 text-gold" />
-                <h4 className="font-bold text-white">Pool Coins — {COINS_POOL_RATE}%</h4>
-              </div>
+            {/* Pool Coins — only show if coins are enabled */}
+            {COINS_POOL_RATE > 0 && (
+              <div className="p-5 rounded-2xl bg-zinc-800/50 border border-zinc-700">
+                <div className="flex items-center gap-2 mb-4">
+                  <Coins className="w-5 h-5 text-gold" />
+                  <h4 className="font-bold text-white">Pool Coins — {COINS_POOL_RATE}%</h4>
+                </div>
 
-              <div className="space-y-2">
-                {COIN_TIERS.map(tier => (
-                  <div key={tier.amount} className="flex justify-between items-center px-3 py-2 rounded-lg bg-gold/5 border border-gold/10">
-                    <span className="text-gold font-bold text-sm">💰 {tier.label}</span>
-                    <span className="text-zinc-400 text-sm font-mono">{tier.rate}%</span>
-                  </div>
-                ))}
-                <p className="text-[11px] text-zinc-500 pl-3">
-                  Distribution interne (si coins tiré)
-                </p>
+                <div className="space-y-2">
+                  {COIN_TIERS.map(tier => (
+                    <div key={tier.amount} className="flex justify-between items-center px-3 py-2 rounded-lg bg-gold/5 border border-gold/10">
+                      <span className="text-gold font-bold text-sm">💰 {tier.label}</span>
+                      <span className="text-zinc-400 text-sm font-mono">{tier.rate}%</span>
+                    </div>
+                  ))}
+                  <p className="text-[11px] text-zinc-500 pl-3">
+                    Distribution interne (si coins tiré)
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           <p className="text-xs text-zinc-500 mt-4 text-center">
-            Chaque ouverture donne soit un item, soit des coins — jamais les deux.
+            {COINS_POOL_RATE > 0
+              ? "Chaque ouverture donne soit un item, soit des coins — jamais les deux."
+              : "Chaque ouverture donne un cosmétique aléatoire."
+            }
           </p>
         </div>
       </div>
@@ -424,6 +572,18 @@ const Cases = () => {
       {(isOpening || showResult) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="bg-zinc-900 rounded-3xl border border-zinc-700 p-8 max-w-3xl w-full mx-4 shadow-2xl">
+            {/* Case counter */}
+            {caseCount > 0 && (
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <span className="px-4 py-1.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 font-mono font-bold text-sm">
+                  {showResult ? `${caseCount} caisse${caseCount > 1 ? 's' : ''} ouverte${caseCount > 1 ? 's' : ''}` : `Caisse #${caseCount}`}
+                </span>
+                {isOpening && holdingRef.current && (
+                  <span className="text-zinc-500 text-xs animate-pulse">Relâche pour arrêter</span>
+                )}
+              </div>
+            )}
+
             {/* Roulette */}
             <div className="relative mb-8">
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1 h-full bg-gradient-to-b from-primary via-primary to-transparent z-10" />
@@ -438,7 +598,7 @@ const Cases = () => {
                   className="flex items-center gap-2 py-2 px-2 transition-transform ease-out"
                   style={{
                     transform: `translateX(${roulettePosition}px)`,
-                    transitionDuration: isOpening && !showResult ? '4000ms' : '0ms',
+                    transitionDuration: isOpening && !showResult ? `${animSpeed}ms` : '0ms',
                     transitionTimingFunction: 'cubic-bezier(0.15, 0.85, 0.35, 1)'
                   }}
                 >
@@ -473,47 +633,97 @@ const Cases = () => {
               </div>
             </div>
 
-            {/* Result */}
-            {showResult && reward && (() => {
-              const display = getRewardDisplay(reward);
-              return (
-                <div className="text-center animate-bounce-in">
-                  <h2 className="text-3xl font-black text-white mb-2">
-                    {display.icon} {display.name}
-                  </h2>
-
-                  {reward.kind === 'cosmetic' && (
-                    <div className="mb-4">
-                      {reward.cosmetic?.type === 'background' && reward.cosmetic.image_url && (
-                        <video src={reward.cosmetic.image_url} autoPlay loop muted playsInline className="w-48 h-28 object-cover rounded-xl mx-auto mb-3 border border-white/20" />
-                      )}
-                      <p className="text-zinc-400">Ajouté à ton inventaire!</p>
+            {/* Result / Summary */}
+            {showResult && multiRewards.length > 0 && (
+              <div className="text-center animate-bounce-in">
+                {multiRewards.length === 1 ? (
+                  // Single case result
+                  <>
+                    {(() => {
+                      const display = getRewardDisplay(multiRewards[0]);
+                      return (
+                        <>
+                          <h2 className="text-3xl font-black text-white mb-2">
+                            {display.icon} {display.name}
+                          </h2>
+                          {multiRewards[0].kind === 'cosmetic' && (
+                            <div className="mb-4">
+                              {multiRewards[0].cosmetic?.type === 'background' && multiRewards[0].cosmetic.image_url && (
+                                <video src={multiRewards[0].cosmetic.image_url} autoPlay loop muted playsInline className="w-48 h-28 object-cover rounded-xl mx-auto mb-3 border border-white/20" />
+                              )}
+                              <p className="text-zinc-400">Ajouté à ton inventaire!</p>
+                            </div>
+                          )}
+                          {multiRewards[0].kind === 'irl' && (
+                            <div className="mt-2 mb-4 p-4 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/30 inline-block">
+                              <p className="text-pink-300 text-sm font-bold">
+                                Lot IRL! Contacte un admin pour récupérer ton prix!
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  // Multi-case summary
+                  <>
+                    <h2 className="text-2xl font-black text-white mb-4">
+                      Résultat — {multiRewards.length} caisses
+                    </h2>
+                    <div className="max-h-60 overflow-y-auto mb-4 space-y-2">
+                      {multiRewards.map((r, i) => {
+                        const display = getRewardDisplay(r);
+                        return (
+                          <div key={i} className={`flex items-center gap-3 px-4 py-2 rounded-xl ${display.bg} border border-white/10`}>
+                            <span className="text-zinc-500 font-mono text-xs w-6">#{i + 1}</span>
+                            {r.kind === 'cosmetic' && r.cosmetic?.image_url ? (
+                              r.cosmetic.type === 'background' ? (
+                                <video src={r.cosmetic.image_url} preload="metadata" muted className="w-8 h-8 object-cover rounded" />
+                              ) : (
+                                <img src={r.cosmetic.preview_url || r.cosmetic.image_url} alt={r.cosmetic.name} className="w-8 h-8 object-contain rounded" />
+                              )
+                            ) : (
+                              <span className="text-xl w-8 text-center">{display.icon}</span>
+                            )}
+                            <span className={`font-bold text-sm ${display.color}`}>{display.name}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                  {reward.kind === 'coins' && (
-                    <p className="text-gold text-xl font-mono font-bold mb-4">
-                      +{(reward.coinsAmount || 0).toLocaleString('fr-FR')} Johnny Coins
-                    </p>
-                  )}
-                  {reward.kind === 'irl' && (
-                    <div className="mt-2 mb-4 p-4 rounded-xl bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/30 inline-block">
-                      <p className="text-pink-300 text-sm font-bold">
-                        Lot IRL! Contacte un admin pour récupérer ton prix!
-                      </p>
-                    </div>
-                  )}
+                    {/* Deduplicated count */}
+                    {(() => {
+                      const counts = new Map<string, { reward: CaseReward; count: number }>();
+                      multiRewards.forEach(r => {
+                        const key = r.kind === 'cosmetic' ? r.cosmetic?.id || 'unknown' : r.kind === 'irl' ? (r.irlName || 'irl') : `coins-${r.coinsAmount}`;
+                        const existing = counts.get(key);
+                        if (existing) existing.count++;
+                        else counts.set(key, { reward: r, count: 1 });
+                      });
+                      const duplicates = [...counts.values()].filter(v => v.count > 1);
+                      if (duplicates.length === 0) return null;
+                      return (
+                        <p className="text-zinc-500 text-xs mb-2">
+                          {duplicates.map(d => {
+                            const display = getRewardDisplay(d.reward);
+                            return `${display.name} x${d.count}`;
+                          }).join(' • ')}
+                        </p>
+                      );
+                    })()}
+                  </>
+                )}
 
-                  <div className="mt-4">
-                    <button
-                      onClick={closeResult}
-                      className="px-8 py-3 bg-primary rounded-xl text-white font-bold hover:bg-primary/80 transition"
-                    >
-                      Continuer
-                    </button>
-                  </div>
+                <div className="mt-4">
+                  <button
+                    onClick={closeResult}
+                    className="px-8 py-3 bg-primary rounded-xl text-white font-bold hover:bg-primary/80 transition"
+                  >
+                    Continuer
+                  </button>
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
             {isOpening && !showResult && (
               <div className="text-center">
