@@ -171,6 +171,8 @@ const Cases = () => {
 
   const cosmeticsRate = (ITEM_POOL_RATE - IRL_ITEMS.reduce((s, i) => s + i.globalRate, 0));
   const perCosmeticRate = cosmetics.length > 0 ? (cosmeticsRate / cosmetics.length) : 0;
+  const bordersCount = cosmetics.filter(c => c.type === 'border').length;
+  const backgroundsCount = cosmetics.filter(c => c.type === 'background').length;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -297,9 +299,14 @@ const Cases = () => {
               <span className="px-3 py-1 rounded-full text-xs font-bold bg-gold/20 text-gold">
                 💰 Coins {COINS_POOL_RATE}%
               </span>
-              {cosmetics.length > 0 && (
+              {bordersCount > 0 && (
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-zinc-700 text-zinc-300">
-                  {cosmetics.length} cosmétiques
+                  🖼️ {bordersCount} bordures
+                </span>
+              )}
+              {backgroundsCount > 0 && (
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-zinc-700 text-zinc-300">
+                  🎬 {backgroundsCount} backgrounds
                 </span>
               )}
             </div>
@@ -365,9 +372,10 @@ const Cases = () => {
                   <span className="text-zinc-400 text-sm font-mono">{cosmeticsRate.toFixed(2)}%</span>
                 </div>
                 {cosmetics.length > 0 && (
-                  <p className="text-[11px] text-zinc-500 pl-3">
-                    Probabilité uniforme : {perCosmeticRate.toFixed(4)}% chacun
-                  </p>
+                  <div className="text-[11px] text-zinc-500 pl-3 space-y-0.5">
+                    <p>🖼️ {bordersCount} bordures • 🎬 {backgroundsCount} backgrounds</p>
+                    <p>Probabilité uniforme : {perCosmeticRate.toFixed(4)}% chacun</p>
+                  </div>
                 )}
                 {cosmetics.length === 0 && (
                   <p className="text-[11px] text-zinc-500 pl-3">
