@@ -83,12 +83,14 @@ const Cases = () => {
     setReward(null);
 
     try {
-      // Deduct credits
-      const { error: deductError } = await supabase
-        .from('profiles')
-        .update({ credits: profile.credits - CHALLENGER_CASE.price })
-        .eq('id', user.id);
-      if (deductError) throw deductError;
+      // Deduct credits (skip if free)
+      if (CHALLENGER_CASE.price > 0) {
+        const { error: deductError } = await supabase
+          .from('profiles')
+          .update({ credits: profile.credits - CHALLENGER_CASE.price })
+          .eq('id', user.id);
+        if (deductError) throw deductError;
+      }
 
       // Roll
       const result = rollCase(cosmetics);
@@ -126,14 +128,9 @@ const Cases = () => {
             .eq('id', user.id);
           if (cosmeticError) throw cosmeticError;
         }
-      } else if (result.kind === 'coins' && result.coinsAmount) {
-        const { error: awardError } = await supabase
-          .from('profiles')
-          .update({ credits: profile.credits - CHALLENGER_CASE.price + result.coinsAmount })
-          .eq('id', user.id);
-        if (awardError) throw awardError;
       }
       // IRL rewards: display only (manual fulfillment)
+      // Coins: désactivés temporairement
 
       await loadProfile(user.id);
       setShowResult(true);
