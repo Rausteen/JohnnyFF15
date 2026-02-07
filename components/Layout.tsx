@@ -5,6 +5,23 @@ import { useCreditsStore } from '../services/creditsStore';
 import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
 import { BackgroundOverrideProvider, useBackgroundOverride } from '../services/backgroundOverride';
 
+// Preload a video URL via <link rel="preload"> so the browser starts fetching immediately
+function useVideoPreload(url: string | undefined) {
+  useEffect(() => {
+    if (!url) return;
+    // Avoid duplicates
+    const existing = document.querySelector(`link[data-video-preload="${url}"]`);
+    if (existing) return;
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'video';
+    link.href = url;
+    link.setAttribute('data-video-preload', url);
+    document.head.appendChild(link);
+    return () => { link.remove(); };
+  }, [url]);
+}
+
 // Memoized video component — swaps src via ref instead of remounting the DOM element
 const VideoBackground = memo(({ src }: { src: string | undefined }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -56,6 +73,9 @@ const LayoutInner = () => {
   const { overrideBackgroundUrl } = useBackgroundOverride();
 
   const backgroundUrl = overrideBackgroundUrl || equippedBackground?.image_url;
+
+  // Start downloading the video as soon as we know the URL
+  useVideoPreload(backgroundUrl);
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-accent selection:text-white overflow-x-hidden">

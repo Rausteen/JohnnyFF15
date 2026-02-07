@@ -37,7 +37,7 @@ const Cases = () => {
       .filter((c): c is CosmeticItem => c !== null && c !== undefined);
   }, [profile?.owned_cosmetics, cosmetics]);
 
-  // Equip/unequip cosmetic
+  // Equip/unequip cosmetic — optimistic update for instant feedback
   const handleEquip = async (itemId: string, itemType: string, isCurrentlyEquipped: boolean) => {
     if (!user || !profile || equipping) return;
     setEquipping(itemId);
@@ -45,12 +45,22 @@ const Cases = () => {
       const updateField = itemType === 'title' ? 'equipped_title'
         : itemType === 'background' ? 'equipped_background'
         : 'equipped_border';
+      const newValue = isCurrentlyEquipped ? null : itemId;
+
+      // Optimistic: update store immediately so Layout picks up background change instantly
+      const { setProfile } = useCreditsStore.getState();
+      setProfile({ ...profile, [updateField]: newValue });
+
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ [updateField]: isCurrentlyEquipped ? null : itemId })
+        .update({ [updateField]: newValue })
         .eq('id', user.id);
-      if (updateError) throw updateError;
-      await loadProfile(user.id);
+
+      if (updateError) {
+        // Rollback on error
+        setProfile(profile);
+        throw updateError;
+      }
     } catch (err) {
       console.error('Equip error:', err);
       setError("Erreur lors de l'équipement");
@@ -257,7 +267,7 @@ const Cases = () => {
                     )}
                     {item.image_url ? (
                       item.type === 'background' ? (
-                        <video src={item.image_url} preload="metadata" muted className="w-12 h-12 mx-auto mb-2 rounded-lg object-cover" />
+                        <video src={item.image_url} preload="auto" muted playsInline className="w-12 h-12 mx-auto mb-2 rounded-lg object-cover" />
                       ) : (
                         <img src={item.image_url} alt={item.name} className="w-12 h-12 mx-auto mb-2 rounded-lg object-cover" />
                       )

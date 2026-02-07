@@ -52,6 +52,7 @@ interface CreditsState {
   getTimeUntilNextBonus: () => { hours: number; minutes: number } | null;
   transferCredits: (recipientPseudo: string, amount: number) => Promise<{ success: boolean; error?: string; fee?: number }>;
   getTransferLimits: () => { min: number; max: number; dailyRemaining: number; cooldownRemaining: number | null; fee: number };
+  setProfile: (profile: UserProfile) => void;
   clearProfile: () => void;
 }
 
@@ -463,6 +464,10 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
       cooldownRemaining,
       fee: TRANSFER_FEE_PERCENT * 100
     };
+  },
+
+  setProfile: (profile: UserProfile) => {
+    set({ profile });
   },
 
   clearProfile: () => {
