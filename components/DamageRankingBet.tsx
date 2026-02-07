@@ -41,8 +41,8 @@ const DamageRankingBet: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [rankingBetsCount, setRankingBetsCount] = useState(0);
 
-  // Get all tracked players currently in the same Flex game
-  const playersInFlexGame = useMemo(() => {
+  // Get all tracked players currently in the same Flex/Clash game (5v5 premade)
+  const playersInTeamGame = useMemo(() => {
     const inGamePlayers: { player: TrackedPlayer; gameId: string; queueId: number }[] = [];
 
     for (const player of trackedPlayers) {
@@ -66,8 +66,9 @@ const DamageRankingBet: React.FC = () => {
       gameGroups.set(p.gameId, existing);
     }
 
+    // Flex (440) or Clash (700) with all 5 players
     for (const [_gameId, players] of gameGroups) {
-      if (players.length === 5 && players[0].queueId === 440) {
+      if (players.length === 5 && (players[0].queueId === 440 || players[0].queueId === 700)) {
         return players.map(p => p.player);
       }
     }
@@ -75,13 +76,13 @@ const DamageRankingBet: React.FC = () => {
     return [];
   }, [trackedPlayers, playerStates]);
 
-  const isFlexWith5Players = playersInFlexGame.length === 5;
+  const isFlexWith5Players = playersInTeamGame.length === 5;
   const betMatchId = isFlexWith5Players
-    ? playerStates.get(playersInFlexGame[0].puuid!)?.currentGameId
+    ? playerStates.get(playersInTeamGame[0].puuid!)?.currentGameId
     : null;
 
   const currentGame = isFlexWith5Players
-    ? playerStates.get(playersInFlexGame[0].puuid!)?.currentGame
+    ? playerStates.get(playersInTeamGame[0].puuid!)?.currentGame
     : null;
   const gameTimeMinutes = currentGame
     ? Math.floor((Date.now() - currentGame.gameStartTime) / 1000 / 60)
@@ -114,10 +115,10 @@ const DamageRankingBet: React.FC = () => {
   }, [user, betMatchId]);
 
   const availablePlayers = useMemo(() => {
-    return playersInFlexGame.filter(
+    return playersInTeamGame.filter(
       p => !rankedPlayers.some(rp => rp.player.puuid === p.puuid)
     );
-  }, [playersInFlexGame, rankedPlayers]);
+  }, [playersInTeamGame, rankedPlayers]);
 
   const currentOdds = RANKING_ODDS[rankedPlayers.length] || 0;
   const potentialGain = amount ? Math.floor(parseInt(amount) * currentOdds) : 0;
@@ -209,7 +210,7 @@ const DamageRankingBet: React.FC = () => {
       const bet = await placeBet(
         propId, propTitle, currentOdds, val,
         betMatchId || undefined, undefined, user.id, undefined,
-        playersInFlexGame[0]?.puuid || undefined, 'Flex 5'
+        playersInTeamGame[0]?.puuid || undefined, 'Flex 5'
       );
 
       if (!bet) { setError("Erreur lors de l'enregistrement du pari"); setLoading(false); return; }

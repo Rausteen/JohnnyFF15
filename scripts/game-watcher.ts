@@ -120,6 +120,7 @@ interface AdminCommand {
 const QUEUE_NAMES: Record<number, string> = {
   420: 'Ranked Solo/Duo',
   440: 'Ranked Flex',
+  700: 'Clash',
   400: 'Normal Draft',
   430: 'Normal Blind',
   450: 'ARAM',
@@ -127,8 +128,8 @@ const QUEUE_NAMES: Record<number, string> = {
   1700: 'Arena',
 };
 
-// Only allow bets on these queues (Solo/Duo and Flex)
-const ALLOWED_QUEUE_IDS = [420, 440];
+// Only allow bets on these queues (Solo/Duo, Flex, and Clash)
+const ALLOWED_QUEUE_IDS = [420, 440, 700];
 
 // Champion data from Data Dragon
 let CHAMPIONS: Record<number, string> = {}; // ID -> display name (e.g., "Wukong")

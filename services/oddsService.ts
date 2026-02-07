@@ -172,8 +172,8 @@ export function getAdjustedOdds(
     return { adjustedOdds: prop.odds, modifier: 1.0, propType };
   }
 
-  // Check for Flex mode (queueId 440) with hardcoded overrides
-  if (queueId === 440) {
+  // Check for Flex/Clash mode (queueId 440/700) with hardcoded overrides
+  if (queueId === 440 || queueId === 700) {
     const flexOdds = getFlexOdds(prop.id, skillRating.odverall);
     if (flexOdds !== null) {
       const modifier = flexOdds / prop.odds;
