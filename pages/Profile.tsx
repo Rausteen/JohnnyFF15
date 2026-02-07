@@ -229,22 +229,22 @@ const Profile = () => {
   const equippedBackground = getCosmetic(profile?.equipped_background);
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="relative min-h-screen">
+      {/* Video background full page */}
+      {equippedBackground?.image_url && (
+        <video
+          src={equippedBackground.image_url}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="fixed inset-0 w-full h-full object-cover pointer-events-none z-0"
+        />
+      )}
+
+      <div className="relative z-10 container mx-auto px-4 py-8 max-w-4xl">
       {/* Header */}
-      <div className="relative flex items-center gap-4 mb-8 rounded-2xl p-4 overflow-hidden">
-        {equippedBackground?.image_url && (
-          <>
-            <video
-              src={equippedBackground.image_url}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/40 to-transparent pointer-events-none" />
-          </>
-        )}
+      <div className="flex items-center gap-4 mb-8">
         {/* Avatar with upload */}
         <div className="relative group z-10">
           <div className="w-20 h-20 shadow-lg shadow-primary/30 relative">
@@ -317,7 +317,7 @@ const Profile = () => {
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Credits Card */}
-        <div className="bg-gradient-to-br from-gold/10 via-amber-900/10 to-zinc-900 rounded-2xl p-6 border border-gold/20 shadow-xl">
+        <div className="bg-gradient-to-br from-gold/10 via-amber-900/10 to-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-gold/20 shadow-xl">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-3 bg-gold/20 rounded-xl">
               <Sparkles className="w-6 h-6 text-gold" />
@@ -376,7 +376,7 @@ const Profile = () => {
         </div>
 
         {/* User Info Card */}
-        <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-white/5 rounded-xl">
               <User className="w-6 h-6 text-white" />
@@ -412,7 +412,7 @@ const Profile = () => {
         </div>
 
         {/* Stats Card */}
-        <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-primary/10 rounded-xl">
               <TrendingUp className="w-6 h-6 text-primary" />
@@ -449,7 +449,7 @@ const Profile = () => {
         </div>
 
         {/* Transfer Credits Card */}
-        <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-3 bg-blue-500/10 rounded-xl">
               <Send className="w-6 h-6 text-blue-400" />
@@ -549,7 +549,7 @@ const Profile = () => {
         </div>
 
         {/* Actions Card */}
-        <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-red-500/10 rounded-xl">
               <LogOut className="w-6 h-6 text-red-400" />
@@ -566,6 +566,7 @@ const Profile = () => {
             Se déconnecter
           </button>
         </div>
+      </div>
       </div>
     </div>
   );
