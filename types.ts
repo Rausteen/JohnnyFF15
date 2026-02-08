@@ -121,7 +121,7 @@ export interface PlayerWithSkill extends TrackedPlayer {
 export interface BalancedTeam {
   players: Array<{
     player: PlayerWithSkill;
-    assignedRole: PlayerRole;
+    assignedRole?: PlayerRole;
   }>;
   totalSkill: number;
 }
