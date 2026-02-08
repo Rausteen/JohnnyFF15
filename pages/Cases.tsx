@@ -5,6 +5,7 @@ import { useCreditsStore } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
 import { fetchAllCosmetics } from '../services/fetchAllCosmetics';
 import { notifyRareDrop } from '../services/discordWebhook';
+import { recordSnapshot } from '../services/balanceSnapshots';
 import {
   CHALLENGER_CASE, ITEM_POOL_RATE, COINS_POOL_RATE, IRL_ITEMS, COIN_TIERS,
   CosmeticItem, CaseReward, rollCase, generateRouletteItems
@@ -160,11 +161,13 @@ const Cases = () => {
     try {
       // Deduct total credits (skip if free)
       if (CHALLENGER_CASE.price > 0) {
+        const newBalance = profile.credits - totalCost;
         const { error: deductError } = await supabase
           .from('profiles')
-          .update({ credits: profile.credits - totalCost })
+          .update({ credits: newBalance })
           .eq('id', user.id);
         if (deductError) throw deductError;
+        recordSnapshot(user.id, newBalance, -totalCost, 'case_purchase');
       }
 
       // Roll all cases at once
@@ -253,11 +256,13 @@ const Cases = () => {
       // Award coins
       if (totalCoinsWon > 0) {
         const freshCredits = currentProfile?.credits ?? profile.credits;
+        const coinsBalance = freshCredits - totalCost + totalCoinsWon;
         const { error: coinsError } = await supabase
           .from('profiles')
-          .update({ credits: freshCredits - totalCost + totalCoinsWon })
+          .update({ credits: coinsBalance })
           .eq('id', user.id);
         if (coinsError) throw coinsError;
+        recordSnapshot(user.id, coinsBalance, totalCoinsWon, 'case_coins_won');
       }
 
       // Save drops to history

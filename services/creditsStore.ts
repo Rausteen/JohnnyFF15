@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from './supabase';
+import { recordSnapshot } from './balanceSnapshots';
 
 interface UserProfile {
   id: string;
@@ -296,6 +297,8 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
 
       if (error) throw error;
 
+      recordSnapshot(profile.id, newCredits, bonusAmount, 'daily_bonus');
+
       set({
         profile: {
           ...profile,
@@ -415,11 +418,18 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
         // Don't fail the transfer, credits were already moved
       }
 
+      const newBalance = profile.credits - totalDeducted;
+
+      // Record snapshots for sender and recipient
+      recordSnapshot(profile.id, newBalance, -totalDeducted, 'transfer_out', recipient.id);
+      // We don't know recipient's exact balance, but record the delta
+      recordSnapshot(recipient.id, 0, amount, 'transfer_in', profile.id);
+
       // Update local state
       set({
         profile: {
           ...profile,
-          credits: profile.credits - totalDeducted,
+          credits: newBalance,
           last_transfer_at: now,
           daily_transfer_total: newDailyTotal,
           daily_transfer_date: today

@@ -5,6 +5,8 @@ import { useCreditsStore, TRANSFER_LIMITS } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
 import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, Camera, X } from 'lucide-react';
 import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
+import PlayerStats from '../components/PlayerStats';
+import PlayerBalanceGraph from '../components/PlayerBalanceGraph';
 
 interface UserOption {
   id: string;
@@ -434,6 +436,32 @@ const Profile = () => {
             </div>
           </div>
         </div>
+
+        {/* Advanced Stats — full width */}
+        {user && profile && (profile.total_bets || 0) > 0 && (
+          <div className="md:col-span-2 bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-purple-500/10 rounded-xl">
+                <TrendingUp className="w-6 h-6 text-purple-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white">Analyse détaillée</h2>
+            </div>
+            <PlayerStats
+              userId={user.id}
+              credits={profile.credits}
+              jcWon={profile.jc_won || 0}
+              jcLost={profile.jc_lost || 0}
+            />
+          </div>
+        )}
+
+        {/* Balance Graph — full width */}
+        {user && (
+          <div className="md:col-span-2 bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+            <h2 className="text-xl font-bold text-white mb-4">Évolution du portefeuille</h2>
+            <PlayerBalanceGraph userId={user.id} initialBalance={10000} />
+          </div>
+        )}
 
         {/* Transfer Credits Card */}
         <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">

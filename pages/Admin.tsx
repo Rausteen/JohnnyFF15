@@ -14,6 +14,8 @@ import { supabase } from '../services/supabase';
 import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers, linkUserToPlayer, unlinkUserFromPlayer } from '../services/playersService';
 import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight, Link2, Unlink } from 'lucide-react';
 import { sendTestNotification, notifySeasonReset } from '../services/discordWebhook';
+import { recordSnapshot, recordSnapshotBatch } from '../services/balanceSnapshots';
+import AdminAnalytics from '../components/AdminAnalytics';
 import { syncLastGame as syncLastGameCommand, checkPlayersStatus, syncRanks as syncRanksCommand, syncPlayerGames as syncPlayerGamesCommand } from '../services/adminCommands';
 
 const REGIONS: { value: Region; label: string }[] = [
@@ -765,8 +767,14 @@ const Admin = () => {
 
       if (betsError) throw betsError;
 
-      // Delete all case drops history
+      // Delete all case drops history and old snapshots
       await supabase.from('case_drops').delete().not('id', 'is', null);
+      await supabase.from('balance_snapshots').delete().not('id', 'is', null);
+
+      // Record initial season snapshots for all users
+      recordSnapshotBatch(allUsers.map(u => ({
+        user_id: u.id, balance: 10000, delta: 0, source: 'season_reset' as const
+      })));
 
       // Send Discord notification
       notifySeasonReset(allUsers.length);
@@ -827,6 +835,8 @@ const Admin = () => {
         .eq('id', addCreditsUserId);
 
       if (updateError) throw updateError;
+
+      recordSnapshot(addCreditsUserId, newCredits, amount, 'admin_add');
 
       setAddCreditsResult({
         success: true,
@@ -2022,6 +2032,9 @@ const Admin = () => {
               </div>
             )}
           </div>
+
+          {/* Analytics Dashboard */}
+          <AdminAnalytics />
 
           {/* User Account Reset */}
           <div className="bg-gradient-to-b from-red-950/20 to-zinc-900 p-6 rounded-2xl border border-red-500/30">
