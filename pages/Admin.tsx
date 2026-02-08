@@ -722,12 +722,12 @@ const Admin = () => {
 
   // Reset ALL user accounts
   const handleResetAllAccounts = async () => {
-    if (!confirm('⚠️ ATTENTION ⚠️\n\nEs-tu VRAIMENT sûr de vouloir reset TOUS les comptes du site ?\n\nCela va:\n- Remettre TOUS les crédits à 10000\n- Reset TOUS les daily bonus\n- Remettre TOUTES les stats à zéro\n- Supprimer TOUS les paris\n\nCette action est IRRÉVERSIBLE !')) {
+    if (!confirm('⚠️ RESET DE SAISON ⚠️\n\nEs-tu VRAIMENT sûr de vouloir reset TOUS les comptes du site ?\n\nCela va:\n- Remettre TOUS les crédits à 10000\n- Reset TOUS les daily bonus\n- Remettre TOUTES les stats à zéro\n- Supprimer TOUS les paris\n- Supprimer TOUS les cosmétiques possédés\n- Déséquiper TOUS les cosmétiques (badge, titre, bordure, background)\n\nCette action est IRRÉVERSIBLE !')) {
       return;
     }
 
     // Double confirmation
-    if (!confirm('DERNIÈRE CONFIRMATION\n\nTous les comptes vont être reset.\nContinuer ?')) {
+    if (!confirm('DERNIÈRE CONFIRMATION\n\nReset de saison complet: crédits, stats, paris, cosmétiques.\nContinuer ?')) {
       return;
     }
 
@@ -746,6 +746,11 @@ const Admin = () => {
           bets_lost: 0,
           jc_won: 0,
           jc_lost: 0,
+          owned_cosmetics: [],
+          equipped_badge: null,
+          equipped_title: null,
+          equipped_border: null,
+          equipped_background: null,
           reset_at: new Date().toISOString()
         })
         .not('id', 'is', null); // Update all rows
@@ -762,7 +767,7 @@ const Admin = () => {
 
       setResetAllAccountsResult({
         success: true,
-        message: `Tous les comptes ont été reset ! (${allUsers.length} utilisateurs)`
+        message: `Reset de saison complet effectué ! (${allUsers.length} utilisateurs)`
       });
 
       // Refresh users list and pending bets
