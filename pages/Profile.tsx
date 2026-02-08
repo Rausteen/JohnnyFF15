@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../services/authStore';
-import { useCreditsStore, TRANSFER_LIMITS } from '../services/creditsStore';
+import { useCreditsStore, TRANSFER_LIMITS, getDailyBonusAmount } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
 import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, Camera, X } from 'lucide-react';
 import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
@@ -328,7 +328,7 @@ const Profile = () => {
                 <Gift className="w-4 h-4" />
                 <span>Bonus Quotidien</span>
               </div>
-              <span className="text-sm font-bold text-gold">+1 000 JC</span>
+              <span className="text-sm font-bold text-gold">+{getDailyBonusAmount(profile?.credits ?? 0).toLocaleString('fr-FR')} JC</span>
             </div>
 
             {bonusMessage && (

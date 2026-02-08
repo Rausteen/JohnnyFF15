@@ -73,7 +73,7 @@ const DAILY_BONUS_MAX_CREDITS = 15000; // Can't claim if you have more than this
 const DAILY_BONUS_THRESHOLD = 10000; // Below this: 1000 bonus, above: 500 bonus
 
 // Get daily bonus amount based on current credits
-function getDailyBonusAmount(credits: number): number {
+export function getDailyBonusAmount(credits: number): number {
   if (credits >= DAILY_BONUS_MAX_CREDITS) return 0;
   if (credits < DAILY_BONUS_THRESHOLD) return 1000;
   return 500;
