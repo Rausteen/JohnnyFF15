@@ -13,7 +13,7 @@ import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
 import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers, linkUserToPlayer, unlinkUserFromPlayer } from '../services/playersService';
 import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight, Link2, Unlink } from 'lucide-react';
-import { sendTestNotification } from '../services/discordWebhook';
+import { sendTestNotification, notifySeasonReset } from '../services/discordWebhook';
 import { syncLastGame as syncLastGameCommand, checkPlayersStatus, syncRanks as syncRanksCommand, syncPlayerGames as syncPlayerGamesCommand } from '../services/adminCommands';
 
 const REGIONS: { value: Region; label: string }[] = [
@@ -764,6 +764,12 @@ const Admin = () => {
         .not('id', 'is', null); // Delete all rows
 
       if (betsError) throw betsError;
+
+      // Delete all case drops history
+      await supabase.from('case_drops').delete().not('id', 'is', null);
+
+      // Send Discord notification
+      notifySeasonReset(allUsers.length);
 
       setResetAllAccountsResult({
         success: true,

@@ -32,8 +32,8 @@ export interface CaseReward {
 export const CHALLENGER_CASE = {
   id: 'challenger',
   name: 'Challenger Case',
-  description: 'Gratuit — Découvre les cosmétiques!',
-  price: 0,
+  description: 'Tente ta chance pour des cosmétiques et des coins!',
+  price: 10000,
   image: '⚔️',
   color: 'from-orange-500 via-red-600 to-purple-700',
   glowColor: 'shadow-orange-500/50',
@@ -43,9 +43,9 @@ export const CHALLENGER_CASE = {
 // DROP RATES
 // ============================================
 
-// Global split: 100% items, 0% coins (temporaire — coins désactivés)
-export const ITEM_POOL_RATE = 100;
-export const COINS_POOL_RATE = 0;
+// Global split: 65% items, 35% coins
+export const ITEM_POOL_RATE = 65;
+export const COINS_POOL_RATE = 35;
 
 // Within item pool (65%):
 // - 100 RP LoL: 0.10% of total → 0.10/65 of item pool
@@ -142,6 +142,10 @@ export function generateRouletteItems(
 }
 
 function randomFillerReward(cosmetics: CosmeticItem[]): CaseReward {
+  const roll = Math.random() * 100;
+  if (roll < COINS_POOL_RATE) {
+    return { kind: 'coins', coinsAmount: rollCoinTier() };
+  }
   if (cosmetics.length > 0) {
     const idx = Math.floor(Math.random() * cosmetics.length);
     return { kind: 'cosmetic', cosmetic: cosmetics[idx] };

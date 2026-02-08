@@ -1,13 +1,23 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Package, Sparkles, Loader2, Gift, Info, Backpack, Check, Coins, Minus, Plus } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Package, Sparkles, Loader2, Gift, Info, Backpack, Check, Coins, Minus, Plus, History, Filter } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
 import { fetchAllCosmetics } from '../services/fetchAllCosmetics';
+import { notifyRareDrop } from '../services/discordWebhook';
 import {
   CHALLENGER_CASE, ITEM_POOL_RATE, COINS_POOL_RATE, IRL_ITEMS, COIN_TIERS,
   CosmeticItem, CaseReward, rollCase, generateRouletteItems
 } from '../services/casesData';
+
+interface CaseDrop {
+  id: string;
+  pseudo: string;
+  reward_kind: string;
+  reward_name: string;
+  reward_image_url: string | null;
+  created_at: string;
+}
 
 interface RouletteSlot {
   items: CaseReward[];
@@ -33,12 +43,41 @@ const Cases = () => {
   const [slots, setSlots] = useState<RouletteSlot[]>([]);
   const [pendingAnimate, setPendingAnimate] = useState(false);
 
+  // Inventory filter
+  const [inventoryFilter, setInventoryFilter] = useState<'all' | 'border' | 'background' | 'title'>('all');
+
+  // Drop history
+  const [dropHistory, setDropHistory] = useState<CaseDrop[]>([]);
+  const [showDropHistory, setShowDropHistory] = useState(false);
+
   const rouletteContainerRef = useRef<HTMLDivElement>(null);
 
   // Load cosmetics from Supabase (paginated to get all rows)
   useEffect(() => {
     fetchAllCosmetics().then(data => setCosmetics(data));
   }, []);
+
+  // Load recent drops
+  const loadDropHistory = useCallback(async () => {
+    const { data } = await supabase
+      .from('case_drops')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (data) setDropHistory(data);
+  }, []);
+
+  useEffect(() => {
+    loadDropHistory();
+    // Subscribe to realtime drops
+    const channel = supabase
+      .channel('case_drops_feed')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'case_drops' }, (payload) => {
+        setDropHistory(prev => [payload.new as CaseDrop, ...prev].slice(0, 50));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [loadDropHistory]);
 
   // After slots render at position 0, measure real container width and set target positions
   useEffect(() => {
@@ -62,12 +101,17 @@ const Cases = () => {
   }, [pendingAnimate]);
 
   // Inventory items from profile
-  const inventoryItems = useMemo(() => {
+  const allInventoryItems = useMemo(() => {
     if (!profile?.owned_cosmetics || cosmetics.length === 0) return [];
     return profile.owned_cosmetics
       .map(id => cosmetics.find(c => c.id === id))
       .filter((c): c is CosmeticItem => c !== null && c !== undefined);
   }, [profile?.owned_cosmetics, cosmetics]);
+
+  const inventoryItems = useMemo(() => {
+    if (inventoryFilter === 'all') return allInventoryItems;
+    return allInventoryItems.filter(c => c.type === inventoryFilter);
+  }, [allInventoryItems, inventoryFilter]);
 
   // Equip/unequip cosmetic — optimistic update for instant feedback
   const handleEquip = async (itemId: string, itemType: string, isCurrentlyEquipped: boolean) => {
@@ -153,16 +197,48 @@ const Cases = () => {
       // Wait for animation
       await new Promise(resolve => setTimeout(resolve, ANIM_DURATION + 100));
 
-      // Award all cosmetics
+      // Award all rewards
       const currentProfile = useCreditsStore.getState().profile;
       const currentOwned = [...(currentProfile?.owned_cosmetics || [])];
       const newCosmetics: string[] = [];
+      let totalCoinsWon = 0;
+      const playerPseudo = currentProfile?.pseudo || 'Joueur';
+
+      // Prepare drop history entries
+      const dropEntries: { user_id: string; pseudo: string; reward_kind: string; reward_name: string; reward_image_url: string | null }[] = [];
 
       for (const slot of newSlots) {
         if (slot.reward.kind === 'cosmetic' && slot.reward.cosmetic) {
           if (!currentOwned.includes(slot.reward.cosmetic.id) && !newCosmetics.includes(slot.reward.cosmetic.id)) {
             newCosmetics.push(slot.reward.cosmetic.id);
           }
+          dropEntries.push({
+            user_id: user.id, pseudo: playerPseudo,
+            reward_kind: 'cosmetic', reward_name: slot.reward.cosmetic.name,
+            reward_image_url: slot.reward.cosmetic.image_url || null,
+          });
+        } else if (slot.reward.kind === 'coins' && slot.reward.coinsAmount) {
+          totalCoinsWon += slot.reward.coinsAmount;
+          dropEntries.push({
+            user_id: user.id, pseudo: playerPseudo,
+            reward_kind: 'coins', reward_name: `+${slot.reward.coinsAmount.toLocaleString('fr-FR')} JC`,
+            reward_image_url: null,
+          });
+        } else if (slot.reward.kind === 'irl') {
+          // 100 RP drop: give cosmetic + Discord notification
+          const irlName = slot.reward.irlName || 'IRL';
+          dropEntries.push({
+            user_id: user.id, pseudo: playerPseudo,
+            reward_kind: 'irl', reward_name: irlName,
+            reward_image_url: null,
+          });
+          // Give a "100 RP" cosmetic in inventory (look for it in cosmetics table)
+          const rpCosmetic = cosmetics.find(c => c.name === '100 RP');
+          if (rpCosmetic && !currentOwned.includes(rpCosmetic.id) && !newCosmetics.includes(rpCosmetic.id)) {
+            newCosmetics.push(rpCosmetic.id);
+          }
+          // Discord notification
+          notifyRareDrop(playerPseudo, irlName);
         }
       }
 
@@ -172,6 +248,21 @@ const Cases = () => {
           .update({ owned_cosmetics: [...currentOwned, ...newCosmetics] })
           .eq('id', user.id);
         if (cosmeticError) throw cosmeticError;
+      }
+
+      // Award coins
+      if (totalCoinsWon > 0) {
+        const freshCredits = currentProfile?.credits ?? profile.credits;
+        const { error: coinsError } = await supabase
+          .from('profiles')
+          .update({ credits: freshCredits - totalCost + totalCoinsWon })
+          .eq('id', user.id);
+        if (coinsError) throw coinsError;
+      }
+
+      // Save drops to history
+      if (dropEntries.length > 0) {
+        await supabase.from('case_drops').insert(dropEntries);
       }
 
       await loadProfile(user.id);
@@ -199,6 +290,17 @@ const Cases = () => {
       return { icon: r.irlIcon || '🏆', name: r.irlName || 'IRL', color: 'text-pink-400', bg: 'bg-pink-500/20' };
     }
     return { icon: '💰', name: `+${(r.coinsAmount || 0).toLocaleString('fr-FR')} JC`, color: 'text-gold', bg: 'bg-gold/20' };
+  };
+
+  const getTimeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'à l\'instant';
+    if (mins < 60) return `il y a ${mins}min`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `il y a ${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `il y a ${days}j`;
   };
 
   if (!user) {
@@ -253,9 +355,9 @@ const Cases = () => {
         >
           <Backpack className="w-5 h-5" />
           <span className="font-bold">Inventaire</span>
-          {inventoryItems.length > 0 && (
+          {allInventoryItems.length > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-300 text-sm font-mono">
-              {inventoryItems.length}
+              {allInventoryItems.length}
             </span>
           )}
         </button>
@@ -270,15 +372,35 @@ const Cases = () => {
       {/* Inventory */}
       {showInventory && (
         <div className="bg-zinc-900 rounded-3xl border border-zinc-800 p-6 mb-12">
-          <div className="flex items-center gap-3 mb-6">
-            <Backpack className="w-6 h-6 text-purple-400" />
-            <h2 className="text-xl font-bold text-white">Mon Inventaire</h2>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Backpack className="w-6 h-6 text-purple-400" />
+              <h2 className="text-xl font-bold text-white">Mon Inventaire</h2>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-4 h-4 text-zinc-500 mr-1" />
+              {([['all', 'Tout'], ['border', 'Bordures'], ['background', 'Backgrounds'], ['title', 'Titres']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setInventoryFilter(key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    inventoryFilter === key
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {inventoryItems.length === 0 ? (
             <div className="text-center py-12">
               <Backpack className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
-              <p className="text-zinc-500">Ton inventaire est vide. Ouvre des caisses pour obtenir des cosmétiques!</p>
+              <p className="text-zinc-500">
+                {inventoryFilter !== 'all' ? `Aucun(e) ${inventoryFilter === 'border' ? 'bordure' : inventoryFilter === 'background' ? 'background' : 'titre'} dans ton inventaire.` : 'Ton inventaire est vide. Ouvre des caisses pour obtenir des cosmétiques!'}
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -514,6 +636,62 @@ const Cases = () => {
         </div>
       </div>
 
+      {/* ===== DROP HISTORY ===== */}
+      <div className="bg-zinc-900 rounded-3xl border border-zinc-800 p-6 mb-12">
+        <button
+          onClick={() => setShowDropHistory(!showDropHistory)}
+          className="flex items-center justify-between w-full"
+        >
+          <div className="flex items-center gap-3">
+            <History className="w-6 h-6 text-gold" />
+            <h2 className="text-xl font-bold text-white">Derniers Drops</h2>
+            {dropHistory.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-gold/20 text-gold text-sm font-mono">
+                {dropHistory.length}
+              </span>
+            )}
+          </div>
+          <span className="text-zinc-500 text-sm">{showDropHistory ? 'Masquer' : 'Voir'}</span>
+        </button>
+
+        {showDropHistory && (
+          <div className="mt-4">
+            {dropHistory.length === 0 ? (
+              <p className="text-center py-8 text-zinc-500">Aucun drop pour le moment.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-80 overflow-y-auto">
+                {dropHistory.map((drop) => {
+                  const isIrl = drop.reward_kind === 'irl';
+                  const isCoins = drop.reward_kind === 'coins';
+                  const bg = isIrl ? 'bg-pink-500/10 border-pink-500/20' : isCoins ? 'bg-gold/10 border-gold/20' : 'bg-purple-500/10 border-purple-500/20';
+                  const textColor = isIrl ? 'text-pink-300' : isCoins ? 'text-gold' : 'text-purple-300';
+                  const icon = isIrl ? '🏆' : isCoins ? '💰' : '🎁';
+                  const timeAgo = getTimeAgo(drop.created_at);
+
+                  return (
+                    <div key={drop.id} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border ${bg}`}>
+                      {drop.reward_image_url ? (
+                        <img src={drop.reward_image_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                      ) : (
+                        <span className="text-lg w-8 text-center flex-shrink-0">{icon}</span>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-bold text-sm truncate">{drop.pseudo}</span>
+                          <span className="text-zinc-600 text-xs">a obtenu</span>
+                          <span className={`font-bold text-sm truncate ${textColor}`}>{drop.reward_name}</span>
+                        </div>
+                      </div>
+                      <span className="text-zinc-600 text-xs flex-shrink-0">{timeAgo}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ===== ROULETTE MODAL ===== */}
       {(isOpening || showResult) && slots.length > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -605,6 +783,11 @@ const Cases = () => {
                             <p className="text-pink-300 text-sm font-bold">
                               Lot IRL! Contacte un admin pour récupérer ton prix!
                             </p>
+                          </div>
+                        )}
+                        {slots[0].reward.kind === 'coins' && (
+                          <div className="mb-4">
+                            <p className="text-gold font-bold">Ajouté à ton solde!</p>
                           </div>
                         )}
                       </>

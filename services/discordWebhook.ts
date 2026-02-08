@@ -204,6 +204,49 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
   });
 }
 
+export async function notifySeasonReset(userCount: number): Promise<boolean> {
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
+
+  return sendDiscordNotification({
+    content: '<@&1466416446094442578>',
+    embeds: [{
+      title: '🔄 RESET DE SAISON',
+      description: `**La saison a été reset !**\n\nTous les comptes ont été remis à zéro.\nC'est reparti de zéro pour tout le monde !`,
+      color: COLORS.GOLD,
+      fields: [
+        { name: '👥 Joueurs reset', value: `${userCount}`, inline: true },
+        { name: '💰 Crédits', value: '10 000 JC', inline: true },
+        { name: '📊 Stats', value: 'Remises à zéro', inline: true },
+        { name: '🎁 Cosmétiques', value: 'Tous supprimés', inline: true },
+        { name: '🎰 Paris', value: 'Tous supprimés', inline: true },
+        { name: '🔗 Rejouer maintenant', value: `[Ouvrir JohnnyFF15](${siteUrl})`, inline: false },
+      ],
+      footer: { text: 'JohnnyFF15 - Nouvelle saison !' },
+      timestamp: new Date().toISOString(),
+    }],
+  });
+}
+
+export async function notifyRareDrop(playerName: string, itemName: string): Promise<boolean> {
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
+
+  return sendDiscordNotification({
+    content: '<@&1466416446094442578>',
+    embeds: [{
+      title: '🏆 DROP RARE !',
+      description: `**${playerName}** vient de drop **${itemName}** dans la Challenger Case !`,
+      color: COLORS.GOLD,
+      fields: [
+        { name: '🎁 Lot', value: itemName, inline: true },
+        { name: '👤 Joueur', value: playerName, inline: true },
+        { name: '🔗 Tenter ta chance', value: `[Ouvrir JohnnyFF15](${siteUrl})`, inline: false },
+      ],
+      footer: { text: 'JohnnyFF15 - Challenger Case' },
+      timestamp: new Date().toISOString(),
+    }],
+  });
+}
+
 export async function notifyGameEnded(won: boolean, kills: number, deaths: number, assists: number, championName: string, playerName: string = 'Johnny', matchId?: string): Promise<boolean> {
   // Avoid duplicate notifications for the same game end
   const dedupeKey = `${playerName}_${matchId || `${championName}_${kills}_${deaths}_${assists}`}`;
