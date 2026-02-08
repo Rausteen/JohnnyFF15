@@ -737,8 +737,18 @@ const Admin = () => {
     setResetAllAccountsResult(null);
 
     try {
+      // Fetch fresh user list first to ensure accurate count
+      const { data: freshUsers, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id, pseudo, credits')
+        .order('pseudo');
+
+      if (fetchError) throw fetchError;
+      const users = freshUsers || [];
+      setAllUsers(users);
+
       // Reset all profiles in Supabase
-      const { error: profileError, count } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           credits: 10000,
@@ -772,16 +782,16 @@ const Admin = () => {
       await supabase.from('balance_snapshots').delete().not('id', 'is', null);
 
       // Record initial season snapshots for all users
-      recordSnapshotBatch(allUsers.map(u => ({
+      recordSnapshotBatch(users.map(u => ({
         user_id: u.id, balance: 10000, delta: 0, source: 'season_reset' as const
       })));
 
       // Send Discord notification
-      notifySeasonReset(allUsers.length);
+      notifySeasonReset(users.length);
 
       setResetAllAccountsResult({
         success: true,
-        message: `Reset de saison complet effectué ! (${allUsers.length} utilisateurs)`
+        message: `Reset de saison complet effectué ! (${users.length} utilisateurs)`
       });
 
       // Refresh users list and pending bets
