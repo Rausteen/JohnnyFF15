@@ -45,7 +45,7 @@ export const useStore = create<StoreState>()(
           propTitle,
           amount,
           odds,
-          potentialPayout: Math.floor(amount * odds),
+          potentialPayout: Math.min(Math.floor(amount * odds), 100000),
           status: BetStatus.PENDING,
           matchId: matchId || gameState.matchId,
           timestamp: Date.now(),

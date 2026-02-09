@@ -90,12 +90,14 @@ export const useComboStore = create<ComboState>((set, get) => ({
   totalOdds: () => {
     const { selections } = get();
     if (selections.length === 0) return 0;
-    // Décroissance des cotes: 10% de réduction par pari supplémentaire
-    // 1er pari: 100%, 2ème: 90%, 3ème: 81%, 4ème: 72.9%
-    return selections.reduce((acc, sel, index) => {
-      const discountFactor = Math.pow(0.9, index);
+    // Décroissance des cotes: 15% de réduction par pari supplémentaire
+    // 1er pari: 100%, 2ème: 85%, 3ème: 72.25%, 4ème: 61.4%
+    const raw = selections.reduce((acc, sel, index) => {
+      const discountFactor = Math.pow(0.85, index);
       return acc * sel.adjustedOdds * discountFactor;
     }, 1);
+    // Cap combo odds at x100
+    return Math.min(raw, 100);
   },
 
   addToCombo: (prop: Prop, adjustedOdds: number, playerPuuid?: string, playerName?: string, gameId?: string) => {

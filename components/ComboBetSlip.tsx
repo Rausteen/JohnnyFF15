@@ -45,8 +45,9 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const credits = profile?.credits || 0;
+  const MAX_COMBO_PAYOUT = 100000;
   const combinedOdds = totalOdds();
-  const potentialGain = amount ? Math.floor(parseInt(amount) * combinedOdds) : 0;
+  const potentialGain = amount ? Math.min(Math.floor(parseInt(amount) * combinedOdds), MAX_COMBO_PAYOUT) : 0;
 
   // Auto-clear combo store error after 3 seconds
   useEffect(() => {
@@ -101,8 +102,8 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
       return;
     }
 
-    if (val > 30000) {
-      setError("Mise maximum combo: 30 000 JC");
+    if (val > 5000) {
+      setError("Mise maximum combo: 5 000 JC");
       return;
     }
 
