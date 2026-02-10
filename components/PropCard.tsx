@@ -141,11 +141,12 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player, dataDrivenOdds, dataD
     setLoading(true);
 
     try {
-      // Anti-exploit: block same prop on multiple players in same game
-      if (betMatchId && activePlayer?.puuid) {
+      // Anti-exploit: block same first blood prop on multiple players in same game
+      const firstBloodProps = ['early1', 'early5'];
+      if (firstBloodProps.includes(prop.id) && betMatchId && activePlayer?.puuid) {
         const hasDupe = await hasDuplicatePropBet(user.id, betMatchId, prop.id, activePlayer.puuid);
         if (hasDupe) {
-          setError("Tu as déjà ce pari sur un autre joueur dans cette game");
+          setError("Tu as déjà ce pari first blood sur un autre joueur dans cette game");
           setLoading(false);
           return;
         }
