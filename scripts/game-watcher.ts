@@ -36,6 +36,7 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL |
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 const CHECK_INTERVAL = 45000; // 45 seconds
 const WEALTH_TAX_CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
+const RANK_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 const WEALTH_TAX_THRESHOLD = 200000; // 200k JC
 const WEALTH_TAX_RATE = 0.05; // 5%
 
@@ -171,6 +172,10 @@ interface TrackedPlayer {
   region: string;
   display_name: string;
   is_active: boolean;
+  solo_tier: string | null;
+  solo_division: string | null;
+  solo_lp: number | null;
+  rank_updated_at: string | null;
 }
 
 interface CurrentGameInfo {
@@ -993,28 +998,12 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
         updated++;
       }
     } else {
-      // Player is unranked - clear rank info
-      const { error } = await supabase
-        .from('tracked_players')
-        .update({
-          solo_tier: null,
-          solo_division: null,
-          solo_lp: null,
-          rank_updated_at: new Date().toISOString()
-        })
-        .eq('id', player.id);
-
-      // If any column doesn't exist (PGRST204), mark and skip
-      if (error?.code === 'PGRST204') {
-        console.error('  ❌ Colonnes de rank manquantes. Exécutez la migration SQL:');
-        console.error('     database/migration-player-ranks.sql');
-        columnsExist = false;
-        continue;
-      }
-
-      if (!error) {
+      // Player is unranked on Riot API
+      // If they already have a manually set rank, keep it
+      if (player.solo_tier) {
+        console.log(`  ⏭️ ${player.display_name}: Unranked sur Riot, rank manuel conservé (${player.solo_tier} ${player.solo_division || ''})`);
+      } else {
         console.log(`  ⚠️ ${player.display_name}: Unranked`);
-        updated++;
       }
     }
 
@@ -2125,6 +2114,7 @@ async function main(): Promise<void> {
   console.log('🎰 JohnnyFF15 Game Watcher Started');
   console.log(`   Game check: every ${CHECK_INTERVAL / 1000} seconds`);
   console.log(`   Command check: every ${COMMAND_CHECK_INTERVAL / 1000} seconds`);
+  console.log(`   Rank sync: every 24 hours`);
   console.log(`   Wealth tax check: every hour (runs on Sundays)`);
   console.log('   Press Ctrl+C to stop\n');
 
@@ -2149,6 +2139,10 @@ async function main(): Promise<void> {
 
   // Schedule command processing
   setInterval(processCommands, COMMAND_CHECK_INTERVAL);
+
+  // Sync ranks on startup and schedule every 24 hours
+  await syncRanksForAllPlayers();
+  setInterval(syncRanksForAllPlayers, RANK_SYNC_INTERVAL);
 
   // Check wealth tax on startup and schedule periodic checks
   await checkAndApplyWeeklyWealthTax();
