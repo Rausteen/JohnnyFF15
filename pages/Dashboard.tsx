@@ -11,6 +11,7 @@ import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { getQueueName, getChampionName } from '../services/riotApi';
 import { getUserPendingBets, getAllPendingBetsWithPseudos, BetWithPseudo } from '../services/betsService';
+import { getDataDrivenOdds } from '../services/dataOddsService';
 import { supabase } from '../services/supabase';
 import { Bet, TrackedPlayer } from '../types';
 import {
@@ -83,6 +84,11 @@ const Dashboard = () => {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('POPULAR');
   const [currentTime, setCurrentTime] = useState(Date.now);  // used only for game time display
   const [showPlayerSelector, setShowPlayerSelector] = useState(false);
+
+  // Data-driven odds
+  const [dataDrivenOdds, setDataDrivenOdds] = useState<Map<string, number>>(new Map());
+  const [dataDrivenGamesCount, setDataDrivenGamesCount] = useState(0);
+  const [isDataDriven, setIsDataDriven] = useState(false);
 
   // Supabase pending bets
   const [supabasePendingBets, setSupabasePendingBets] = useState<Bet[]>([]);
@@ -176,6 +182,33 @@ const Dashboard = () => {
     const interval = setInterval(() => setCurrentTime(Date.now()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Fetch data-driven odds when active player or queue changes
+  const queueId = currentGame?.gameQueueConfigId;
+  useEffect(() => {
+    const fetchOdds = async () => {
+      if (!activePlayer?.puuid || !queueId) {
+        setDataDrivenOdds(new Map());
+        setDataDrivenGamesCount(0);
+        setIsDataDriven(false);
+        return;
+      }
+
+      try {
+        const allP = getProps();
+        const result = await getDataDrivenOdds(activePlayer.puuid, queueId, allP);
+        setDataDrivenOdds(result.odds);
+        setDataDrivenGamesCount(result.gamesCount);
+        setIsDataDriven(result.isDataDriven);
+      } catch (err) {
+        console.error('Error fetching data-driven odds:', err);
+        setDataDrivenOdds(new Map());
+        setIsDataDriven(false);
+      }
+    };
+
+    fetchOdds();
+  }, [activePlayer?.puuid, queueId]);
 
   // Get props with custom odds applied
   const allProps = getProps();
@@ -395,6 +428,12 @@ const Dashboard = () => {
                   <div className="text-xs sm:text-sm font-bold text-white">{allProps.length}</div>
                   <div className="text-xs text-green-300">Paris</div>
                 </div>
+                {isDataDriven && (
+                  <div className="text-center px-2 sm:px-3 py-1.5 sm:py-2 bg-cyan-500/10 border border-cyan-500/30 rounded-xl shrink-0">
+                    <div className="text-xs sm:text-sm font-bold text-cyan-400">{dataDrivenGamesCount}</div>
+                    <div className="text-xs text-cyan-300">Games</div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -681,7 +720,7 @@ const Dashboard = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {sortedProps.map(prop => (
-              <PropCard key={prop.id} prop={prop} player={activePlayer} />
+              <PropCard key={prop.id} prop={prop} player={activePlayer} dataDrivenOdds={dataDrivenOdds} dataDrivenGamesCount={dataDrivenGamesCount} />
             ))}
           </div>
         </section>

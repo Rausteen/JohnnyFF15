@@ -675,29 +675,7 @@ async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message:
       const team = matchData.info.participants.filter((p: { teamId: number }) => p.teamId === playerStats.teamId);
       const teamKills = team.reduce((sum: number, p: { kills: number }) => sum + p.kills, 0);
 
-      const johnnyMatch = {
-        id: matchData.metadata.matchId,
-        puuid: player.puuid,
-        player_name: player.display_name,
-        game_creation: matchData.info.gameCreation,
-        game_duration: matchData.info.gameDuration,
-        game_mode: matchData.info.gameMode,
-        queue_id: matchData.info.queueId,
-        champion_id: playerStats.championId,
-        champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
-        kills: playerStats.kills,
-        deaths: playerStats.deaths,
-        assists: playerStats.assists,
-        cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
-        vision_score: playerStats.visionScore,
-        gold_earned: playerStats.goldEarned,
-        damage_dealt: playerStats.totalDamageDealtToChampions,
-        win: playerStats.win,
-        first_blood_victim: playerStats.firstBloodVictim === true,
-        game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
-        team_kills: teamKills,
-        created_at: new Date().toISOString()
-      };
+      const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
 
       // Use insert instead of upsert to allow same match_id for different players
       const { error } = await supabase
@@ -905,29 +883,7 @@ async function syncGamesForPlayer(playerId: string): Promise<{ success: boolean;
     const team = matchData.info.participants.filter((p: { teamId: number }) => p.teamId === playerStats.teamId);
     const teamKills = team.reduce((sum: number, p: { kills: number }) => sum + p.kills, 0);
 
-    const johnnyMatch = {
-      id: matchData.metadata.matchId,
-      puuid: player.puuid,
-      player_name: player.display_name,
-      game_creation: matchData.info.gameCreation,
-      game_duration: matchData.info.gameDuration,
-      game_mode: matchData.info.gameMode,
-      queue_id: matchData.info.queueId,
-      champion_id: playerStats.championId,
-      champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
-      kills: playerStats.kills,
-      deaths: playerStats.deaths,
-      assists: playerStats.assists,
-      cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
-      vision_score: playerStats.visionScore,
-      gold_earned: playerStats.goldEarned,
-      damage_dealt: playerStats.totalDamageDealtToChampions,
-      win: playerStats.win,
-      first_blood_victim: playerStats.firstBloodVictim === true,
-      game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
-      team_kills: teamKills,
-      created_at: new Date().toISOString()
-    };
+    const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
 
     const { error } = await supabase
       .from('johnny_matches')
@@ -1220,7 +1176,11 @@ interface MatchParticipant {
   firstBloodKill?: boolean;
   doubleKills?: number;
   tripleKills?: number;
+  quadraKills?: number;
   pentaKills?: number;
+  totalDamageTaken?: number;
+  wardsPlaced?: number;
+  wardsKilled?: number;
   gameEndedInSurrender?: boolean;
   teamEarlySurrendered?: boolean;
   teamId: number;
@@ -1247,6 +1207,57 @@ interface MatchData {
     queueId: number;
     gameEndedInSurrender?: boolean;
     participants: MatchParticipant[];
+  };
+}
+
+// Build a johnny_matches row with all detailed stats
+function buildJohnnyMatch(
+  matchData: MatchData,
+  playerStats: MatchParticipant,
+  playerPuuid: string,
+  playerName: string,
+  teamKills: number
+) {
+  const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
+  const teamDamage = team.reduce((sum, p) => sum + p.totalDamageDealtToChampions, 0);
+  const kp = teamKills > 0 ? (playerStats.kills + playerStats.assists) / teamKills : 0;
+  const teamDmgPct = teamDamage > 0 ? playerStats.totalDamageDealtToChampions / teamDamage : 0;
+
+  return {
+    id: matchData.metadata.matchId,
+    puuid: playerPuuid,
+    player_name: playerName,
+    game_creation: matchData.info.gameCreation,
+    game_duration: matchData.info.gameDuration,
+    game_mode: matchData.info.gameMode,
+    queue_id: matchData.info.queueId,
+    champion_id: playerStats.championId,
+    champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
+    kills: playerStats.kills,
+    deaths: playerStats.deaths,
+    assists: playerStats.assists,
+    cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
+    vision_score: playerStats.visionScore,
+    gold_earned: playerStats.goldEarned,
+    damage_dealt: playerStats.totalDamageDealtToChampions,
+    win: playerStats.win,
+    first_blood_victim: playerStats.firstBloodVictim === true,
+    game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
+    team_kills: teamKills,
+    // New detailed stats
+    double_kills: playerStats.doubleKills || 0,
+    triple_kills: playerStats.tripleKills || 0,
+    quadra_kills: (playerStats as any).quadraKills || 0,
+    penta_kills: playerStats.pentaKills || 0,
+    solo_kills: playerStats.challenges?.soloKills || 0,
+    first_blood_kill: playerStats.firstBloodKill === true,
+    kill_participation: Math.round(kp * 10000) / 100, // Store as percentage (e.g., 65.43)
+    team_damage_pct: Math.round(teamDmgPct * 10000) / 100,
+    damage_taken: (playerStats as any).totalDamageTaken || 0,
+    wards_placed: (playerStats as any).wardsPlaced || 0,
+    wards_killed: (playerStats as any).wardsKilled || 0,
+    solo_deaths: playerStats.soloDeaths || 0,
+    created_at: new Date().toISOString()
   };
 }
 
@@ -1842,29 +1853,7 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
   const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
   const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
 
-  const johnnyMatch = {
-    id: matchData.metadata.matchId,
-    puuid: player.puuid,
-    player_name: player.display_name,
-    game_creation: matchData.info.gameCreation,
-    game_duration: matchData.info.gameDuration,
-    game_mode: matchData.info.gameMode,
-    queue_id: matchData.info.queueId,
-    champion_id: playerStats.championId,
-    champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
-    kills: playerStats.kills,
-    deaths: playerStats.deaths,
-    assists: playerStats.assists,
-    cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
-    vision_score: playerStats.visionScore,
-    gold_earned: playerStats.goldEarned,
-    damage_dealt: playerStats.totalDamageDealtToChampions,
-    win: playerStats.win,
-    first_blood_victim: playerStats.firstBloodVictim === true,
-    game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
-    team_kills: teamKills,
-    created_at: new Date().toISOString()
-  };
+  const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
 
   const { error: saveError } = await supabase
     .from('johnny_matches')

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { TrendingUp, TrendingDown, AlertCircle, CheckCircle, Loader2, Plus, Check, Layers, UserX } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertCircle, CheckCircle, Loader2, Plus, Check, Layers, UserX, BarChart3 } from 'lucide-react';
 import { Prop, TrackedPlayer } from '../types';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
@@ -12,9 +12,11 @@ import { getAdjustedOdds, getOddsAdjustmentInfo } from '../services/oddsService'
 interface PropCardProps {
   prop: Prop;
   player?: TrackedPlayer; // The player we're betting on
+  dataDrivenOdds?: Map<string, number>; // Pre-fetched data-driven odds
+  dataDrivenGamesCount?: number; // Number of games used for calculation
 }
 
-const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
+const PropCard: React.FC<PropCardProps> = ({ prop, player, dataDrivenOdds, dataDrivenGamesCount }) => {
   const { placeBet } = useStore();
   const { profile, subtractCredits, recordBetPlaced } = useCreditsStore();
   const { user } = useAuthStore();
@@ -46,10 +48,18 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
   // Pass queueId to enable Flex mode odds (440 = Flex, 420 = Solo/Duo)
   const skillRating = activePlayer?.puuid ? getPlayerSkillRating(activePlayer.puuid) : null;
   const queueId = currentGame?.gameQueueConfigId;
-  const { adjustedOdds, propType } = useMemo(
-    () => getAdjustedOdds(prop, skillRating, queueId),
-    [prop, skillRating, queueId]
-  );
+
+  // Check for data-driven odds (from player match history)
+  const dataOddsValue = dataDrivenOdds?.get(prop.id) ?? null;
+  const useDataDriven = dataOddsValue !== null;
+
+  const { adjustedOdds, propType } = useMemo(() => {
+    if (dataOddsValue !== null) {
+      return getAdjustedOdds({ ...prop, odds: dataOddsValue }, null, queueId);
+    }
+    return getAdjustedOdds(prop, skillRating, queueId);
+  }, [prop, skillRating, queueId, dataOddsValue]);
+
   const oddsInfo = useMemo(
     () => getOddsAdjustmentInfo(prop.odds, adjustedOdds, propType),
     [prop.odds, adjustedOdds, propType]
@@ -229,19 +239,29 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player }) => {
               {inCombo ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
           )}
-          {/* Odds badge with skill adjustment indicator */}
-          <div className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-400 font-mono font-bold text-xs sm:text-sm">
-            {oddsInfo.direction === 'up' ? (
+          {/* Odds badge with skill adjustment or data-driven indicator */}
+          <div className={`flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg font-mono font-bold text-xs sm:text-sm ${
+            useDataDriven
+              ? 'bg-gradient-to-r from-cyan-500/20 to-blue-600/10 border border-cyan-500/30 text-cyan-400'
+              : 'bg-gradient-to-r from-amber-500/20 to-amber-600/10 border border-amber-500/30 text-amber-400'
+          }`}>
+            {useDataDriven ? (
+              <BarChart3 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400" />
+            ) : oddsInfo.direction === 'up' ? (
               <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-400" />
             ) : oddsInfo.direction === 'down' ? (
               <TrendingDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-red-400" />
             ) : (
               <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             )}
-            <span className={oddsInfo.direction === 'up' ? 'text-green-400' : oddsInfo.direction === 'down' ? 'text-red-400' : ''}>
+            <span className={useDataDriven ? 'text-cyan-400' : oddsInfo.direction === 'up' ? 'text-green-400' : oddsInfo.direction === 'down' ? 'text-red-400' : ''}>
               x{adjustedOdds.toFixed(2)}
             </span>
-            {oddsInfo.direction !== 'none' && (
+            {useDataDriven && dataDrivenGamesCount ? (
+              <span className="text-[10px] text-cyan-500">
+                ({dataDrivenGamesCount}g)
+              </span>
+            ) : oddsInfo.direction !== 'none' && (
               <span className={`text-[10px] ${oddsInfo.direction === 'up' ? 'text-green-500' : 'text-red-500'}`}>
                 ({oddsInfo.direction === 'up' ? '+' : '-'}{oddsInfo.percentChange}%)
               </span>
