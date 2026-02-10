@@ -121,8 +121,6 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
       return `Vision: ${stats.visionScore}`;
     case 'gp4': // Moins de 8k dégâts
       return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dégâts`;
-    case 'gp5': // Moins d'or que le support
-      return `${stats.goldEarned} or (min équipe: ${lowestTeammateGold})`;
     case 'gp6': // Participation < 25%
       return `${killParticipation.toFixed(0)}% KP`;
     case 'gp9': // KP > 70%
@@ -329,8 +327,6 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'gp4': // Moins de 8k dégâts
       return stats.totalDamageDealtToChampions < 8000;
 
-    case 'gp5': // Moins d'or que le support
-      return stats.goldEarned < lowestTeammateGold;
 
     case 'gp6': // Participation < 25%
       return killParticipation < 25;

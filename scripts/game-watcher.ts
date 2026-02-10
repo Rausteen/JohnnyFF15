@@ -1223,6 +1223,12 @@ function buildJohnnyMatch(
   const kp = teamKills > 0 ? (playerStats.kills + playerStats.assists) / teamKills : 0;
   const teamDmgPct = teamDamage > 0 ? playerStats.totalDamageDealtToChampions / teamDamage : 0;
 
+  // Precise top damage calculations
+  const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
+  const maxGameDamage = Math.max(...matchData.info.participants.map(p => p.totalDamageDealtToChampions));
+  const isTopDamageTeam = playerStats.totalDamageDealtToChampions === maxTeamDamage;
+  const isTopDamageGame = playerStats.totalDamageDealtToChampions === maxGameDamage;
+
   return {
     id: matchData.metadata.matchId,
     puuid: playerPuuid,
@@ -1257,6 +1263,8 @@ function buildJohnnyMatch(
     wards_placed: (playerStats as any).wardsPlaced || 0,
     wards_killed: (playerStats as any).wardsKilled || 0,
     solo_deaths: playerStats.soloDeaths || 0,
+    is_top_damage_team: isTopDamageTeam,
+    is_top_damage_game: isTopDamageGame,
     created_at: new Date().toISOString()
   };
 }
@@ -1415,8 +1423,6 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
       return stats.visionScore < 5;
     case 'gp4': // Moins de 8k dégâts
       return stats.totalDamageDealtToChampions < 8000;
-    case 'gp5': // Moins d'or que le support
-      return stats.goldEarned < lowestTeammateGold;
     case 'gp6': // Participation < 25%
       return killParticipation < 25;
     case 'gp9': // KP > 70%
@@ -1521,7 +1527,6 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
     case 'gp2': return `Vision: ${stats.visionScore}`;
     case 'gp3': return `Vision: ${stats.visionScore}`;
     case 'gp4': return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dégâts`;
-    case 'gp5': return `${stats.goldEarned} or (min équipe: ${lowestTeammateGold})`;
     case 'gp6': return `${killParticipation.toFixed(0)}% KP`;
     case 'gp9': return `${killParticipation.toFixed(0)}% KP`;
     case 'out1': return `${stats.gameEndedInSurrender || match.info.gameEndedInSurrender ? 'FF' : 'Pas FF'} à ${gameDurationMin}min`;

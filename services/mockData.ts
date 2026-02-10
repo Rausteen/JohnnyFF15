@@ -100,14 +100,6 @@ export const MOCK_PROPS: Prop[] = [
     odds: 3.5,
     category: 'LATE'
   },
-  {
-    id: 'gp5',
-    title: "Moins d'or que le support",
-    description: "{player} finit avec moins d'or que le support allié.",
-    odds: 7.0,
-    category: 'GAMEPLAY'
-  },
-
   // ========== LEGENDARY / THROW ==========
   {
     id: 'kda2',

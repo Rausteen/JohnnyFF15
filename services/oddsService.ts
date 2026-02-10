@@ -20,7 +20,6 @@ const PROP_TYPES: Record<string, PropType> = {
   'kda4': 'NEGATIVE',      // 0 Kill toute la game
   'kda5': 'NEGATIVE',      // 0 Assist toute la game
   'out1': 'NEGATIVE',      // FF avant 20 min
-  'gp5': 'NEGATIVE',       // Moins d'or que le support
   'kda2': 'NEGATIVE',      // 15 morts ou plus
 
   // POSITIVE props (good things - skilled players more likely)
@@ -74,8 +73,6 @@ const FLEX_ODDS_OVERRIDES: Record<string, FlexOddsOverride> = {
   'gp1': { low: 2.20, high: 20.00 },     // CS de la honte
   'kda3': { low: 1.65, high: 10.00 },    // KDA < 0.5
   'gp6': { low: 1.50, high: 3.63 },      // Participation < 25%
-  'gp5': { low: 2.20, high: 10.00 },     // Moins d'or que support
-
   // Solo kills props
   'sk1': { low: 5.00, high: 1.80 },      // 3 Solo Kills ou plus
   'sk2': { low: 12.00, high: 3.30 },     // 5 Solo Kills ou plus

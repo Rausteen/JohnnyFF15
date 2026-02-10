@@ -48,6 +48,8 @@ interface MatchRow {
   team_damage_pct: number;
   damage_taken: number;
   solo_deaths: number;
+  is_top_damage_team: boolean;
+  is_top_damage_game: boolean;
   queue_id: number;
 }
 
@@ -102,16 +104,11 @@ function evaluatePropForMatch(propId: string, m: MatchRow): boolean {
     // Surrender
     case 'out1': return m.game_ended_surrender && m.game_duration < 1200; // < 20min
 
-    // Gold (less than support) - we can't calculate this from stored data alone
-    // Use kill_participation as proxy: < 15% KP usually means less gold than support
-    case 'gp5': return m.kill_participation < 15 && m.gold_earned < 8000;
+    // Carry (top damage team) - precise boolean from match data
+    case 'sp3': return m.is_top_damage_team;
 
-    // Carry (top damage team) - use team_damage_pct
-    case 'sp3': return m.team_damage_pct > 30; // > 30% of team damage ≈ top damage
-
-    // Top damage game (10 players) - can't reliably determine from stored data
-    // Use damage + team_damage_pct as proxy: very high damage + high % = likely top
-    case 'gp8': return m.damage_dealt > 25000 && m.team_damage_pct > 35;
+    // Top damage game (10 players) - precise boolean from match data
+    case 'gp8': return m.is_top_damage_game;
 
     // Solo kills
     case 'sk1': return m.solo_kills >= 3;
@@ -159,7 +156,7 @@ function probabilityToOdds(probability: number): number {
 async function fetchPlayerMatches(puuid: string, queueId: number): Promise<MatchRow[]> {
   const { data, error } = await supabase
     .from('johnny_matches')
-    .select('kills, deaths, assists, cs, vision_score, gold_earned, damage_dealt, win, first_blood_victim, first_blood_kill, game_ended_surrender, team_kills, game_duration, double_kills, triple_kills, quadra_kills, penta_kills, solo_kills, kill_participation, team_damage_pct, damage_taken, solo_deaths, queue_id')
+    .select('kills, deaths, assists, cs, vision_score, gold_earned, damage_dealt, win, first_blood_victim, first_blood_kill, game_ended_surrender, team_kills, game_duration, double_kills, triple_kills, quadra_kills, penta_kills, solo_kills, kill_participation, team_damage_pct, damage_taken, solo_deaths, is_top_damage_team, is_top_damage_game, queue_id')
     .eq('puuid', puuid)
     .eq('queue_id', queueId)
     .order('game_creation', { ascending: false })

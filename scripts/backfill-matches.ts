@@ -30,6 +30,7 @@ const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Rate limiting: 100 requests per 2 minutes = 1 request per 1.2s to be safe
+// Each match needs 2 API calls (match details + timeline for solo deaths)
 const REQUEST_INTERVAL_MS = 1300;
 let lastRequestTime = 0;
 let totalRequests = 0;
@@ -133,10 +134,40 @@ async function getMatchDetails(matchId: string, region: string): Promise<any | n
   return resp.json();
 }
 
+async function getMatchTimeline(matchId: string, region: string): Promise<any | null> {
+  const routing = ROUTING_MAP[region] || 'europe';
+  const url = `https://${routing}.api.riotgames.com/lol/match/v5/matches/${matchId}/timeline`;
+  const resp = await riotFetch(url);
+  if (!resp) return null;
+  return resp.json();
+}
+
+function countSoloDeaths(timelineData: any, puuid: string): number {
+  if (!timelineData?.info?.participants || !timelineData?.info?.frames) return 0;
+
+  const participant = timelineData.info.participants.find((p: any) => p.puuid === puuid);
+  if (!participant) return 0;
+
+  const participantId = participant.participantId;
+  let soloDeaths = 0;
+
+  for (const frame of timelineData.info.frames) {
+    for (const event of frame.events || []) {
+      if (event.type === 'CHAMPION_KILL' &&
+          event.victimId === participantId &&
+          (!event.assistingParticipantIds || event.assistingParticipantIds.length === 0)) {
+        soloDeaths++;
+      }
+    }
+  }
+
+  return soloDeaths;
+}
+
 // ============================================================
 // Build johnny_matches row
 // ============================================================
-function buildMatch(matchData: any, puuid: string, playerName: string) {
+function buildMatch(matchData: any, puuid: string, playerName: string, soloDeaths: number) {
   const playerStats = matchData.info.participants.find((p: any) => p.puuid === puuid);
   if (!playerStats) return null;
 
@@ -145,6 +176,10 @@ function buildMatch(matchData: any, puuid: string, playerName: string) {
   const teamDamage = team.reduce((sum: number, p: any) => sum + p.totalDamageDealtToChampions, 0);
   const kp = teamKills > 0 ? (playerStats.kills + playerStats.assists) / teamKills : 0;
   const teamDmgPct = teamDamage > 0 ? playerStats.totalDamageDealtToChampions / teamDamage : 0;
+
+  // Precise top damage calculations
+  const maxTeamDamage = Math.max(...team.map((p: any) => p.totalDamageDealtToChampions));
+  const maxGameDamage = Math.max(...matchData.info.participants.map((p: any) => p.totalDamageDealtToChampions));
 
   return {
     id: matchData.metadata.matchId,
@@ -178,7 +213,9 @@ function buildMatch(matchData: any, puuid: string, playerName: string) {
     damage_taken: playerStats.totalDamageTaken || 0,
     wards_placed: playerStats.wardsPlaced || 0,
     wards_killed: playerStats.wardsKilled || 0,
-    solo_deaths: 0, // Not available without timeline API (too expensive for backfill)
+    solo_deaths: soloDeaths,
+    is_top_damage_team: playerStats.totalDamageDealtToChampions === maxTeamDamage,
+    is_top_damage_game: playerStats.totalDamageDealtToChampions === maxGameDamage,
     created_at: new Date().toISOString()
   };
 }
@@ -227,8 +264,9 @@ async function main() {
     else console.log('  ✅ Table cleared\n');
   }
 
-  // Cache match details to avoid re-fetching same game for multiple players
+  // Cache match details and timelines to avoid re-fetching same game for multiple players
   const matchCache = new Map<string, any>();
+  const timelineCache = new Map<string, any>();
   let totalInserted = 0;
   let totalSkipped = 0;
 
@@ -291,8 +329,19 @@ async function main() {
           matchCache.set(matchId, matchData);
         }
 
+        // Get timeline for solo deaths (from cache or API)
+        let timelineData = timelineCache.get(matchId);
+        if (!timelineData) {
+          timelineData = await getMatchTimeline(matchId, player.region);
+          if (timelineData) {
+            timelineCache.set(matchId, timelineData);
+          }
+        }
+
+        const soloDeaths = timelineData ? countSoloDeaths(timelineData, player.puuid) : 0;
+
         // Build the row
-        const row = buildMatch(matchData, player.puuid, player.display_name);
+        const row = buildMatch(matchData, player.puuid, player.display_name, soloDeaths);
         if (!row) {
           skipped++;
           continue;
