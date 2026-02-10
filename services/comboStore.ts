@@ -90,11 +90,10 @@ export const useComboStore = create<ComboState>((set, get) => ({
   totalOdds: () => {
     const { selections } = get();
     if (selections.length === 0) return 0;
-    // Décroissance des cotes: 15% de réduction par pari supplémentaire
-    // 1er pari: 100%, 2ème: 85%, 3ème: 72.25%, 4ème: 61.4%
-    const raw = selections.reduce((acc, sel, index) => {
-      const discountFactor = Math.pow(0.85, index);
-      return acc * sel.adjustedOdds * discountFactor;
+    // Pas de decay: la marge de 12% par leg se compose déjà
+    // 2 legs: ~23% edge, 3 legs: ~33%, 4 legs: ~43%
+    const raw = selections.reduce((acc, sel) => {
+      return acc * sel.adjustedOdds;
     }, 1);
     // Cap combo odds at x100
     return Math.min(raw, 100);
