@@ -210,7 +210,7 @@ export const MOCK_PROPS: Prop[] = [
   {
     id: 'sp2',
     title: "Le Miracle KDA",
-    description: "{player} termine avec un KDA > 3.0.",
+    description: "{player} termine avec un KDA > 5.0.",
     odds: 5.0,
     category: 'LATE'
   },

@@ -352,8 +352,8 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
       return match.info.gameDuration > 2400;
 
     // ========== LÉGENDAIRES ==========
-    case 'sp2': // Le Miracle KDA (KDA > 3.0)
-      return kda > 3.0;
+    case 'sp2': // Le Miracle KDA (KDA > 5.0)
+      return kda > 5.0;
 
     case 'sp3': // Le Carry Mystique (top damage de l'équipe)
       const maxTeamDmg = Math.max(...team.map(p => p.totalDamageDealtToChampions));
