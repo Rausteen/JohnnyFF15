@@ -1,6 +1,6 @@
 /**
  * Weekly Wealth Tax Script
- * Applies a 10% tax on wallets > 100,000 JC
+ * Applies a 5% tax on wallets > 200,000 JC
  * Should be run once per week (via cron or manual execution)
  */
 
@@ -12,8 +12,8 @@ const supabaseKey = process.env.SUPABASE_SERVICE_KEY || process.env.VITE_SUPABAS
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const WEALTH_TAX_THRESHOLD = 100000; // 100k JC
-const WEALTH_TAX_RATE = 0.10; // 10%
+const WEALTH_TAX_THRESHOLD = 200000; // 200k JC
+const WEALTH_TAX_RATE = 0.05; // 5%
 
 interface Profile {
   id: string;

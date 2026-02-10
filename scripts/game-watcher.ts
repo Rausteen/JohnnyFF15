@@ -36,8 +36,8 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL |
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 const CHECK_INTERVAL = 45000; // 45 seconds
 const WEALTH_TAX_CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
-const WEALTH_TAX_THRESHOLD = 100000; // 100k JC
-const WEALTH_TAX_RATE = 0.10; // 10%
+const WEALTH_TAX_THRESHOLD = 200000; // 200k JC
+const WEALTH_TAX_RATE = 0.05; // 5%
 
 // Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1689,17 +1689,11 @@ async function resolveBetsForMatch(
     try {
       const won = evaluateProp(bet.prop_id, playerStats, matchData);
       const resolvedStat = getResolvedStat(bet.prop_id, playerStats, matchData);
-      const grossPayout = won ? bet.potential_payout : 0;
+      const payout = won ? bet.potential_payout : 0;
 
-      // Apply tax on winnings
-      const { netPayout, taxAmount, taxRate } = calculateWinningsTax(grossPayout, bet.amount);
-      const payout = netPayout;
-
-      // Update bet status (store tax info in resolved_stat if taxed)
-      const taxInfo = taxAmount > 0 ? ` [Taxe ${taxRate * 100}%: -${taxAmount.toLocaleString()} JC]` : '';
       const updateData: Record<string, unknown> = {
         status: won ? 'WON' : 'LOST',
-        resolved_stat: resolvedStat + taxInfo,
+        resolved_stat: resolvedStat,
       };
       // Enrich champion name if it was missing at placement time
       if (resolvedChampionName && (!bet.champion_name || bet.champion_name === 'Inconnu')) {
@@ -1716,13 +1710,11 @@ async function resolveBetsForMatch(
         continue;
       }
 
-      // Update user credits with net payout (after tax)
       if (bet.user_id) {
         await updateUserCredits(bet.user_id, won, bet.amount, payout);
       }
 
-      const taxLog = taxAmount > 0 ? ` 💰 Taxe: ${taxAmount.toLocaleString()} JC (${taxRate * 100}%)` : '';
-      console.log(`  ${won ? '✅' : '❌'} ${bet.prop_title}: ${won ? 'WON' : 'LOST'} (${resolvedStat})${taxLog}`);
+      console.log(`  ${won ? '✅' : '❌'} ${bet.prop_title}: ${won ? 'WON' : 'LOST'} (${resolvedStat})`);
       resolved++;
     } catch (error) {
       console.error(`  Error resolving bet ${bet.id}:`, error);
@@ -1748,18 +1740,12 @@ async function resolveBetsForMatch(
       // Find the main bet (first bet in combo with the amount)
       const mainBet = bets.find(b => b.amount > 0) || bets[0];
       const totalAmount = mainBet.amount;
-      const grossPayout = comboWon ? mainBet.potential_payout : 0;
+      const actualPayout = comboWon ? mainBet.potential_payout : 0;
 
-      // Apply tax on combo winnings
-      const { netPayout, taxAmount, taxRate } = calculateWinningsTax(grossPayout, totalAmount);
-      const actualPayout = netPayout;
-
-      // Update all bets in the combo
-      const taxInfo = taxAmount > 0 ? ` [Taxe ${taxRate * 100}%: -${taxAmount.toLocaleString()} JC]` : '';
       for (const { bet, resolvedStat } of betResults) {
         const comboUpdateData: Record<string, unknown> = {
           status: comboWon ? 'WON' : 'LOST',
-          resolved_stat: resolvedStat + (bet.id === mainBet.id ? taxInfo : ''),
+          resolved_stat: resolvedStat,
         };
         // Enrich champion name if it was missing at placement time
         if (resolvedChampionName && (!bet.champion_name || bet.champion_name === 'Inconnu')) {
@@ -1778,13 +1764,11 @@ async function resolveBetsForMatch(
         }
       }
 
-      // Update user credits for the combo (only once per combo, with tax applied)
       if (mainBet.user_id) {
         await updateUserCredits(mainBet.user_id, comboWon, totalAmount, actualPayout);
       }
 
-      const taxLog = taxAmount > 0 ? ` 💰 Taxe: ${taxAmount.toLocaleString()} JC (${taxRate * 100}%)` : '';
-      console.log(`  ${comboWon ? '✅' : '❌'} Combo ${comboId.slice(0, 8)}...: ${comboWon ? 'WON +' + actualPayout + ' JC' : 'LOST -' + totalAmount + ' JC'}${taxLog}`);
+      console.log(`  ${comboWon ? '✅' : '❌'} Combo ${comboId.slice(0, 8)}...: ${comboWon ? 'WON +' + actualPayout + ' JC' : 'LOST -' + totalAmount + ' JC'}`);
     } catch (error) {
       console.error(`  Error resolving combo ${comboId}:`, error);
       errors++;
