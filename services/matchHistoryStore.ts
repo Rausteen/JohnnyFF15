@@ -113,8 +113,7 @@ export const useMatchHistoryStore = create<MatchHistoryState>((set, get) => ({
       let query = supabase
         .from('johnny_matches')
         .select('*')
-        .order('game_creation', { ascending: false })
-        .limit(100);
+        .order('game_creation', { ascending: false });
 
       // Filter by tracked player PUUIDs if any
       if (puuids.length > 0) {
