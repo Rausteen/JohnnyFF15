@@ -8,6 +8,7 @@ import { useGameStore } from '../services/gameStore';
 import { useComboStore } from '../services/comboStore';
 import { isUserThePlayer } from '../services/playersService';
 import { getAdjustedOdds, getOddsAdjustmentInfo } from '../services/oddsService';
+import { hasDuplicatePropBet } from '../services/betsService';
 
 interface PropCardProps {
   prop: Prop;
@@ -140,6 +141,16 @@ const PropCard: React.FC<PropCardProps> = ({ prop, player, dataDrivenOdds, dataD
     setLoading(true);
 
     try {
+      // Anti-exploit: block same prop on multiple players in same game
+      if (betMatchId && activePlayer?.puuid) {
+        const hasDupe = await hasDuplicatePropBet(user.id, betMatchId, prop.id, activePlayer.puuid);
+        if (hasDupe) {
+          setError("Tu as déjà ce pari sur un autre joueur dans cette game");
+          setLoading(false);
+          return;
+        }
+      }
+
       // Subtract credits from Supabase
       const result = await subtractCredits(val);
 

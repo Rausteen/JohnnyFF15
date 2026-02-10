@@ -277,6 +277,31 @@ export async function deleteUserBets(userId: string): Promise<{ success: boolean
   }
 }
 
+// Check if user already has a pending bet with same prop on another player in the same match
+export async function hasDuplicatePropBet(
+  userId: string,
+  matchId: string,
+  propId: string,
+  playerPuuid: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('bets')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('match_id', matchId)
+      .eq('prop_id', propId)
+      .eq('status', 'PENDING')
+      .neq('player_puuid', playerPuuid)
+      .limit(1);
+
+    if (error) return false;
+    return (data?.length || 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
 // Get pending bets for a specific user
 export async function getUserPendingBets(userId: string): Promise<Bet[]> {
   try {

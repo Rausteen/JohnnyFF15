@@ -19,7 +19,7 @@ const MIN_GAMES = 15;
 
 // Odds bounds
 const MIN_ODDS = 1.05;
-const MAX_ODDS = 50.0;
+const MAX_ODDS = 15.0;
 
 // Cache: puuid+queueId -> { odds, timestamp }
 const oddsCache = new Map<string, { odds: Map<string, number>; timestamp: number; gamesCount: number }>();
