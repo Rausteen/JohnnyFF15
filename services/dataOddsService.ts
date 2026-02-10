@@ -229,6 +229,29 @@ export async function getDataOddsForProp(
 }
 
 /**
+ * Get detailed odds with probabilities for display purposes
+ * Returns odds, probability, and hit count for each prop
+ */
+export async function getDetailedPlayerOdds(
+  puuid: string,
+  queueId: number,
+  props: Prop[]
+): Promise<{ details: { propId: string; probability: number; odds: number; hits: number }[]; gamesCount: number }> {
+  const matches = await fetchPlayerMatches(puuid, queueId);
+  const details = props.map(prop => {
+    const hits = matches.filter(m => evaluatePropForMatch(prop.id, m)).length;
+    const probability = matches.length > 0 ? hits / matches.length : 0;
+    return {
+      propId: prop.id,
+      probability,
+      odds: probabilityToOdds(probability),
+      hits
+    };
+  });
+  return { details, gamesCount: matches.length };
+}
+
+/**
  * Clear the odds cache (call after new matches are imported)
  */
 export function clearOddsCache(): void {
