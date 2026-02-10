@@ -20,6 +20,8 @@ const MIN_GAMES = 15;
 // Odds bounds
 const MIN_ODDS = 1.05;
 const MAX_ODDS = 15.0;
+const MAX_EXACT_KDA_ODDS = 500;
+const MAX_EXACT_DAMAGE_ODDS = 50;
 
 // Cache: puuid+queueId -> { odds, timestamp }
 const oddsCache = new Map<string, { odds: Map<string, number>; timestamp: number; gamesCount: number }>();
@@ -252,8 +254,110 @@ export async function getDetailedPlayerOdds(
 }
 
 /**
+ * Distribution data for exact stats odds
+ */
+export interface ExactStatsDistribution {
+  killsDist: Map<number, number>;   // kill count → probability
+  deathsDist: Map<number, number>;  // death count → probability
+  assistsDist: Map<number, number>; // assist count → probability
+  damageDist: Map<number, number>;  // damage bucket (k) → probability
+  gamesCount: number;
+}
+
+// Cache for exact stats distributions
+const exactStatsCache = new Map<string, { data: ExactStatsDistribution; timestamp: number }>();
+
+/**
+ * Get the probability distributions for exact stats (KDA + damage)
+ * Used to calculate data-driven odds for exact score bets
+ */
+export async function getExactStatsDistribution(
+  puuid: string,
+  queueId: number
+): Promise<ExactStatsDistribution | null> {
+  const cacheKey = `exact_${puuid}_${queueId}`;
+  const cached = exactStatsCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+
+  const matches = await fetchPlayerMatches(puuid, queueId);
+  if (matches.length < MIN_GAMES) return null;
+
+  const killsCounts = new Map<number, number>();
+  const deathsCounts = new Map<number, number>();
+  const assistsCounts = new Map<number, number>();
+  const damageCounts = new Map<number, number>();
+
+  for (const m of matches) {
+    killsCounts.set(m.kills, (killsCounts.get(m.kills) || 0) + 1);
+    deathsCounts.set(m.deaths, (deathsCounts.get(m.deaths) || 0) + 1);
+    assistsCounts.set(m.assists, (assistsCounts.get(m.assists) || 0) + 1);
+
+    // Damage buckets: 0k, 1k, ..., 39k, 40k+ (40 = everything >= 40k)
+    const dmgK = Math.floor(m.damage_dealt / 1000);
+    const bucket = Math.min(40, dmgK);
+    damageCounts.set(bucket, (damageCounts.get(bucket) || 0) + 1);
+  }
+
+  // Convert counts to probabilities
+  const total = matches.length;
+  const killsDist = new Map<number, number>();
+  const deathsDist = new Map<number, number>();
+  const assistsDist = new Map<number, number>();
+  const damageDist = new Map<number, number>();
+
+  for (const [k, v] of killsCounts) killsDist.set(k, v / total);
+  for (const [k, v] of deathsCounts) deathsDist.set(k, v / total);
+  for (const [k, v] of assistsCounts) assistsDist.set(k, v / total);
+  for (const [k, v] of damageCounts) damageDist.set(k, v / total);
+
+  const data: ExactStatsDistribution = { killsDist, deathsDist, assistsDist, damageDist, gamesCount: total };
+  exactStatsCache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
+}
+
+/**
+ * Calculate data-driven odds for exact KDA bet
+ * Uses independent probability: P(K=k) * P(D=d) * P(A=a)
+ */
+export function calculateExactKdaOdds(
+  kills: number,
+  deaths: number,
+  assists: number,
+  dist: ExactStatsDistribution
+): number {
+  const pK = dist.killsDist.get(kills) || 0;
+  const pD = dist.deathsDist.get(deaths) || 0;
+  const pA = dist.assistsDist.get(assists) || 0;
+
+  if (pK === 0 || pD === 0 || pA === 0) return MAX_EXACT_KDA_ODDS;
+
+  const probability = pK * pD * pA;
+  const rawOdds = (1 / probability) / HOUSE_MARGIN;
+  return Math.max(MIN_ODDS, Math.min(MAX_EXACT_KDA_ODDS, Math.round(rawOdds)));
+}
+
+/**
+ * Calculate data-driven odds for exact damage bet
+ */
+export function calculateExactDamageOdds(
+  damageK: number,
+  dist: ExactStatsDistribution
+): number {
+  const bucket = Math.min(40, damageK);
+  const probability = dist.damageDist.get(bucket) || 0;
+
+  if (probability <= 0) return MAX_EXACT_DAMAGE_ODDS;
+
+  const rawOdds = (1 / probability) / HOUSE_MARGIN;
+  return Math.max(MIN_ODDS, Math.min(MAX_EXACT_DAMAGE_ODDS, Math.round(rawOdds * 100) / 100));
+}
+
+/**
  * Clear the odds cache (call after new matches are imported)
  */
 export function clearOddsCache(): void {
   oddsCache.clear();
+  exactStatsCache.clear();
 }
