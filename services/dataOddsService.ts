@@ -146,7 +146,7 @@ function probabilityToOdds(probability: number): number {
   if (probability <= 0) return MAX_ODDS;
   if (probability >= 1) return MIN_ODDS;
 
-  const rawOdds = (1 / probability) * HOUSE_MARGIN;
+  const rawOdds = (1 / probability) / HOUSE_MARGIN;
   return Math.max(MIN_ODDS, Math.min(MAX_ODDS, Math.round(rawOdds * 100) / 100));
 }
 
