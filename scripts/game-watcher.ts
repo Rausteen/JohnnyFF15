@@ -1636,6 +1636,9 @@ async function resolveBetsForMatch(
 
   console.log(`  📊 Found ${pendingBets.length} pending bets for ${playerName} (${allPendingBets?.length || 0} total pending)`);
 
+  // Get champion name for enrichment (fixes "Inconnu" from placement time)
+  const resolvedChampionName = playerStats.championName || CHAMPIONS[playerStats.championId] || null;
+
   // Separate single bets from combo bets
   const singleBets = pendingBets.filter(b => !b.combo_id);
   const comboBets = pendingBets.filter(b => b.combo_id);
@@ -1664,12 +1667,17 @@ async function resolveBetsForMatch(
 
       // Update bet status (store tax info in resolved_stat if taxed)
       const taxInfo = taxAmount > 0 ? ` [Taxe ${taxRate * 100}%: -${taxAmount.toLocaleString()} JC]` : '';
+      const updateData: Record<string, unknown> = {
+        status: won ? 'WON' : 'LOST',
+        resolved_stat: resolvedStat + taxInfo,
+      };
+      // Enrich champion name if it was missing at placement time
+      if (resolvedChampionName && (!bet.champion_name || bet.champion_name === 'Inconnu')) {
+        updateData.champion_name = resolvedChampionName;
+      }
       const { error: updateError } = await supabase
         .from('bets')
-        .update({
-          status: won ? 'WON' : 'LOST',
-          resolved_stat: resolvedStat + taxInfo,
-        })
+        .update(updateData)
         .eq('id', bet.id);
 
       if (updateError) {
@@ -1719,12 +1727,17 @@ async function resolveBetsForMatch(
       // Update all bets in the combo
       const taxInfo = taxAmount > 0 ? ` [Taxe ${taxRate * 100}%: -${taxAmount.toLocaleString()} JC]` : '';
       for (const { bet, resolvedStat } of betResults) {
+        const comboUpdateData: Record<string, unknown> = {
+          status: comboWon ? 'WON' : 'LOST',
+          resolved_stat: resolvedStat + (bet.id === mainBet.id ? taxInfo : ''),
+        };
+        // Enrich champion name if it was missing at placement time
+        if (resolvedChampionName && (!bet.champion_name || bet.champion_name === 'Inconnu')) {
+          comboUpdateData.champion_name = resolvedChampionName;
+        }
         const { error: updateError } = await supabase
           .from('bets')
-          .update({
-            status: comboWon ? 'WON' : 'LOST',
-            resolved_stat: resolvedStat + (bet.id === mainBet.id ? taxInfo : ''),
-          })
+          .update(comboUpdateData)
           .eq('id', bet.id);
 
         if (updateError) {
