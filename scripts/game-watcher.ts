@@ -601,6 +601,20 @@ function countSoloDeaths(
   ).length;
 }
 
+// Check if player was the first blood victim (using timeline data)
+// Riot API doesn't return firstBloodVictim in match details, only firstBloodKill
+function isFirstBloodVictim(
+  timeline: { participants: Array<{ participantId: number; puuid: string }>; killEvents: TimelineKillEvent[] },
+  playerPuuid: string
+): boolean {
+  const participant = timeline.participants.find(p => p.puuid === playerPuuid);
+  if (!participant || timeline.killEvents.length === 0) return false;
+
+  // First CHAMPION_KILL event = first blood
+  const firstKill = timeline.killEvents[0];
+  return firstKill.victimId === participant.participantId;
+}
+
 // Sync last game for all players
 async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message: string; matches: unknown[] }> {
   console.log('📥 Syncing last game for all players...');
@@ -1849,6 +1863,11 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
     const soloDeaths = countSoloDeaths(timeline, player.puuid);
     (playerStats as MatchParticipant).soloDeaths = soloDeaths;
     console.log(`  💀 Solo deaths: ${soloDeaths}`);
+
+    // Fix: Riot API doesn't return firstBloodVictim, determine from timeline
+    const fbVictim = isFirstBloodVictim(timeline, player.puuid);
+    (playerStats as MatchParticipant).firstBloodVictim = fbVictim;
+    if (fbVictim) console.log(`  🩸 First Blood victim!`);
   } else {
     console.log('  ⚠️ Could not fetch timeline, solo deaths will be 0');
     (playerStats as MatchParticipant).soloDeaths = 0;

@@ -164,10 +164,29 @@ function countSoloDeaths(timelineData: any, puuid: string): number {
   return soloDeaths;
 }
 
+// Check if player was the first blood victim from timeline
+// Riot API doesn't return firstBloodVictim in match details
+function checkFirstBloodVictim(timelineData: any, puuid: string): boolean {
+  if (!timelineData?.info?.participants || !timelineData?.info?.frames) return false;
+
+  const participant = timelineData.info.participants.find((p: any) => p.puuid === puuid);
+  if (!participant) return false;
+
+  // Find the first CHAMPION_KILL event = first blood
+  for (const frame of timelineData.info.frames) {
+    for (const event of frame.events || []) {
+      if (event.type === 'CHAMPION_KILL') {
+        return event.victimId === participant.participantId;
+      }
+    }
+  }
+  return false;
+}
+
 // ============================================================
 // Build johnny_matches row
 // ============================================================
-function buildMatch(matchData: any, puuid: string, playerName: string, soloDeaths: number) {
+function buildMatch(matchData: any, puuid: string, playerName: string, soloDeaths: number, firstBloodVictim: boolean) {
   const playerStats = matchData.info.participants.find((p: any) => p.puuid === puuid);
   if (!playerStats) return null;
 
@@ -199,7 +218,7 @@ function buildMatch(matchData: any, puuid: string, playerName: string, soloDeath
     gold_earned: playerStats.goldEarned,
     damage_dealt: playerStats.totalDamageDealtToChampions,
     win: playerStats.win,
-    first_blood_victim: playerStats.firstBloodVictim === true,
+    first_blood_victim: firstBloodVictim,
     game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
     team_kills: teamKills,
     double_kills: playerStats.doubleKills || 0,
@@ -339,9 +358,10 @@ async function main() {
         }
 
         const soloDeaths = timelineData ? countSoloDeaths(timelineData, player.puuid) : 0;
+        const fbVictim = timelineData ? checkFirstBloodVictim(timelineData, player.puuid) : false;
 
         // Build the row
-        const row = buildMatch(matchData, player.puuid, player.display_name, soloDeaths);
+        const row = buildMatch(matchData, player.puuid, player.display_name, soloDeaths, fbVictim);
         if (!row) {
           skipped++;
           continue;
