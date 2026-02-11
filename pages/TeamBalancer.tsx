@@ -477,6 +477,10 @@ const PlayerSelectCard: React.FC<{
           <Target className="w-3 h-3" />
           {player.skillRating.avgKDA}
         </div>
+        <div className="flex items-center gap-1" title="Kill Participation">
+          <Users className="w-3 h-3" />
+          {player.skillRating.avgKillParticipation}%
+        </div>
         <div className="flex items-center gap-1" title="Games">
           <Crosshair className="w-3 h-3" />
           {player.skillRating.gamesPlayed}
@@ -519,23 +523,35 @@ const TeamCard: React.FC<{
       <div className="p-2 space-y-1">
         {team.players.map(({ player }) => {
           const tier = getSkillTier(player.skillRating.odverall);
+          const s = player.skillRating;
 
           return (
             <div
               key={player.id}
-              className="flex items-center gap-2 p-2 rounded-lg bg-zinc-800/50"
+              className="p-2 rounded-lg bg-zinc-800/50"
             >
-              <span className="flex-1 font-medium text-white text-sm truncate">
-                {player.displayName}
-              </span>
-              {player.soloTier && (
-                <span className={`text-[10px] ${RANK_COLORS[player.soloTier]}`} title={`${RANK_LABELS[player.soloTier]} ${player.soloDivision || ''}`}>
-                  {player.soloTier.slice(0, 3)}{player.soloDivision ? player.soloDivision : ''}
+              <div className="flex items-center gap-2">
+                <span className="flex-1 font-medium text-white text-sm truncate">
+                  {player.displayName}
                 </span>
+                {player.soloTier && (
+                  <span className={`text-[10px] ${RANK_COLORS[player.soloTier]}`} title={`${RANK_LABELS[player.soloTier]} ${player.soloDivision || ''}`}>
+                    {player.soloTier.slice(0, 3)}{player.soloDivision ? player.soloDivision : ''}
+                  </span>
+                )}
+                <span className={`text-xs font-bold ${tier.color}`}>
+                  {player.skillRating.odverall}
+                </span>
+              </div>
+              {s.gamesPlayed > 0 && (
+                <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
+                  <span title="Win Rate">{s.winRate}%W</span>
+                  <span title="KDA">{s.avgKDA}KDA</span>
+                  <span title="Kill Participation">{s.avgKillParticipation}%KP</span>
+                  <span title="Team Damage %">{s.avgTeamDamagePct}%DMG</span>
+                  <span title="Games">{s.gamesPlayed}g</span>
+                </div>
               )}
-              <span className={`text-xs font-bold ${tier.color}`}>
-                {player.skillRating.odverall}
-              </span>
             </div>
           );
         })}

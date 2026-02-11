@@ -90,6 +90,11 @@ export interface PlayerSkillRating {
   avgDamage: number;
   avgVisionScore: number;
   gamesPlayed: number;
+  // New detailed metrics
+  avgKillParticipation: number; // 0-100%
+  avgTeamDamagePct: number; // 0-100%
+  avgSoloKills: number;
+  avgSoloDeaths: number;
 }
 
 // Tracked player (someone we can bet on)

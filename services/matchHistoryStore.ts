@@ -28,6 +28,21 @@ export interface JohnnyMatch {
   game_ended_surrender: boolean;
   team_kills: number;
   created_at: string;
+  // Detailed stats
+  double_kills?: number;
+  triple_kills?: number;
+  quadra_kills?: number;
+  penta_kills?: number;
+  solo_kills?: number;
+  first_blood_kill?: boolean;
+  kill_participation?: number; // percentage (e.g. 65.43)
+  team_damage_pct?: number; // percentage (e.g. 25.12)
+  damage_taken?: number;
+  wards_placed?: number;
+  wards_killed?: number;
+  solo_deaths?: number;
+  is_top_damage_team?: boolean;
+  is_top_damage_game?: boolean;
 }
 
 // Type for Johnny's config from Supabase
