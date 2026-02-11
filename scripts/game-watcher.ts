@@ -202,7 +202,11 @@ async function getTrackedPlayers(): Promise<TrackedPlayer[]> {
   return data || [];
 }
 
-async function checkCurrentGame(puuid: string, region: string, retries = 2): Promise<CurrentGameInfo | null> {
+// Returns:
+// - CurrentGameInfo: player is in game
+// - null: player is NOT in game (confirmed by 404)
+// - undefined: API error, state unknown (don't change previous state)
+async function checkCurrentGame(puuid: string, region: string, retries = 2): Promise<CurrentGameInfo | null | undefined> {
   const platformMap: Record<string, string> = {
     EUW: 'euw1',
     EUNE: 'eun1',
@@ -229,18 +233,18 @@ async function checkCurrentGame(puuid: string, region: string, retries = 2): Pro
         return checkCurrentGame(puuid, region, retries - 1);
       }
       console.error('Rate limit exceeded, skipping this check');
-      return null;
+      return undefined; // Don't assume game ended
     }
 
     if (!response.ok) {
       console.error(`Riot API error: ${response.status}`);
-      return null;
+      return undefined; // Don't assume game ended
     }
 
     return await response.json();
   } catch (error) {
     console.error('Error checking game:', error);
-    return null;
+    return undefined; // Don't assume game ended
   }
 }
 
@@ -1918,6 +1922,13 @@ async function checkAllPlayers(): Promise<void> {
     const wasInGame = prevState?.isInGame || false;
     const previousGameId = prevState?.gameId || null;
 
+    // undefined = API error, keep previous state and skip this player
+    if (game === undefined) {
+      const name = player.display_name || player.game_name || 'Unknown';
+      console.log(`  ⚠️  ${name} - API error, keeping previous state`);
+      continue;
+    }
+
     if (game) {
       const gameId = game.gameId;
       const queueId = game.gameQueueConfigId;
@@ -1951,6 +1962,7 @@ async function checkAllPlayers(): Promise<void> {
         previousGameState.set(player.id, { isInGame: true, gameId: String(gameId) });
       }
     } else {
+      // game === null: confirmed not in game (404 from Riot API)
       const name = player.display_name || player.game_name || 'Unknown';
       console.log(`  ⏸️  ${name} not in game`);
       await updateGameStatusInSupabase(player.id, false, null, null);
