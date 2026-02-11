@@ -1,4 +1,4 @@
-// Team Balancer Service - Generates balanced teams (any size, no role requirement)
+// Team Balancer Service - Generates balanced teams (skill + role diversity)
 import {
   PlayerWithSkill,
   BalancedTeamsResult
@@ -8,14 +8,14 @@ import {
  * Balance players into 2 teams
  * - Minimum 2 players
  * - Odd numbers supported (one team gets +1)
- * - Role assignment is optional (only for 5v5)
+ * - Considers both skill balance AND role diversity
  */
 export function balanceTeams(players: PlayerWithSkill[]): BalancedTeamsResult {
   if (players.length < 2) {
     throw new Error('Il faut au moins 2 joueurs');
   }
 
-  const NUM_ATTEMPTS = 100;
+  const NUM_ATTEMPTS = 200;
   let bestResult: BalancedTeamsResult | null = null;
   let bestScore = -Infinity;
 
@@ -42,8 +42,8 @@ function tryBalanceTeams(players: PlayerWithSkill[]): BalancedTeamsResult {
 
   // Sort by skill with randomization for variation between attempts
   const sorted = [...players].sort((a, b) => {
-    const aSkill = a.skillRating.odverall + (Math.random() - 0.5) * 10;
-    const bSkill = b.skillRating.odverall + (Math.random() - 0.5) * 10;
+    const aSkill = a.skillRating.odverall + (Math.random() - 0.5) * 15;
+    const bSkill = b.skillRating.odverall + (Math.random() - 0.5) * 15;
     return bSkill - aSkill;
   });
 
@@ -66,7 +66,6 @@ function tryBalanceTeams(players: PlayerWithSkill[]): BalancedTeamsResult {
     }
   });
 
-  // Build team results - no role assignment (pure skill balance)
   const team1 = team1Players.map(p => ({ player: p }));
   const team2 = team2Players.map(p => ({ player: p }));
 
@@ -81,12 +80,39 @@ function tryBalanceTeams(players: PlayerWithSkill[]): BalancedTeamsResult {
 }
 
 /**
+ * Count role duplicates in a team.
+ * FILL players don't conflict with anyone.
+ * Uses primaryRole only (secondaryRole is a fallback preference, not a conflict).
+ */
+function countRoleDuplicates(players: PlayerWithSkill[]): number {
+  const roleCounts: Record<string, number> = {};
+  for (const p of players) {
+    const role = p.primaryRole;
+    if (!role || role === 'FILL') continue;
+    roleCounts[role] = (roleCounts[role] || 0) + 1;
+  }
+  // Each extra player beyond 1 on the same role is a duplicate
+  let duplicates = 0;
+  for (const count of Object.values(roleCounts)) {
+    if (count > 1) duplicates += count - 1;
+  }
+  return duplicates;
+}
+
+/**
  * Evaluate how good a team balance is (higher = better)
- * Pure skill balance - lower difference is better
+ * Considers skill balance + role diversity on BOTH teams
  */
 function evaluateBalance(result: BalancedTeamsResult): number {
+  // Skill penalty: -2 per point of difference
   const skillPenalty = result.skillDifference * 2;
-  return Math.max(0, 100 - skillPenalty);
+
+  // Role penalty: -15 per duplicate role per team
+  const team1Players = result.team1.players.map(p => p.player);
+  const team2Players = result.team2.players.map(p => p.player);
+  const rolePenalty = (countRoleDuplicates(team1Players) + countRoleDuplicates(team2Players)) * 15;
+
+  return Math.max(0, 100 - skillPenalty - rolePenalty);
 }
 
 /**
@@ -100,10 +126,8 @@ export function quickBalance(players: PlayerWithSkill[]): BalancedTeamsResult {
   const team1Size = Math.ceil(players.length / 2);
   const team2Size = Math.floor(players.length / 2);
 
-  // Sort by skill descending
   const sorted = [...players].sort((a, b) => b.skillRating.odverall - a.skillRating.odverall);
 
-  // Greedy: put each player in team with lower total skill
   const team1Players: PlayerWithSkill[] = [];
   const team2Players: PlayerWithSkill[] = [];
   let team1Skill = 0;
