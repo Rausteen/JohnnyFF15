@@ -19,7 +19,7 @@ const MIN_GAMES = 15;
 
 // Odds bounds
 const MIN_ODDS = 1.05;
-const MAX_ODDS = 15.0;
+const MAX_ODDS = 100.0;
 const MAX_EXACT_KDA_ODDS = 500;
 const MAX_EXACT_DAMAGE_ODDS = 50;
 
@@ -127,18 +127,21 @@ function evaluatePropForMatch(propId: string, m: MatchRow): boolean {
 }
 
 /**
- * Calculate probability from match history
- * Returns value between 0 and 1
+ * Calculate probability from match history using Laplace smoothing.
+ * Formula: (hits + 0.5) / (games + 1)
+ * This avoids 0% probabilities for rare events and gives odds
+ * that better reflect actual rarity (e.g. 15+ deaths ≠ pentakill).
  */
 function calculateProbability(matches: MatchRow[], propId: string): number {
-  if (matches.length === 0) return 0.5; // Default to 50% if no data
+  if (matches.length === 0) return 0.5;
 
   let trueCount = 0;
   for (const m of matches) {
     if (evaluatePropForMatch(propId, m)) trueCount++;
   }
 
-  return trueCount / matches.length;
+  // Laplace smoothing: avoids 0-probability and gives conservative estimates for rare events
+  return (trueCount + 0.5) / (matches.length + 1);
 }
 
 /**
