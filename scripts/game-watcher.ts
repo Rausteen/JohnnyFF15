@@ -1779,15 +1779,9 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
   console.log('  ⏳ Waiting 90s for Riot API to process match data...');
   await new Promise(r => setTimeout(r, 90000));
 
-  // Fetch last match
-  const matchIds = await getMatchHistory(player.puuid, player.region, 1);
-  if (!matchIds || matchIds.length === 0) {
-    console.error(`  ❌ No match found for ${player.display_name}`);
-    return;
-  }
-
-  const matchId = matchIds[0];
-  const rawMatchData = await getMatchDetails(matchId, player.region) as {
+  // Fetch last match with retries (API can be slow after game ends)
+  let matchIds: string[] | null = null;
+  let rawMatchData: {
     metadata: { matchId: string };
     info: {
       gameCreation: number;
@@ -1817,15 +1811,35 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
         teamId: number;
       }>;
     };
-  } | null;
+  } | null = null;
+
+  const RETRY_DELAYS = [0, 30000, 60000, 120000]; // immediate, 30s, 60s, 2min
+  for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
+    if (attempt > 0) {
+      console.log(`  🔄 Retry ${attempt}/${RETRY_DELAYS.length - 1} - waiting ${RETRY_DELAYS[attempt] / 1000}s...`);
+      await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+    }
+
+    matchIds = await getMatchHistory(player.puuid, player.region, 1);
+    if (!matchIds || matchIds.length === 0) {
+      console.error(`  ❌ No match found for ${player.display_name} (attempt ${attempt + 1})`);
+      continue;
+    }
+
+    rawMatchData = await getMatchDetails(matchIds[0], player.region) as typeof rawMatchData;
+    if (rawMatchData) break;
+    console.error(`  ❌ Could not fetch match data for ${player.display_name} (attempt ${attempt + 1})`);
+  }
 
   // Cast to MatchData type for bet resolution
   const matchData: MatchData | null = rawMatchData;
 
   if (!matchData) {
-    console.error(`  ❌ Could not fetch match data for ${player.display_name}`);
+    console.error(`  ❌ All retries failed for ${player.display_name} - giving up`);
     return;
   }
+
+  const matchId = matchIds![0];
 
   const playerStats = matchData.info.participants.find(p => p.puuid === player.puuid);
   if (!playerStats) {
