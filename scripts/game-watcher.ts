@@ -1847,26 +1847,34 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
   }
 
   // Save match to johnny_matches
-  const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
-  const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
+  try {
+    const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
+    const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
 
-  const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
+    const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
 
-  const { error: saveError } = await supabase
-    .from('johnny_matches')
-    .insert([johnnyMatch]);
+    const { error: saveError } = await supabase
+      .from('johnny_matches')
+      .insert([johnnyMatch]);
 
-  if (saveError && saveError.code !== '23505') {
-    console.error(`  ❌ Error saving match:`, saveError);
-  } else {
-    console.log(`  ✅ Match saved: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
+    if (saveError && saveError.code !== '23505') {
+      console.error(`  ❌ Error saving match:`, saveError);
+    } else {
+      console.log(`  ✅ Match saved: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
+    }
+  } catch (saveErr) {
+    console.error(`  ❌ Exception saving match:`, saveErr);
   }
 
   // Resolve bets
-  const { resolved, errors } = await resolveBetsForMatch(matchData, player.puuid, player.display_name);
-  console.log(`  📊 Bets resolved: ${resolved} (${errors} errors)`);
+  try {
+    const { resolved, errors } = await resolveBetsForMatch(matchData, player.puuid, player.display_name);
+    console.log(`  📊 Bets resolved: ${resolved} (${errors} errors)`);
+  } catch (resolveErr) {
+    console.error(`  ❌ Exception resolving bets:`, resolveErr);
+  }
 
-  // Send game end notification
+  // Send game end notification (always runs even if above steps failed)
   const gameMode = QUEUE_NAMES[matchData.info.queueId] || matchData.info.gameMode || 'Normal';
   const championName = playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown';
   await sendGameEndNotification(
