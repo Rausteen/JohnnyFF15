@@ -132,6 +132,20 @@ const QUEUE_NAMES: Record<number, string> = {
 // Only allow bets on these queues (Solo/Duo, Flex, and Clash)
 const ALLOWED_QUEUE_IDS = [420, 440, 700];
 
+// Rank display names
+const RANK_DISPLAY: Record<string, string> = {
+  IRON: 'Fer',
+  BRONZE: 'Bronze',
+  SILVER: 'Argent',
+  GOLD: 'Or',
+  PLATINUM: 'Platine',
+  EMERALD: 'Emeraude',
+  DIAMOND: 'Diamant',
+  MASTER: 'Master',
+  GRANDMASTER: 'GrandMaster',
+  CHALLENGER: 'Challenger'
+};
+
 // Champion data from Data Dragon
 let CHAMPIONS: Record<number, string> = {}; // ID -> display name (e.g., "Wukong")
 let CHAMPION_KEYS: Record<number, string> = {}; // ID -> internal key for images (e.g., "MonkeyKing")
@@ -1122,7 +1136,9 @@ async function sendGameEndNotification(
   deaths: number,
   assists: number,
   gameMode: string,
-  championId: number = 0
+  championId: number = 0,
+  rankInfo?: { tier: string; division: string; lp: number } | null,
+  lpChange?: number | null
 ): Promise<void> {
   if (!DISCORD_WEBHOOK_URL) return;
 
@@ -1135,6 +1151,28 @@ async function sendGameEndNotification(
     ? getChampionImageUrl(championId)
     : getChampionImageUrl(championName);
 
+  // Build fields
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [
+    { name: '🎮 Mode', value: gameMode, inline: true },
+    { name: '🏆 Champion', value: championName, inline: true },
+    { name: '📊 KDA', value: kda, inline: true },
+  ];
+
+  // Add rank + LP change if available
+  if (rankInfo) {
+    const tierName = RANK_DISPLAY[rankInfo.tier] || rankInfo.tier;
+    const divDisplay = ['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(rankInfo.tier)
+      ? '' : ` ${rankInfo.division}`;
+    const rankText = `${tierName}${divDisplay} (${rankInfo.lp} LP)`;
+    fields.push({ name: '🎖️ Rank', value: rankText, inline: true });
+  }
+
+  if (lpChange != null) {
+    const lpSign = lpChange >= 0 ? '+' : '';
+    const lpEmoji = lpChange >= 0 ? '📈' : '📉';
+    fields.push({ name: `${lpEmoji} LP`, value: `${lpSign}${lpChange}`, inline: true });
+  }
+
   const payload = {
     username: 'JohnnyFF15 Bot',
     avatar_url: `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`,
@@ -1142,11 +1180,7 @@ async function sendGameEndNotification(
       title: `${result} - ${playerName.toUpperCase()}`,
       description: `La game de **${playerName}** est terminée !\n\nLes paris ont été résolus automatiquement.`,
       color,
-      fields: [
-        { name: '🎮 Mode', value: gameMode, inline: true },
-        { name: '🏆 Champion', value: championName, inline: true },
-        { name: '📊 KDA', value: kda, inline: true },
-      ],
+      fields,
       thumbnail: { url: thumbnailUrl },
       footer: { text: 'JohnnyFF15 - Les paris sont résolus' },
       timestamp: new Date().toISOString(),
@@ -1892,6 +1926,36 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
     console.error(`  ❌ Exception resolving bets:`, resolveErr);
   }
 
+  // Fetch current rank + LP after game (for webhook and DB update)
+  let newRankInfo: { tier: string; division: string; lp: number } | null = null;
+  let lpChange: number | null = null;
+  try {
+    newRankInfo = await getRankedInfo(player.puuid, player.region);
+    if (newRankInfo) {
+      // Calculate LP change from stored rank
+      if (player.solo_tier === newRankInfo.tier &&
+          player.solo_division === newRankInfo.division &&
+          player.solo_lp != null) {
+        lpChange = newRankInfo.lp - player.solo_lp;
+      }
+
+      // Update rank in DB
+      await supabase
+        .from('tracked_players')
+        .update({
+          solo_tier: newRankInfo.tier,
+          solo_division: newRankInfo.division,
+          solo_lp: newRankInfo.lp,
+          rank_updated_at: new Date().toISOString()
+        })
+        .eq('id', player.id);
+
+      console.log(`  🎖️ Rank: ${newRankInfo.tier} ${newRankInfo.division} ${newRankInfo.lp} LP${lpChange != null ? ` (${lpChange >= 0 ? '+' : ''}${lpChange})` : ''}`);
+    }
+  } catch (rankErr) {
+    console.error('  ⚠️ Error fetching rank:', rankErr);
+  }
+
   // Send game end notification (always runs even if above steps failed)
   const gameMode = QUEUE_NAMES[matchData.info.queueId] || matchData.info.gameMode || 'Normal';
   const championName = playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown';
@@ -1903,7 +1967,9 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
     playerStats.deaths,
     playerStats.assists,
     gameMode,
-    playerStats.championId
+    playerStats.championId,
+    newRankInfo,
+    lpChange
   );
 }
 
