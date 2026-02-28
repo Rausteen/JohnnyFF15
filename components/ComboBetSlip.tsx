@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Layers, TrendingUp, AlertCircle, CheckCircle, Loader2, Trash2, UserX } from 'lucide-react';
+import { X, Layers, TrendingUp, AlertCircle, CheckCircle, Loader2, Trash2, UserX, Info } from 'lucide-react';
 import { useComboStore } from '../services/comboStore';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
@@ -7,6 +7,7 @@ import { useAuthStore } from '../services/authStore';
 import { useGameStore } from '../services/gameStore';
 import { TrackedPlayer } from '../types';
 import { isUserThePlayer } from '../services/playersService';
+import { supabase } from '../services/supabase';
 
 interface ComboBetSlipProps {
   player?: TrackedPlayer; // The player we're betting on
@@ -45,8 +46,9 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const credits = profile?.credits || 0;
+  const MAX_COMBO_PAYOUT = 100000;
   const combinedOdds = totalOdds();
-  const potentialGain = amount ? Math.floor(parseInt(amount) * combinedOdds) : 0;
+  const potentialGain = amount ? Math.min(Math.floor(parseInt(amount) * combinedOdds), MAX_COMBO_PAYOUT) : 0;
 
   // Auto-clear combo store error after 3 seconds
   useEffect(() => {
@@ -101,12 +103,34 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
       return;
     }
 
-    if (val > 30000) {
-      setError("Mise maximum combo: 30 000 JC");
+    if (val > 5000) {
+      setError("Mise maximum combo: 5 000 JC");
       return;
     }
 
     setLoading(true);
+
+    try {
+      // Check if user already has a combo for this game
+      const currentMatchId = selections[0]?.gameId || betMatchId;
+      if (currentMatchId && user) {
+        const { count } = await supabase
+          .from('bets')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('match_id', currentMatchId)
+          .not('combo_id', 'is', null)
+          .eq('combo_index', 1); // Only count first leg of each combo
+
+        if (count && count >= 1) {
+          setError("Maximum 1 combiné par game !");
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Error checking existing combos:', err);
+    }
 
     try {
       // Subtract credits from Supabase
@@ -266,6 +290,12 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
               ))}
             </div>
 
+            {/* Combo limits info */}
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px]">
+              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>Cote max x100 · Gain max 100 000 JC · Mise max 5 000 JC · 1 combo par game</span>
+            </div>
+
             {/* Amount input */}
             <input
               type="number"
@@ -280,11 +310,16 @@ const ComboBetSlip: React.FC<ComboBetSlipProps> = ({ player }) => {
 
             {/* Potential gain */}
             {amount && parseInt(amount) > 0 && (
-              <div className="flex justify-between text-sm px-1 py-2 bg-gold/5 rounded-lg border border-gold/20">
+              <div className="flex justify-between items-center text-sm px-1 py-2 bg-gold/5 rounded-lg border border-gold/20">
                 <span className="text-zinc-400">Gain potentiel:</span>
-                <span className="text-gold font-bold font-mono text-lg">
-                  {potentialGain.toLocaleString()} JC
-                </span>
+                <div className="text-right">
+                  <span className="text-gold font-bold font-mono text-lg">
+                    {potentialGain.toLocaleString()} JC
+                  </span>
+                  {potentialGain >= MAX_COMBO_PAYOUT && (
+                    <div className="text-[10px] text-orange-400">plafonné</div>
+                  )}
+                </div>
               </div>
             )}
 

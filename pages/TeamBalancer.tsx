@@ -9,18 +9,15 @@ import {
   Swords,
   Trophy,
   Target,
-  Eye,
   Crosshair,
-  Crown,
-  ChevronDown
+  Crown
 } from 'lucide-react';
 import { useGameStore } from '../services/gameStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { calculateMultiplePlayerSkillRatings, getSkillTier } from '../services/playerStatsService';
-import { balanceTeams, quickBalance } from '../services/teamBalancerService';
+import { balanceTeams } from '../services/teamBalancerService';
 import { updatePlayerRank } from '../services/playersService';
 import {
-  TrackedPlayer,
   PlayerWithSkill,
   BalancedTeamsResult,
   PlayerRole,
@@ -87,12 +84,12 @@ const TeamBalancer = () => {
     calculateSkills();
   }, [trackedPlayers]);
 
-  // Toggle player selection
+  // Toggle player selection (no max limit)
   const togglePlayer = (playerId: string) => {
     const newSelected = new Set(selectedPlayers);
     if (newSelected.has(playerId)) {
       newSelected.delete(playerId);
-    } else if (newSelected.size < 10) {
+    } else {
       newSelected.add(playerId);
     }
     setSelectedPlayers(newSelected);
@@ -104,7 +101,7 @@ const TeamBalancer = () => {
   const selectAll = () => {
     const activePlayers = playersWithSkill.filter(p => p.isActive);
     const newSelected = new Set<string>();
-    activePlayers.slice(0, 10).forEach(p => newSelected.add(p.id));
+    activePlayers.forEach(p => newSelected.add(p.id));
     setSelectedPlayers(newSelected);
     setBalancedTeams(null);
   };
@@ -117,8 +114,8 @@ const TeamBalancer = () => {
 
   // Generate balanced teams
   const generateTeams = () => {
-    if (selectedPlayers.size !== 10) {
-      setError('Il faut exactement 10 joueurs pour equilibrer les equipes');
+    if (selectedPlayers.size < 2) {
+      setError('Il faut au moins 2 joueurs pour equilibrer les equipes');
       return;
     }
 
@@ -130,7 +127,7 @@ const TeamBalancer = () => {
 
   // Re-roll teams
   const rerollTeams = () => {
-    if (selectedPlayers.size !== 10) return;
+    if (selectedPlayers.size < 2) return;
     const selected = playersWithSkill.filter(p => selectedPlayers.has(p.id));
     const result = balanceTeams(selected);
     setBalancedTeams(result);
@@ -187,7 +184,7 @@ const TeamBalancer = () => {
           <Swords className="w-10 h-10 text-primary" />
           <h1 className="text-4xl font-black text-white">Team Balancer</h1>
         </div>
-        <p className="text-zinc-400">Selectionne 10 joueurs pour generer des equipes equilibrees</p>
+        <p className="text-zinc-400">Selectionne au moins 2 joueurs pour generer des equipes equilibrees</p>
       </div>
 
       {error && (
@@ -203,7 +200,7 @@ const TeamBalancer = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Users className="w-5 h-5 text-primary" />
-              Joueurs ({selectedPlayers.size}/10)
+              Joueurs ({selectedPlayers.size})
             </h2>
             <div className="flex gap-2">
               <button
@@ -234,7 +231,7 @@ const TeamBalancer = () => {
                   player={player}
                   isSelected={selectedPlayers.has(player.id)}
                   onToggle={() => togglePlayer(player.id)}
-                  disabled={!selectedPlayers.has(player.id) && selectedPlayers.size >= 10}
+                  disabled={false}
                   isAdmin={isAdmin || false}
                   onEditRank={() => openRankEditor(player)}
                 />
@@ -252,15 +249,15 @@ const TeamBalancer = () => {
           <div className="mt-6 pt-6 border-t border-zinc-800">
             <button
               onClick={generateTeams}
-              disabled={selectedPlayers.size !== 10}
+              disabled={selectedPlayers.size < 2}
               className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all ${
-                selectedPlayers.size === 10
+                selectedPlayers.size >= 2
                   ? 'bg-gradient-to-r from-primary to-accent text-white hover:opacity-90'
                   : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
               }`}
             >
               <Shuffle className="w-5 h-5" />
-              Generer les equipes
+              Generer les equipes ({Math.ceil(selectedPlayers.size / 2)}v{Math.floor(selectedPlayers.size / 2)})
             </button>
           </div>
         </div>
@@ -316,23 +313,10 @@ const TeamBalancer = () => {
               <Swords className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-zinc-500 mb-2">Pas encore d'equipes</h3>
               <p className="text-zinc-600">
-                Selectionne 10 joueurs et clique sur "Generer les equipes"
+                Selectionne au moins 2 joueurs et clique sur "Generer les equipes"
               </p>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="mt-8 bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
-        <h3 className="text-sm font-bold text-zinc-400 mb-3">Legende des roles</h3>
-        <div className="flex flex-wrap gap-4">
-          {Object.entries(ROLE_LABELS).map(([role, label]) => (
-            <div key={role} className="flex items-center gap-2 text-sm text-zinc-400">
-              <span>{ROLE_ICONS[role as PlayerRole]}</span>
-              <span>{label}</span>
-            </div>
-          ))}
         </div>
       </div>
 
@@ -493,6 +477,10 @@ const PlayerSelectCard: React.FC<{
           <Target className="w-3 h-3" />
           {player.skillRating.avgKDA}
         </div>
+        <div className="flex items-center gap-1" title="Kill Participation">
+          <Users className="w-3 h-3" />
+          {player.skillRating.avgKillParticipation}%
+        </div>
         <div className="flex items-center gap-1" title="Games">
           <Crosshair className="w-3 h-3" />
           {player.skillRating.gamesPlayed}
@@ -515,7 +503,7 @@ const PlayerSelectCard: React.FC<{
 
 // Team Display Card
 const TeamCard: React.FC<{
-  team: { players: Array<{ player: PlayerWithSkill; assignedRole: PlayerRole }>; totalSkill: number };
+  team: { players: Array<{ player: PlayerWithSkill; assignedRole?: PlayerRole }>; totalSkill: number };
   teamName: string;
   color: 'blue' | 'red';
 }> = ({ team, teamName, color }) => {
@@ -530,37 +518,40 @@ const TeamCard: React.FC<{
   return (
     <div className={`rounded-2xl border ${colorClasses} overflow-hidden`}>
       <div className={`px-4 py-3 border-b ${color === 'blue' ? 'border-blue-500/20' : 'border-red-500/20'}`}>
-        <h3 className={`font-bold ${headerClasses}`}>{teamName}</h3>
+        <h3 className={`font-bold ${headerClasses}`}>{teamName} ({team.players.length})</h3>
       </div>
       <div className="p-2 space-y-1">
-        {team.players.map(({ player, assignedRole }) => {
+        {team.players.map(({ player }) => {
           const tier = getSkillTier(player.skillRating.odverall);
-          const isPreferredRole = player.primaryRole === assignedRole || player.secondaryRole === assignedRole;
+          const s = player.skillRating;
 
           return (
             <div
               key={player.id}
-              className="flex items-center gap-2 p-2 rounded-lg bg-zinc-800/50"
+              className="p-2 rounded-lg bg-zinc-800/50"
             >
-              <span className="text-lg" title={ROLE_LABELS[assignedRole]}>
-                {ROLE_ICONS[assignedRole]}
-              </span>
-              <span className="flex-1 font-medium text-white text-sm truncate">
-                {player.displayName}
-              </span>
-              {player.soloTier && (
-                <span className={`text-[10px] ${RANK_COLORS[player.soloTier]}`} title={`${RANK_LABELS[player.soloTier]} ${player.soloDivision || ''}`}>
-                  {player.soloTier.slice(0, 3)}{player.soloDivision ? player.soloDivision : ''}
+              <div className="flex items-center gap-2">
+                <span className="flex-1 font-medium text-white text-sm truncate">
+                  {player.displayName}
                 </span>
-              )}
-              {!isPreferredRole && player.primaryRole && (
-                <span className="text-xs text-yellow-500" title="Role non prefere">
-                  !
+                {player.soloTier && (
+                  <span className={`text-[10px] ${RANK_COLORS[player.soloTier]}`} title={`${RANK_LABELS[player.soloTier]} ${player.soloDivision || ''}`}>
+                    {player.soloTier.slice(0, 3)}{player.soloDivision ? player.soloDivision : ''}
+                  </span>
+                )}
+                <span className={`text-xs font-bold ${tier.color}`}>
+                  {player.skillRating.odverall}
                 </span>
+              </div>
+              {s.gamesPlayed > 0 && (
+                <div className="flex items-center gap-2 mt-1 text-[10px] text-zinc-500">
+                  <span title="Win Rate">{s.winRate}%W</span>
+                  <span title="KDA">{s.avgKDA}KDA</span>
+                  <span title="Kill Participation">{s.avgKillParticipation}%KP</span>
+                  <span title="Team Damage %">{s.avgTeamDamagePct}%DMG</span>
+                  <span title="Games">{s.gamesPlayed}g</span>
+                </div>
               )}
-              <span className={`text-xs font-bold ${tier.color}`}>
-                {player.skillRating.odverall}
-              </span>
             </div>
           );
         })}

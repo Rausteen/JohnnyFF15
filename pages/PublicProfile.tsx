@@ -5,7 +5,8 @@ import { supabase } from '../services/supabase';
 import { useAuthStore } from '../services/authStore';
 import { getBetsByUserId } from '../services/betsService';
 import { BetStatus, Bet } from '../types';
-import { getCosmeticById } from '../services/shopData';
+import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
+import { useBackgroundOverride } from '../services/backgroundOverride';
 
 interface PublicUser {
   id: string;
@@ -21,6 +22,7 @@ interface PublicUser {
   equipped_badge?: string | null;
   equipped_title?: string | null;
   equipped_border?: string | null;
+  equipped_background?: string | null;
 }
 
 const PublicProfile = () => {
@@ -37,6 +39,21 @@ const PublicProfile = () => {
   const [betsLoading, setBetsLoading] = useState(true);
 
   const isOwnProfile = currentUser?.id === userId;
+
+  // Get equipped cosmetics from Supabase (must be before any early return)
+  const { getCosmetic } = useCosmeticsLookup();
+  const { setOverrideBackgroundUrl } = useBackgroundOverride();
+
+  // Override the global background with this user's equipped background
+  const equippedBackground = getCosmetic(profile?.equipped_background);
+  useEffect(() => {
+    if (equippedBackground?.image_url) {
+      setOverrideBackgroundUrl(equippedBackground.image_url);
+    } else {
+      setOverrideBackgroundUrl(null);
+    }
+    return () => setOverrideBackgroundUrl(null);
+  }, [equippedBackground?.image_url, setOverrideBackgroundUrl]);
 
   // Load user bets from Supabase
   const loadUserBets = async () => {
@@ -169,10 +186,8 @@ const PublicProfile = () => {
     year: 'numeric'
   });
 
-  // Get equipped cosmetics
-  const equippedBadge = profile.equipped_badge ? getCosmeticById(profile.equipped_badge) : null;
-  const equippedTitle = profile.equipped_title ? getCosmeticById(profile.equipped_title) : null;
-  const equippedBorder = profile.equipped_border ? getCosmeticById(profile.equipped_border) : null;
+  const equippedTitle = getCosmetic(profile.equipped_title);
+  const equippedBorder = getCosmetic(profile.equipped_border);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -186,24 +201,28 @@ const PublicProfile = () => {
       </Link>
 
       {/* Profile Header */}
-      <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 rounded-3xl border border-zinc-800 p-8 mb-8">
-        <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+      <div className="bg-gradient-to-br from-zinc-900/95 via-zinc-900/95 to-zinc-800/95 backdrop-blur-sm rounded-3xl border border-zinc-800 p-8 mb-8">
+        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8">
           {/* Avatar */}
           <div className="relative">
-            <div
-              className={`w-32 h-32 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 overflow-hidden ${equippedBorder?.animated ? 'animated-border' : ''}`}
-              style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '5px' } : undefined}
-            >
+            <div className="w-32 h-32 shadow-lg shadow-primary/30 relative">
               {profile.avatar_url ? (
                 <img
                   src={profile.avatar_url}
                   alt={profile.pseudo}
-                  className={`w-full h-full object-cover ${equippedBorder ? 'rounded-xl' : 'rounded-2xl'}`}
+                  className="w-full h-full object-cover"
                 />
               ) : (
-                <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
+                <div className="w-full h-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                   <span className="text-5xl font-black text-white">{profile.pseudo.charAt(0).toUpperCase()}</span>
                 </div>
+              )}
+              {equippedBorder?.image_url && (
+                <img
+                  src={equippedBorder.image_url}
+                  alt=""
+                  className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
+                />
               )}
             </div>
             {rank && rank <= 3 && (
@@ -217,7 +236,6 @@ const PublicProfile = () => {
           <div className="flex-1 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
               <h1 className="text-3xl font-black text-white">{profile.pseudo}</h1>
-              {equippedBadge?.icon && <span className="text-2xl" title={equippedBadge.name}>{equippedBadge.icon}</span>}
               {isOwnProfile && (
                 <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm font-bold">
                   C'est toi !
@@ -283,7 +301,7 @@ const PublicProfile = () => {
 
       {/* JC Stats */}
       <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+        <div className="bg-zinc-900/95 backdrop-blur-sm rounded-2xl border border-zinc-800 p-6">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-gold" />
             Johnny Coins gagnés
@@ -294,7 +312,7 @@ const PublicProfile = () => {
           <p className="text-zinc-500 text-sm mt-2">Total des gains sur les paris</p>
         </div>
 
-        <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-6">
+        <div className="bg-zinc-900/95 backdrop-blur-sm rounded-2xl border border-zinc-800 p-6">
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-red-400" />
             Johnny Coins perdus
@@ -334,12 +352,12 @@ const PublicProfile = () => {
         </div>
 
         {betsLoading ? (
-          <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-8 text-center">
+          <div className="bg-zinc-900/95 backdrop-blur-sm rounded-2xl border border-zinc-800 p-8 text-center">
             <Loader2 className="w-8 h-8 text-zinc-500 animate-spin mx-auto mb-4" />
             <p className="text-zinc-500">Chargement des paris...</p>
           </div>
         ) : groupedBets.length === 0 ? (
-          <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-8 text-center">
+          <div className="bg-zinc-900/95 backdrop-blur-sm rounded-2xl border border-zinc-800 p-8 text-center">
             <Swords className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
             <p className="text-zinc-500">Aucun pari enregistré</p>
           </div>
@@ -365,7 +383,7 @@ const PublicProfile = () => {
               return (
                 <div
                   key={matchId}
-                  className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden"
+                  className="bg-zinc-900/95 backdrop-blur-sm rounded-xl border border-zinc-800 overflow-hidden"
                 >
                   {/* Game header */}
                   <button
@@ -537,7 +555,7 @@ const StatCard = ({ icon, label, value, color }: { icon: React.ReactNode; label:
   };
 
   return (
-    <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 text-center">
+    <div className="bg-zinc-900/95 backdrop-blur-sm rounded-xl border border-zinc-800 p-6 text-center">
       <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-zinc-800 ${colorClasses[color]} mb-3`}>
         {icon}
       </div>

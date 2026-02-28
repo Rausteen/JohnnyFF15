@@ -90,12 +90,14 @@ export const useComboStore = create<ComboState>((set, get) => ({
   totalOdds: () => {
     const { selections } = get();
     if (selections.length === 0) return 0;
-    // Décroissance des cotes: 10% de réduction par pari supplémentaire
-    // 1er pari: 100%, 2ème: 90%, 3ème: 81%, 4ème: 72.9%
-    return selections.reduce((acc, sel, index) => {
-      const discountFactor = Math.pow(0.9, index);
-      return acc * sel.adjustedOdds * discountFactor;
-    }, 1);
+    // Marge maison flat 12% sur le combo total (pas de composition)
+    // Chaque leg a déjà sa marge /1.12, on compense les extras
+    // pour que le combo ait la même marge qu'un pari simple
+    const HOUSE_MARGIN = 1.12;
+    const raw = selections.reduce((acc, sel) => acc * sel.adjustedOdds, 1);
+    const compensated = raw * Math.pow(HOUSE_MARGIN, selections.length - 1);
+    // Cap combo odds at x100
+    return Math.min(Math.round(compensated * 100) / 100, 100);
   },
 
   addToCombo: (prop: Prop, adjustedOdds: number, playerPuuid?: string, playerName?: string, gameId?: string) => {

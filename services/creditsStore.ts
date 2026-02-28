@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from './supabase';
+import { recordSnapshot } from './balanceSnapshots';
 
 interface UserProfile {
   id: string;
@@ -22,6 +23,7 @@ interface UserProfile {
   equipped_badge?: string | null;
   equipped_title?: string | null;
   equipped_border?: string | null;
+  equipped_background?: string | null;
 }
 
 // Transfer limits
@@ -51,6 +53,7 @@ interface CreditsState {
   getTimeUntilNextBonus: () => { hours: number; minutes: number } | null;
   transferCredits: (recipientPseudo: string, amount: number) => Promise<{ success: boolean; error?: string; fee?: number }>;
   getTransferLimits: () => { min: number; max: number; dailyRemaining: number; cooldownRemaining: number | null; fee: number };
+  setProfile: (profile: UserProfile) => void;
   clearProfile: () => void;
 }
 
@@ -70,7 +73,7 @@ const DAILY_BONUS_MAX_CREDITS = 15000; // Can't claim if you have more than this
 const DAILY_BONUS_THRESHOLD = 10000; // Below this: 1000 bonus, above: 500 bonus
 
 // Get daily bonus amount based on current credits
-function getDailyBonusAmount(credits: number): number {
+export function getDailyBonusAmount(credits: number): number {
   if (credits >= DAILY_BONUS_MAX_CREDITS) return 0;
   if (credits < DAILY_BONUS_THRESHOLD) return 1000;
   return 500;
@@ -294,6 +297,8 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
 
       if (error) throw error;
 
+      recordSnapshot(profile.id, newCredits, bonusAmount, 'daily_bonus');
+
       set({
         profile: {
           ...profile,
@@ -413,11 +418,18 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
         // Don't fail the transfer, credits were already moved
       }
 
+      const newBalance = profile.credits - totalDeducted;
+
+      // Record snapshots for sender and recipient
+      recordSnapshot(profile.id, newBalance, -totalDeducted, 'transfer_out', recipient.id);
+      // We don't know recipient's exact balance, but record the delta
+      recordSnapshot(recipient.id, 0, amount, 'transfer_in', profile.id);
+
       // Update local state
       set({
         profile: {
           ...profile,
-          credits: profile.credits - totalDeducted,
+          credits: newBalance,
           last_transfer_at: now,
           daily_transfer_total: newDailyTotal,
           daily_transfer_date: today
@@ -462,6 +474,10 @@ export const useCreditsStore = create<CreditsState>((set, get) => ({
       cooldownRemaining,
       fee: TRANSFER_FEE_PERCENT * 100
     };
+  },
+
+  setProfile: (profile: UserProfile) => {
+    set({ profile });
   },
 
   clearProfile: () => {

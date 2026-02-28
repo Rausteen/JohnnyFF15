@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift, Trophy, Swords, ShoppingBag, Package } from 'lucide-react';
+import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift, Trophy, Swords, Package, BarChart3 } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
-import { getCosmeticById } from '../services/shopData';
+import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
 
 const TopBar = () => {
   const { user, signOut, loading: authLoading } = useAuthStore();
@@ -22,8 +22,8 @@ const navLinks = [
   { path: '/my-bets', label: 'Mes Paris', icon: Coins },
   { path: '/history', label: 'Musée', icon: History },
   { path: '/leaderboard', label: 'Classement', icon: Trophy },
-  { path: '/shop', label: 'Boutique', icon: ShoppingBag },
   { path: '/cases', label: 'Caisses', icon: Package },
+  { path: '/player-stats', label: 'Stats', icon: BarChart3 },
   ...(isAdmin ? [
     { path: '/team-balancer', label: '5v5', icon: Swords },
     { path: '/admin', label: 'Admin', icon: ShieldAlert }
@@ -39,9 +39,9 @@ const navLinks = [
   // Get user display name
   const displayName = profile?.pseudo || user?.user_metadata?.pseudo || user?.email?.split('@')[0] || 'Utilisateur';
 
-  // Get equipped cosmetics
-  const equippedBadge = profile?.equipped_badge ? getCosmeticById(profile.equipped_badge) : null;
-  const equippedBorder = profile?.equipped_border ? getCosmeticById(profile.equipped_border) : null;
+  // Get equipped cosmetics from Supabase
+  const { getCosmetic } = useCosmeticsLookup();
+  const equippedBorder = getCosmetic(profile?.equipped_border);
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-white/10 bg-black/80 backdrop-blur-xl">
@@ -96,22 +96,25 @@ const navLinks = [
                 to="/profile"
                 className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/20 bg-white/5 hover:bg-white/10 transition cursor-pointer"
               >
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center overflow-hidden ${equippedBorder?.animated ? 'animated-border' : ''}`}
-                  style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '2px' } : undefined}
-                >
+                <div className="w-6 h-6 relative">
                   {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt={displayName} className="w-full h-full rounded-full object-cover" />
+                    <img src={profile.avatar_url} alt={displayName} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                    <div className="w-full h-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                       <span className="text-xs font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
                     </div>
+                  )}
+                  {equippedBorder?.image_url && (
+                    <img
+                      src={equippedBorder.image_url}
+                      alt=""
+                      className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
+                    />
                   )}
                 </div>
                 <span className="text-sm font-bold text-white truncate max-w-[100px]">
                   {displayName}
                 </span>
-                {equippedBadge?.icon && <span title={equippedBadge.name}>{equippedBadge.icon}</span>}
               </Link>
               {/* Sign Out */}
               <button
@@ -151,20 +154,23 @@ const navLinks = [
           {user && profile && (
             <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-zinc-900 to-black border border-gold/20 mb-4">
               <div className="flex items-center gap-3">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${equippedBorder?.animated ? 'animated-border' : ''}`}
-                  style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '2px' } : undefined}
-                >
+                <div className="w-10 h-10 relative">
                   {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt={displayName} className="w-full h-full rounded-full object-cover" />
+                    <img src={profile.avatar_url} alt={displayName} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                    <div className="w-full h-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                       <span className="text-sm font-bold text-white">{displayName.charAt(0).toUpperCase()}</span>
                     </div>
                   )}
+                  {equippedBorder?.image_url && (
+                    <img
+                      src={equippedBorder.image_url}
+                      alt=""
+                      className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
+                    />
+                  )}
                 </div>
                 <span className="text-white font-bold">{displayName}</span>
-                {equippedBadge?.icon && <span title={equippedBadge.name}>{equippedBadge.icon}</span>}
               </div>
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-gold" />

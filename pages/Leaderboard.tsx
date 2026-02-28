@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, memo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Medal, Sparkles, TrendingUp, TrendingDown, Crown, Award, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { useAuthStore } from '../services/authStore';
 import PlayerBalanceGraph from '../components/PlayerBalanceGraph';
-import { getCosmeticById } from '../services/shopData';
+import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
 
 interface LeaderboardUser {
   id: string;
@@ -20,6 +20,7 @@ interface LeaderboardUser {
   equipped_badge?: string | null;
   equipped_title?: string | null;
   equipped_border?: string | null;
+  equipped_background?: string | null;
 }
 
 const Leaderboard = () => {
@@ -30,28 +31,30 @@ const Leaderboard = () => {
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>(currentUser?.id || '');
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('credits', { ascending: false });
+
+      if (error) throw error;
+      setUsers(data as LeaderboardUser[]);
+    } catch (err: any) {
+      console.error('Error fetching leaderboard:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('credits', { ascending: false });
-
-        if (error) throw error;
-        setUsers(data as LeaderboardUser[]);
-      } catch (err: any) {
-        console.error('Error fetching leaderboard:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+    setLoading(true);
     fetchLeaderboard();
 
-    // Real-time subscription
+    // Debounced realtime subscription — coalesce rapid profile changes
     const subscription = supabase
       .channel('leaderboard-changes')
       .on(
@@ -61,12 +64,18 @@ const Leaderboard = () => {
           schema: 'public',
           table: 'profiles'
         },
-        () => fetchLeaderboard()
+        () => {
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = setTimeout(fetchLeaderboard, 5000);
+        }
       )
       .subscribe();
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      subscription.unsubscribe();
+    };
+  }, [fetchLeaderboard]);
 
   if (loading) {
     return (
@@ -91,7 +100,7 @@ const Leaderboard = () => {
       </div>
 
       {error && (
-        <div className="mb-6 p-4 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 text-center">
+        <div className="mb-6 p-4 rounded-xl bg-red-950 border border-red-900 text-red-400 text-center">
           Erreur: {error}
         </div>
       )}
@@ -113,7 +122,7 @@ const Leaderboard = () => {
 
       {/* Rest of the leaderboard */}
       <div className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden mb-10">
-        <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-zinc-800/50 text-sm font-bold text-zinc-400 uppercase tracking-wide">
+        <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-zinc-800 text-sm font-bold text-zinc-400 uppercase tracking-wide">
           <div className="col-span-1 text-center">#</div>
           <div className="col-span-4">Joueur</div>
           <div className="col-span-3 text-right">Johnny Coins</div>
@@ -148,7 +157,7 @@ const Leaderboard = () => {
           <select
             value={selectedPlayerId}
             onChange={(e) => setSelectedPlayerId(e.target.value)}
-            className="p-2 rounded-md bg-zinc-800 text-white border border-white/20"
+            className="p-2 rounded-md bg-zinc-800 text-white border border-zinc-700"
           >
             {users.map((user) => (
               <option key={user.id} value={user.id}>
@@ -167,40 +176,57 @@ const Leaderboard = () => {
   );
 };
 
-// Podium Card
-const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank: number; isCurrentUser: boolean }) => {
+// Podium Card — memoized to avoid re-renders on parent state changes
+const PodiumCard = memo(({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank: number; isCurrentUser: boolean }) => {
   const winRate = user.total_bets > 0 ? Math.round((user.bets_won / user.total_bets) * 100) : 0;
-  const badge = user.equipped_badge ? getCosmeticById(user.equipped_badge) : null;
-  const title = user.equipped_title ? getCosmeticById(user.equipped_title) : null;
-  const border = user.equipped_border ? getCosmeticById(user.equipped_border) : null;
+  const { getCosmetic } = useCosmeticsLookup();
+  const title = getCosmetic(user.equipped_title);
+  const border = getCosmetic(user.equipped_border);
+  const background = getCosmetic(user.equipped_background);
   const rankStyles = {
-    1: { bg: 'bg-gradient-to-b from-gold/20 via-amber-900/10 to-zinc-900', border: 'border-gold/50', icon: <Crown className="w-8 h-8 text-gold" />, text: 'text-gold' },
-    2: { bg: 'bg-gradient-to-b from-zinc-400/20 via-zinc-600/10 to-zinc-900', border: 'border-zinc-400/50', icon: <Medal className="w-7 h-7 text-zinc-300" />, text: 'text-zinc-300' },
-    3: { bg: 'bg-gradient-to-b from-amber-700/20 via-amber-900/10 to-zinc-900', border: 'border-amber-700/50', icon: <Award className="w-6 h-6 text-amber-600" />, text: 'text-amber-600' }
+    1: { bg: 'bg-gradient-to-b from-amber-900 via-zinc-900 to-zinc-900', border: 'border-gold', icon: <Crown className="w-8 h-8 text-gold" />, text: 'text-gold' },
+    2: { bg: 'bg-gradient-to-b from-zinc-700 via-zinc-900 to-zinc-900', border: 'border-zinc-400', icon: <Medal className="w-7 h-7 text-zinc-300" />, text: 'text-zinc-300' },
+    3: { bg: 'bg-gradient-to-b from-amber-950 via-zinc-900 to-zinc-900', border: 'border-amber-700', icon: <Award className="w-6 h-6 text-amber-600" />, text: 'text-amber-600' }
   };
   const style = rankStyles[rank as keyof typeof rankStyles];
   return (
     <Link
       to={`/user/${user.id}`}
-      className={`block p-6 rounded-2xl border ${style.bg} ${style.border} ${isCurrentUser ? 'ring-2 ring-primary' : ''} hover:scale-105 transition-transform`}
+      className={`block p-6 rounded-2xl border relative overflow-hidden ${style.bg} ${style.border} ${isCurrentUser ? 'ring-2 ring-primary' : ''} hover:scale-105 transition-transform`}
     >
-      <div className="flex flex-col items-center text-center">
+      {/* Use preload=none + poster preview instead of auto-playing 3 videos simultaneously */}
+      {background?.image_url && (
+        <video
+          src={background.image_url}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="none"
+          className="absolute inset-0 w-full h-full object-cover opacity-25 pointer-events-none"
+        />
+      )}
+      <div className="relative z-10 flex flex-col items-center text-center">
         {style.icon}
-        <div
-          className={`w-16 h-16 rounded-full flex items-center justify-center mt-4 mb-3 overflow-hidden ${rank === 1 ? 'ring-4 ring-gold/50' : ''}`}
-          style={border?.gradient ? { background: border.gradient, padding: '3px' } : undefined}
-        >
+        <div className="w-16 h-16 mt-4 mb-3 relative">
           {user.avatar_url ? (
-            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full rounded-full object-cover" />
+            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full object-cover" loading="lazy" />
           ) : (
-            <div className="w-full h-full rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+            <div className="w-full h-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
               <span className="text-2xl font-black text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
             </div>
+          )}
+          {border?.image_url && (
+            <img
+              src={border.image_url}
+              alt=""
+              className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
+              loading="lazy"
+            />
           )}
         </div>
         <div className="flex items-center gap-1">
           <h3 className="font-bold text-white text-lg truncate max-w-full">{user.pseudo}</h3>
-          {badge?.icon && <span className="text-lg" title={badge.name}>{badge.icon}</span>}
         </div>
         {title && <div className="text-xs text-zinc-400 italic">"{title.name}"</div>}
         <div className={`flex items-center gap-2 mt-2 ${style.text}`}>
@@ -213,34 +239,38 @@ const PodiumCard = ({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank
       </div>
     </Link>
   );
-};
+});
 
-// Leaderboard Row
-const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentUser: boolean }> = ({ user, rank, isCurrentUser }) => {
+// Leaderboard Row — memoized to skip re-render when parent re-fetches but row data unchanged
+const LeaderboardRow = memo(({ user, rank, isCurrentUser }: { user: LeaderboardUser; rank: number; isCurrentUser: boolean }) => {
   const winRate = user.total_bets > 0 ? Math.round((user.bets_won / user.total_bets) * 100) : 0;
-  const badge = user.equipped_badge ? getCosmeticById(user.equipped_badge) : null;
-  const border = user.equipped_border ? getCosmeticById(user.equipped_border) : null;
+  const { getCosmetic } = useCosmeticsLookup();
+  const border = getCosmetic(user.equipped_border);
   return (
     <Link
       to={`/user/${user.id}`}
-      className={`grid grid-cols-12 gap-4 px-6 py-4 hover:bg-zinc-800/50 transition-colors ${isCurrentUser ? 'bg-primary/10 border-l-4 border-primary' : ''}`}
+      className={`grid grid-cols-12 gap-4 px-6 py-4 hover:bg-zinc-800 transition-colors ${isCurrentUser ? 'bg-zinc-800 border-l-4 border-primary' : ''}`}
     >
       <div className="col-span-1 text-center font-bold text-zinc-500">{rank}</div>
       <div className="col-span-4 flex items-center gap-3">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
-          style={border?.gradient ? { background: border.gradient, padding: '2px' } : undefined}
-        >
+        <div className="w-10 h-10 flex-shrink-0 relative">
           {user.avatar_url ? (
-            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full rounded-full object-cover" />
+            <img src={user.avatar_url} alt={user.pseudo} className="w-full h-full object-cover" loading="lazy" />
           ) : (
-            <div className="w-full h-full rounded-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center">
+            <div className="w-full h-full bg-gradient-to-br from-primary/50 to-accent/50 flex items-center justify-center">
               <span className="font-bold text-white">{user.pseudo.charAt(0).toUpperCase()}</span>
             </div>
           )}
+          {border?.image_url && (
+            <img
+              src={border.image_url}
+              alt=""
+              className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
+              loading="lazy"
+            />
+          )}
         </div>
         <span className="font-bold text-white truncate">{user.pseudo}</span>
-        {badge?.icon && <span title={badge.name}>{badge.icon}</span>}
         {isCurrentUser && <span className="text-xs text-primary">(toi)</span>}
       </div>
       <div className="col-span-3 flex items-center justify-end gap-2">
@@ -266,6 +296,6 @@ const LeaderboardRow: React.FC<{ user: LeaderboardUser; rank: number; isCurrentU
       </div>
     </Link>
   );
-};
+});
 
 export default Leaderboard;

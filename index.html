@@ -104,9 +104,10 @@
           #ff8c00, #ff4500, #ff0000, #ff4500,
           #ff8c00, #ffd700, #ff8c00, #ff4500, #ff0000);
         background-size: 400% 400%;
-        animation: flame-dance 2s ease-in-out infinite;
-        filter: blur(6px);
-        opacity: 0.95;
+        animation: flame-dance 3s ease-in-out infinite;
+        filter: blur(3px);
+        opacity: 0.9;
+        will-change: background-position, transform;
       }
       .animated-border::after {
         background: radial-gradient(circle at 50% 100%,
@@ -114,9 +115,10 @@
           rgba(255, 100, 0, 0.7) 30%,
           rgba(255, 0, 0, 0.5) 60%,
           transparent 80%);
-        animation: flame-flicker 0.15s ease-in-out infinite alternate, flame-pulse 1s ease-in-out infinite;
-        filter: blur(3px);
+        animation: flame-flicker 0.5s ease-in-out infinite alternate, flame-pulse 2s ease-in-out infinite;
+        filter: blur(2px);
         opacity: 0.8;
+        will-change: opacity, transform, filter;
       }
       @keyframes flame-dance {
         0%, 100% {

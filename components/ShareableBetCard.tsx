@@ -49,7 +49,7 @@ const ShareableBetCard: React.FC<ShareableBetCardProps> = ({ gameData, onClose }
     try {
       const canvas = await html2canvas(cardRef.current, {
         backgroundColor: '#0a0a0a',
-        scale: 3,
+        scale: 2,
         useCORS: true,
         logging: false,
       });

@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../services/authStore';
-import { useCreditsStore, TRANSFER_LIMITS } from '../services/creditsStore';
+import { useCreditsStore, TRANSFER_LIMITS, getDailyBonusAmount } from '../services/creditsStore';
 import { supabase } from '../services/supabase';
-import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, ShoppingBag, Camera, X } from 'lucide-react';
-import { getCosmeticById } from '../services/shopData';
+import { User, Mail, Calendar, Coins, LogOut, LogIn, Gift, Clock, Sparkles, Trophy, TrendingUp, Send, Loader2, Info, ChevronDown, Camera, X } from 'lucide-react';
+import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
+import PlayerStats from '../components/PlayerStats';
+import PlayerBalanceGraph from '../components/PlayerBalanceGraph';
 
 interface UserOption {
   id: string;
@@ -30,6 +32,9 @@ const Profile = () => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
+  // Get equipped cosmetics from Supabase (must be before any early return)
+  const { getCosmetic } = useCosmeticsLookup();
+
   // Update countdown timer
   useEffect(() => {
     const updateTimer = () => {
@@ -48,7 +53,8 @@ const Profile = () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('id, pseudo')
-        .order('pseudo');
+        .order('pseudo')
+        .limit(200);
 
       if (!error && data) {
         setAllUsers(data);
@@ -221,38 +227,40 @@ const Profile = () => {
 
   const canClaim = canClaimDailyBonus();
 
-  // Get equipped cosmetics
-  const equippedBadge = profile?.equipped_badge ? getCosmeticById(profile.equipped_badge) : null;
-  const equippedTitle = profile?.equipped_title ? getCosmeticById(profile.equipped_title) : null;
-  const equippedBorder = profile?.equipped_border ? getCosmeticById(profile.equipped_border) : null;
+  const equippedTitle = getCosmetic(profile?.equipped_title);
+  const equippedBorder = getCosmetic(profile?.equipped_border);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
         {/* Avatar with upload */}
-        <div className="relative group">
-          <div
-            className={`w-20 h-20 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 ${equippedBorder?.animated ? 'animated-border' : ''}`}
-            style={equippedBorder?.gradient && !equippedBorder?.animated ? { background: equippedBorder.gradient, padding: '4px' } : undefined}
-          >
+        <div className="relative group z-10">
+          <div className="w-20 h-20 shadow-lg shadow-primary/30 relative">
             {profile?.avatar_url ? (
               <img
                 src={profile.avatar_url}
                 alt={displayName}
-                className={`w-full h-full object-cover ${equippedBorder ? 'rounded-xl' : 'rounded-2xl'}`}
+                className="w-full h-full object-cover"
               />
             ) : (
-              <div className={`w-full h-full rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center ${!equippedBorder ? 'rounded-2xl' : ''}`}>
+              <div className="w-full h-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                 <span className="text-3xl font-black text-white">{displayName.charAt(0).toUpperCase()}</span>
               </div>
+            )}
+            {equippedBorder?.image_url && (
+              <img
+                src={equippedBorder.image_url}
+                alt=""
+                className="absolute inset-0 w-full h-full pointer-events-none z-10 object-cover scale-[1.2]"
+              />
             )}
           </div>
 
           {/* Upload overlay */}
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="absolute inset-0 rounded-2xl bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"
+            className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"
           >
             {avatarUploading ? (
               <Loader2 className="w-6 h-6 text-white animate-spin" />
@@ -281,10 +289,9 @@ const Profile = () => {
           />
         </div>
 
-        <div>
+        <div className="relative z-10">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-black text-white">{displayName}</h1>
-            {equippedBadge?.icon && <span className="text-2xl" title={equippedBadge.name}>{equippedBadge.icon}</span>}
           </div>
           {equippedTitle ? (
             <p className="text-zinc-400 italic">"{equippedTitle.name}"</p>
@@ -299,7 +306,7 @@ const Profile = () => {
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Credits Card */}
-        <div className="bg-gradient-to-br from-gold/10 via-amber-900/10 to-zinc-900 rounded-2xl p-6 border border-gold/20 shadow-xl">
+        <div className="bg-gradient-to-br from-gold/10 via-amber-900/10 to-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-gold/20 shadow-xl">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-3 bg-gold/20 rounded-xl">
               <Sparkles className="w-6 h-6 text-gold" />
@@ -321,7 +328,7 @@ const Profile = () => {
                 <Gift className="w-4 h-4" />
                 <span>Bonus Quotidien</span>
               </div>
-              <span className="text-sm font-bold text-gold">+1 000 JC</span>
+              <span className="text-sm font-bold text-gold">+{getDailyBonusAmount(profile?.credits ?? 0).toLocaleString('fr-FR')} JC</span>
             </div>
 
             {bonusMessage && (
@@ -358,7 +365,7 @@ const Profile = () => {
         </div>
 
         {/* User Info Card */}
-        <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-white/5 rounded-xl">
               <User className="w-6 h-6 text-white" />
@@ -394,7 +401,7 @@ const Profile = () => {
         </div>
 
         {/* Stats Card */}
-        <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-primary/10 rounded-xl">
               <TrendingUp className="w-6 h-6 text-primary" />
@@ -430,8 +437,34 @@ const Profile = () => {
           </div>
         </div>
 
+        {/* Advanced Stats — full width */}
+        {user && profile && (profile.total_bets || 0) > 0 && (
+          <div className="md:col-span-2 bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-purple-500/10 rounded-xl">
+                <TrendingUp className="w-6 h-6 text-purple-400" />
+              </div>
+              <h2 className="text-xl font-bold text-white">Analyse détaillée</h2>
+            </div>
+            <PlayerStats
+              userId={user.id}
+              credits={profile.credits}
+              jcWon={profile.jc_won || 0}
+              jcLost={profile.jc_lost || 0}
+            />
+          </div>
+        )}
+
+        {/* Balance Graph — full width */}
+        {user && (
+          <div className="md:col-span-2 bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
+            <h2 className="text-xl font-bold text-white mb-4">Évolution du portefeuille</h2>
+            <PlayerBalanceGraph userId={user.id} initialBalance={10000} />
+          </div>
+        )}
+
         {/* Transfer Credits Card */}
-        <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-3 bg-blue-500/10 rounded-xl">
               <Send className="w-6 h-6 text-blue-400" />
@@ -531,7 +564,7 @@ const Profile = () => {
         </div>
 
         {/* Actions Card */}
-        <div className="bg-zinc-900 rounded-2xl p-6 border border-white/10">
+        <div className="bg-zinc-900/80 backdrop-blur-sm rounded-2xl p-6 border border-white/10">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-red-500/10 rounded-xl">
               <LogOut className="w-6 h-6 text-red-400" />

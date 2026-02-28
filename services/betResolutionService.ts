@@ -4,6 +4,7 @@ import { MatchDto, MatchParticipant } from './riotApi';
 import { Bet, BetStatus } from '../types';
 import { getAllPendingBets, updateBetStatus } from './betsService';
 import { supabase } from './supabase';
+import { recordSnapshot } from './balanceSnapshots';
 
 export interface BetResolutionResult {
   betId: string;
@@ -120,8 +121,6 @@ export function getResolvedStat(propId: string, stats: MatchParticipant, match: 
       return `Vision: ${stats.visionScore}`;
     case 'gp4': // Moins de 8k dégâts
       return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dégâts`;
-    case 'gp5': // Moins d'or que le support
-      return `${stats.goldEarned} or (min équipe: ${lowestTeammateGold})`;
     case 'gp6': // Participation < 25%
       return `${killParticipation.toFixed(0)}% KP`;
     case 'gp9': // KP > 70%
@@ -328,8 +327,6 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
     case 'gp4': // Moins de 8k dégâts
       return stats.totalDamageDealtToChampions < 8000;
 
-    case 'gp5': // Moins d'or que le support
-      return stats.goldEarned < lowestTeammateGold;
 
     case 'gp6': // Participation < 25%
       return killParticipation < 25;
@@ -351,8 +348,8 @@ export function evaluateProp(propId: string, stats: MatchParticipant, match: Mat
       return match.info.gameDuration > 2400;
 
     // ========== LÉGENDAIRES ==========
-    case 'sp2': // Le Miracle KDA (KDA > 3.0)
-      return kda > 3.0;
+    case 'sp2': // Le Miracle KDA (KDA > 5.0)
+      return kda > 5.0;
 
     case 'sp3': // Le Carry Mystique (top damage de l'équipe)
       const maxTeamDmg = Math.max(...team.map(p => p.totalDamageDealtToChampions));
@@ -393,6 +390,12 @@ async function updateUserCredits(userId: string, won: boolean, amount: number, p
       return;
     }
 
+    // Record snapshot after successful RPC (fetch current balance for accuracy)
+    const { data: updatedProfile } = await supabase.from('profiles').select('credits').eq('id', userId).single();
+    if (updatedProfile) {
+      recordSnapshot(userId, updatedProfile.credits, won ? payout : 0, won ? 'bet_won' : 'bet_lost');
+    }
+
     console.log(`Credits updated successfully for user ${userId.slice(0, 8)}...`);
   } catch (err) {
     console.error('Error updating user credits:', err);
@@ -415,11 +418,12 @@ async function updateUserCreditsDirect(userId: string, won: boolean, amount: num
     }
 
     if (won) {
+      const newBalance = profile.credits + payout;
       // Add winnings to credits and update stats
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
-          credits: profile.credits + payout,
+          credits: newBalance,
           bets_won: (profile.bets_won || 0) + 1,
           jc_won: (profile.jc_won || 0) + (payout - amount)
         })
@@ -428,6 +432,7 @@ async function updateUserCreditsDirect(userId: string, won: boolean, amount: num
       if (updateError) {
         console.error('Error updating user credits (win):', updateError);
       } else {
+        recordSnapshot(userId, newBalance, payout, 'bet_won');
         console.log(`Direct update successful: +${payout} credits for user ${userId.slice(0, 8)}...`);
       }
     } else {
@@ -443,6 +448,7 @@ async function updateUserCreditsDirect(userId: string, won: boolean, amount: num
       if (updateError) {
         console.error('Error updating user stats (loss):', updateError);
       } else {
+        recordSnapshot(userId, profile.credits, 0, 'bet_lost');
         console.log(`Direct update successful: loss stats updated for user ${userId.slice(0, 8)}...`);
       }
     }

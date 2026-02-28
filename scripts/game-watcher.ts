@@ -36,8 +36,9 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL |
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 const CHECK_INTERVAL = 45000; // 45 seconds
 const WEALTH_TAX_CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
-const WEALTH_TAX_THRESHOLD = 100000; // 100k JC
-const WEALTH_TAX_RATE = 0.10; // 10%
+const RANK_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+const WEALTH_TAX_THRESHOLD = 200000; // 200k JC
+const WEALTH_TAX_RATE = 0.05; // 5%
 
 // Supabase client
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -120,6 +121,7 @@ interface AdminCommand {
 const QUEUE_NAMES: Record<number, string> = {
   420: 'Ranked Solo/Duo',
   440: 'Ranked Flex',
+  700: 'Clash',
   400: 'Normal Draft',
   430: 'Normal Blind',
   450: 'ARAM',
@@ -127,8 +129,22 @@ const QUEUE_NAMES: Record<number, string> = {
   1700: 'Arena',
 };
 
-// Only allow bets on these queues (Solo/Duo and Flex)
-const ALLOWED_QUEUE_IDS = [420, 440];
+// Only allow bets on these queues (Solo/Duo, Flex, and Clash)
+const ALLOWED_QUEUE_IDS = [420, 440, 700];
+
+// Rank display names
+const RANK_DISPLAY: Record<string, string> = {
+  IRON: 'Fer',
+  BRONZE: 'Bronze',
+  SILVER: 'Argent',
+  GOLD: 'Or',
+  PLATINUM: 'Platine',
+  EMERALD: 'Emeraude',
+  DIAMOND: 'Diamant',
+  MASTER: 'Master',
+  GRANDMASTER: 'GrandMaster',
+  CHALLENGER: 'Challenger'
+};
 
 // Champion data from Data Dragon
 let CHAMPIONS: Record<number, string> = {}; // ID -> display name (e.g., "Wukong")
@@ -170,6 +186,10 @@ interface TrackedPlayer {
   region: string;
   display_name: string;
   is_active: boolean;
+  solo_tier: string | null;
+  solo_division: string | null;
+  solo_lp: number | null;
+  rank_updated_at: string | null;
 }
 
 interface CurrentGameInfo {
@@ -196,7 +216,11 @@ async function getTrackedPlayers(): Promise<TrackedPlayer[]> {
   return data || [];
 }
 
-async function checkCurrentGame(puuid: string, region: string, retries = 2): Promise<CurrentGameInfo | null> {
+// Returns:
+// - CurrentGameInfo: player is in game
+// - null: player is NOT in game (confirmed by 404)
+// - undefined: API error, state unknown (don't change previous state)
+async function checkCurrentGame(puuid: string, region: string, retries = 2): Promise<CurrentGameInfo | null | undefined> {
   const platformMap: Record<string, string> = {
     EUW: 'euw1',
     EUNE: 'eun1',
@@ -223,18 +247,18 @@ async function checkCurrentGame(puuid: string, region: string, retries = 2): Pro
         return checkCurrentGame(puuid, region, retries - 1);
       }
       console.error('Rate limit exceeded, skipping this check');
-      return null;
+      return undefined; // Don't assume game ended
     }
 
     if (!response.ok) {
       console.error(`Riot API error: ${response.status}`);
-      return null;
+      return undefined; // Don't assume game ended
     }
 
     return await response.json();
   } catch (error) {
     console.error('Error checking game:', error);
-    return null;
+    return undefined; // Don't assume game ended
   }
 }
 
@@ -600,6 +624,20 @@ function countSoloDeaths(
   ).length;
 }
 
+// Check if player was the first blood victim (using timeline data)
+// Riot API doesn't return firstBloodVictim in match details, only firstBloodKill
+function isFirstBloodVictim(
+  timeline: { participants: Array<{ participantId: number; puuid: string }>; killEvents: TimelineKillEvent[] },
+  playerPuuid: string
+): boolean {
+  const participant = timeline.participants.find(p => p.puuid === playerPuuid);
+  if (!participant || timeline.killEvents.length === 0) return false;
+
+  // First CHAMPION_KILL event = first blood
+  const firstKill = timeline.killEvents[0];
+  return firstKill.victimId === participant.participantId;
+}
+
 // Sync last game for all players
 async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message: string; matches: unknown[] }> {
   console.log('📥 Syncing last game for all players...');
@@ -674,29 +712,7 @@ async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message:
       const team = matchData.info.participants.filter((p: { teamId: number }) => p.teamId === playerStats.teamId);
       const teamKills = team.reduce((sum: number, p: { kills: number }) => sum + p.kills, 0);
 
-      const johnnyMatch = {
-        id: matchData.metadata.matchId,
-        puuid: player.puuid,
-        player_name: player.display_name,
-        game_creation: matchData.info.gameCreation,
-        game_duration: matchData.info.gameDuration,
-        game_mode: matchData.info.gameMode,
-        queue_id: matchData.info.queueId,
-        champion_id: playerStats.championId,
-        champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
-        kills: playerStats.kills,
-        deaths: playerStats.deaths,
-        assists: playerStats.assists,
-        cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
-        vision_score: playerStats.visionScore,
-        gold_earned: playerStats.goldEarned,
-        damage_dealt: playerStats.totalDamageDealtToChampions,
-        win: playerStats.win,
-        first_blood_victim: playerStats.firstBloodVictim === true,
-        game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
-        team_kills: teamKills,
-        created_at: new Date().toISOString()
-      };
+      const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
 
       // Use insert instead of upsert to allow same match_id for different players
       const { error } = await supabase
@@ -904,29 +920,7 @@ async function syncGamesForPlayer(playerId: string): Promise<{ success: boolean;
     const team = matchData.info.participants.filter((p: { teamId: number }) => p.teamId === playerStats.teamId);
     const teamKills = team.reduce((sum: number, p: { kills: number }) => sum + p.kills, 0);
 
-    const johnnyMatch = {
-      id: matchData.metadata.matchId,
-      puuid: player.puuid,
-      player_name: player.display_name,
-      game_creation: matchData.info.gameCreation,
-      game_duration: matchData.info.gameDuration,
-      game_mode: matchData.info.gameMode,
-      queue_id: matchData.info.queueId,
-      champion_id: playerStats.championId,
-      champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
-      kills: playerStats.kills,
-      deaths: playerStats.deaths,
-      assists: playerStats.assists,
-      cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
-      vision_score: playerStats.visionScore,
-      gold_earned: playerStats.goldEarned,
-      damage_dealt: playerStats.totalDamageDealtToChampions,
-      win: playerStats.win,
-      first_blood_victim: playerStats.firstBloodVictim === true,
-      game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
-      team_kills: teamKills,
-      created_at: new Date().toISOString()
-    };
+    const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
 
     const { error } = await supabase
       .from('johnny_matches')
@@ -1022,28 +1016,12 @@ async function syncRanksForAllPlayers(): Promise<{ success: boolean; message: st
         updated++;
       }
     } else {
-      // Player is unranked - clear rank info
-      const { error } = await supabase
-        .from('tracked_players')
-        .update({
-          solo_tier: null,
-          solo_division: null,
-          solo_lp: null,
-          rank_updated_at: new Date().toISOString()
-        })
-        .eq('id', player.id);
-
-      // If any column doesn't exist (PGRST204), mark and skip
-      if (error?.code === 'PGRST204') {
-        console.error('  ❌ Colonnes de rank manquantes. Exécutez la migration SQL:');
-        console.error('     database/migration-player-ranks.sql');
-        columnsExist = false;
-        continue;
-      }
-
-      if (!error) {
+      // Player is unranked on Riot API
+      // If they already have a manually set rank, keep it
+      if (player.solo_tier) {
+        console.log(`  ⏭️ ${player.display_name}: Unranked sur Riot, rank manuel conservé (${player.solo_tier} ${player.solo_division || ''})`);
+      } else {
         console.log(`  ⚠️ ${player.display_name}: Unranked`);
-        updated++;
       }
     }
 
@@ -1158,7 +1136,9 @@ async function sendGameEndNotification(
   deaths: number,
   assists: number,
   gameMode: string,
-  championId: number = 0
+  championId: number = 0,
+  rankInfo?: { tier: string; division: string; lp: number } | null,
+  lpChange?: number | null
 ): Promise<void> {
   if (!DISCORD_WEBHOOK_URL) return;
 
@@ -1171,6 +1151,28 @@ async function sendGameEndNotification(
     ? getChampionImageUrl(championId)
     : getChampionImageUrl(championName);
 
+  // Build fields
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [
+    { name: '🎮 Mode', value: gameMode, inline: true },
+    { name: '🏆 Champion', value: championName, inline: true },
+    { name: '📊 KDA', value: kda, inline: true },
+  ];
+
+  // Add rank + LP change if available
+  if (rankInfo) {
+    const tierName = RANK_DISPLAY[rankInfo.tier] || rankInfo.tier;
+    const divDisplay = ['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(rankInfo.tier)
+      ? '' : ` ${rankInfo.division}`;
+    const rankText = `${tierName}${divDisplay} (${rankInfo.lp} LP)`;
+    fields.push({ name: '🎖️ Rank', value: rankText, inline: true });
+  }
+
+  if (lpChange != null) {
+    const lpSign = lpChange >= 0 ? '+' : '';
+    const lpEmoji = lpChange >= 0 ? '📈' : '📉';
+    fields.push({ name: `${lpEmoji} LP`, value: `${lpSign}${lpChange}`, inline: true });
+  }
+
   const payload = {
     username: 'JohnnyFF15 Bot',
     avatar_url: `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`,
@@ -1178,11 +1180,7 @@ async function sendGameEndNotification(
       title: `${result} - ${playerName.toUpperCase()}`,
       description: `La game de **${playerName}** est terminée !\n\nLes paris ont été résolus automatiquement.`,
       color,
-      fields: [
-        { name: '🎮 Mode', value: gameMode, inline: true },
-        { name: '🏆 Champion', value: championName, inline: true },
-        { name: '📊 KDA', value: kda, inline: true },
-      ],
+      fields,
       thumbnail: { url: thumbnailUrl },
       footer: { text: 'JohnnyFF15 - Les paris sont résolus' },
       timestamp: new Date().toISOString(),
@@ -1219,7 +1217,11 @@ interface MatchParticipant {
   firstBloodKill?: boolean;
   doubleKills?: number;
   tripleKills?: number;
+  quadraKills?: number;
   pentaKills?: number;
+  totalDamageTaken?: number;
+  wardsPlaced?: number;
+  wardsKilled?: number;
   gameEndedInSurrender?: boolean;
   teamEarlySurrendered?: boolean;
   teamId: number;
@@ -1246,6 +1248,65 @@ interface MatchData {
     queueId: number;
     gameEndedInSurrender?: boolean;
     participants: MatchParticipant[];
+  };
+}
+
+// Build a johnny_matches row with all detailed stats
+function buildJohnnyMatch(
+  matchData: MatchData,
+  playerStats: MatchParticipant,
+  playerPuuid: string,
+  playerName: string,
+  teamKills: number
+) {
+  const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
+  const teamDamage = team.reduce((sum, p) => sum + p.totalDamageDealtToChampions, 0);
+  const kp = teamKills > 0 ? (playerStats.kills + playerStats.assists) / teamKills : 0;
+  const teamDmgPct = teamDamage > 0 ? playerStats.totalDamageDealtToChampions / teamDamage : 0;
+
+  // Precise top damage calculations
+  const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
+  const maxGameDamage = Math.max(...matchData.info.participants.map(p => p.totalDamageDealtToChampions));
+  const isTopDamageTeam = playerStats.totalDamageDealtToChampions === maxTeamDamage;
+  const isTopDamageGame = playerStats.totalDamageDealtToChampions === maxGameDamage;
+
+  return {
+    id: matchData.metadata.matchId,
+    puuid: playerPuuid,
+    player_name: playerName,
+    game_creation: matchData.info.gameCreation,
+    game_duration: matchData.info.gameDuration,
+    game_mode: matchData.info.gameMode,
+    queue_id: matchData.info.queueId,
+    champion_id: playerStats.championId,
+    champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
+    kills: playerStats.kills,
+    deaths: playerStats.deaths,
+    assists: playerStats.assists,
+    cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
+    vision_score: playerStats.visionScore,
+    gold_earned: playerStats.goldEarned,
+    damage_dealt: playerStats.totalDamageDealtToChampions,
+    win: playerStats.win,
+    first_blood_victim: playerStats.firstBloodVictim === true,
+    game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
+    team_kills: teamKills,
+    // New detailed stats
+    double_kills: playerStats.doubleKills || 0,
+    triple_kills: playerStats.tripleKills || 0,
+    quadra_kills: (playerStats as any).quadraKills || 0,
+    penta_kills: playerStats.pentaKills || 0,
+    solo_kills: playerStats.challenges?.soloKills || 0,
+    first_blood_kill: playerStats.firstBloodKill === true,
+    kill_participation: Math.round(kp * 10000) / 100, // Store as percentage (e.g., 65.43)
+    team_damage_pct: Math.round(teamDmgPct * 10000) / 100,
+    damage_taken: (playerStats as any).totalDamageTaken || 0,
+    wards_placed: (playerStats as any).wardsPlaced || 0,
+    wards_killed: (playerStats as any).wardsKilled || 0,
+    solo_deaths: playerStats.soloDeaths || 0,
+    is_top_damage_team: isTopDamageTeam,
+    is_top_damage_game: isTopDamageGame,
+    created_at: new Date().toISOString()
   };
 }
 
@@ -1403,8 +1464,6 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
       return stats.visionScore < 5;
     case 'gp4': // Moins de 8k dégâts
       return stats.totalDamageDealtToChampions < 8000;
-    case 'gp5': // Moins d'or que le support
-      return stats.goldEarned < lowestTeammateGold;
     case 'gp6': // Participation < 25%
       return killParticipation < 25;
     case 'gp9': // KP > 70%
@@ -1421,8 +1480,8 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
       return match.info.gameDuration > 2400;
 
     // ========== LÉGENDAIRES ==========
-    case 'sp2': // Le Miracle KDA (KDA > 3.0)
-      return kda > 3.0;
+    case 'sp2': // Le Miracle KDA (KDA > 5.0)
+      return kda > 5.0;
     case 'sp3': // Le Carry Mystique (top damage de l'équipe)
       const maxTeamDamage = Math.max(...team.map(p => p.totalDamageDealtToChampions));
       return stats.totalDamageDealtToChampions === maxTeamDamage;
@@ -1509,7 +1568,6 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
     case 'gp2': return `Vision: ${stats.visionScore}`;
     case 'gp3': return `Vision: ${stats.visionScore}`;
     case 'gp4': return `${(stats.totalDamageDealtToChampions / 1000).toFixed(1)}k dégâts`;
-    case 'gp5': return `${stats.goldEarned} or (min équipe: ${lowestTeammateGold})`;
     case 'gp6': return `${killParticipation.toFixed(0)}% KP`;
     case 'gp9': return `${killParticipation.toFixed(0)}% KP`;
     case 'out1': return `${stats.gameEndedInSurrender || match.info.gameEndedInSurrender ? 'FF' : 'Pas FF'} à ${gameDurationMin}min`;
@@ -1635,6 +1693,9 @@ async function resolveBetsForMatch(
 
   console.log(`  📊 Found ${pendingBets.length} pending bets for ${playerName} (${allPendingBets?.length || 0} total pending)`);
 
+  // Get champion name for enrichment (fixes "Inconnu" from placement time)
+  const resolvedChampionName = playerStats.championName || CHAMPIONS[playerStats.championId] || null;
+
   // Separate single bets from combo bets
   const singleBets = pendingBets.filter(b => !b.combo_id);
   const comboBets = pendingBets.filter(b => b.combo_id);
@@ -1655,20 +1716,19 @@ async function resolveBetsForMatch(
     try {
       const won = evaluateProp(bet.prop_id, playerStats, matchData);
       const resolvedStat = getResolvedStat(bet.prop_id, playerStats, matchData);
-      const grossPayout = won ? bet.potential_payout : 0;
+      const payout = won ? bet.potential_payout : 0;
 
-      // Apply tax on winnings
-      const { netPayout, taxAmount, taxRate } = calculateWinningsTax(grossPayout, bet.amount);
-      const payout = netPayout;
-
-      // Update bet status (store tax info in resolved_stat if taxed)
-      const taxInfo = taxAmount > 0 ? ` [Taxe ${taxRate * 100}%: -${taxAmount.toLocaleString()} JC]` : '';
+      const updateData: Record<string, unknown> = {
+        status: won ? 'WON' : 'LOST',
+        resolved_stat: resolvedStat,
+      };
+      // Enrich champion name if it was missing at placement time
+      if (resolvedChampionName && (!bet.champion_name || bet.champion_name === 'Inconnu')) {
+        updateData.champion_name = resolvedChampionName;
+      }
       const { error: updateError } = await supabase
         .from('bets')
-        .update({
-          status: won ? 'WON' : 'LOST',
-          resolved_stat: resolvedStat + taxInfo,
-        })
+        .update(updateData)
         .eq('id', bet.id);
 
       if (updateError) {
@@ -1677,13 +1737,11 @@ async function resolveBetsForMatch(
         continue;
       }
 
-      // Update user credits with net payout (after tax)
       if (bet.user_id) {
         await updateUserCredits(bet.user_id, won, bet.amount, payout);
       }
 
-      const taxLog = taxAmount > 0 ? ` 💰 Taxe: ${taxAmount.toLocaleString()} JC (${taxRate * 100}%)` : '';
-      console.log(`  ${won ? '✅' : '❌'} ${bet.prop_title}: ${won ? 'WON' : 'LOST'} (${resolvedStat})${taxLog}`);
+      console.log(`  ${won ? '✅' : '❌'} ${bet.prop_title}: ${won ? 'WON' : 'LOST'} (${resolvedStat})`);
       resolved++;
     } catch (error) {
       console.error(`  Error resolving bet ${bet.id}:`, error);
@@ -1709,21 +1767,20 @@ async function resolveBetsForMatch(
       // Find the main bet (first bet in combo with the amount)
       const mainBet = bets.find(b => b.amount > 0) || bets[0];
       const totalAmount = mainBet.amount;
-      const grossPayout = comboWon ? mainBet.potential_payout : 0;
+      const actualPayout = comboWon ? mainBet.potential_payout : 0;
 
-      // Apply tax on combo winnings
-      const { netPayout, taxAmount, taxRate } = calculateWinningsTax(grossPayout, totalAmount);
-      const actualPayout = netPayout;
-
-      // Update all bets in the combo
-      const taxInfo = taxAmount > 0 ? ` [Taxe ${taxRate * 100}%: -${taxAmount.toLocaleString()} JC]` : '';
       for (const { bet, resolvedStat } of betResults) {
+        const comboUpdateData: Record<string, unknown> = {
+          status: comboWon ? 'WON' : 'LOST',
+          resolved_stat: resolvedStat,
+        };
+        // Enrich champion name if it was missing at placement time
+        if (resolvedChampionName && (!bet.champion_name || bet.champion_name === 'Inconnu')) {
+          comboUpdateData.champion_name = resolvedChampionName;
+        }
         const { error: updateError } = await supabase
           .from('bets')
-          .update({
-            status: comboWon ? 'WON' : 'LOST',
-            resolved_stat: resolvedStat + (bet.id === mainBet.id ? taxInfo : ''),
-          })
+          .update(comboUpdateData)
           .eq('id', bet.id);
 
         if (updateError) {
@@ -1734,13 +1791,11 @@ async function resolveBetsForMatch(
         }
       }
 
-      // Update user credits for the combo (only once per combo, with tax applied)
       if (mainBet.user_id) {
         await updateUserCredits(mainBet.user_id, comboWon, totalAmount, actualPayout);
       }
 
-      const taxLog = taxAmount > 0 ? ` 💰 Taxe: ${taxAmount.toLocaleString()} JC (${taxRate * 100}%)` : '';
-      console.log(`  ${comboWon ? '✅' : '❌'} Combo ${comboId.slice(0, 8)}...: ${comboWon ? 'WON +' + actualPayout + ' JC' : 'LOST -' + totalAmount + ' JC'}${taxLog}`);
+      console.log(`  ${comboWon ? '✅' : '❌'} Combo ${comboId.slice(0, 8)}...: ${comboWon ? 'WON +' + actualPayout + ' JC' : 'LOST -' + totalAmount + ' JC'}`);
     } catch (error) {
       console.error(`  Error resolving combo ${comboId}:`, error);
       errors++;
@@ -1758,15 +1813,9 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
   console.log('  ⏳ Waiting 90s for Riot API to process match data...');
   await new Promise(r => setTimeout(r, 90000));
 
-  // Fetch last match
-  const matchIds = await getMatchHistory(player.puuid, player.region, 1);
-  if (!matchIds || matchIds.length === 0) {
-    console.error(`  ❌ No match found for ${player.display_name}`);
-    return;
-  }
-
-  const matchId = matchIds[0];
-  const rawMatchData = await getMatchDetails(matchId, player.region) as {
+  // Fetch last match with retries (API can be slow after game ends)
+  let matchIds: string[] | null = null;
+  let rawMatchData: {
     metadata: { matchId: string };
     info: {
       gameCreation: number;
@@ -1796,15 +1845,35 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
         teamId: number;
       }>;
     };
-  } | null;
+  } | null = null;
+
+  const RETRY_DELAYS = [0, 30000, 60000, 120000]; // immediate, 30s, 60s, 2min
+  for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
+    if (attempt > 0) {
+      console.log(`  🔄 Retry ${attempt}/${RETRY_DELAYS.length - 1} - waiting ${RETRY_DELAYS[attempt] / 1000}s...`);
+      await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+    }
+
+    matchIds = await getMatchHistory(player.puuid, player.region, 1);
+    if (!matchIds || matchIds.length === 0) {
+      console.error(`  ❌ No match found for ${player.display_name} (attempt ${attempt + 1})`);
+      continue;
+    }
+
+    rawMatchData = await getMatchDetails(matchIds[0], player.region) as typeof rawMatchData;
+    if (rawMatchData) break;
+    console.error(`  ❌ Could not fetch match data for ${player.display_name} (attempt ${attempt + 1})`);
+  }
 
   // Cast to MatchData type for bet resolution
   const matchData: MatchData | null = rawMatchData;
 
   if (!matchData) {
-    console.error(`  ❌ Could not fetch match data for ${player.display_name}`);
+    console.error(`  ❌ All retries failed for ${player.display_name} - giving up`);
     return;
   }
+
+  const matchId = matchIds![0];
 
   const playerStats = matchData.info.participants.find(p => p.puuid === player.puuid);
   if (!playerStats) {
@@ -1819,54 +1888,75 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
     const soloDeaths = countSoloDeaths(timeline, player.puuid);
     (playerStats as MatchParticipant).soloDeaths = soloDeaths;
     console.log(`  💀 Solo deaths: ${soloDeaths}`);
+
+    // Fix: Riot API doesn't return firstBloodVictim, determine from timeline
+    const fbVictim = isFirstBloodVictim(timeline, player.puuid);
+    (playerStats as MatchParticipant).firstBloodVictim = fbVictim;
+    if (fbVictim) console.log(`  🩸 First Blood victim!`);
   } else {
     console.log('  ⚠️ Could not fetch timeline, solo deaths will be 0');
     (playerStats as MatchParticipant).soloDeaths = 0;
   }
 
   // Save match to johnny_matches
-  const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
-  const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
+  try {
+    const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
+    const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
 
-  const johnnyMatch = {
-    id: matchData.metadata.matchId,
-    puuid: player.puuid,
-    player_name: player.display_name,
-    game_creation: matchData.info.gameCreation,
-    game_duration: matchData.info.gameDuration,
-    game_mode: matchData.info.gameMode,
-    queue_id: matchData.info.queueId,
-    champion_id: playerStats.championId,
-    champion_name: playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown',
-    kills: playerStats.kills,
-    deaths: playerStats.deaths,
-    assists: playerStats.assists,
-    cs: playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled,
-    vision_score: playerStats.visionScore,
-    gold_earned: playerStats.goldEarned,
-    damage_dealt: playerStats.totalDamageDealtToChampions,
-    win: playerStats.win,
-    first_blood_victim: playerStats.firstBloodVictim === true,
-    game_ended_surrender: matchData.info.gameEndedInSurrender || playerStats.teamEarlySurrendered || false,
-    team_kills: teamKills,
-    created_at: new Date().toISOString()
-  };
+    const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
 
-  const { error: saveError } = await supabase
-    .from('johnny_matches')
-    .insert([johnnyMatch]);
+    const { error: saveError } = await supabase
+      .from('johnny_matches')
+      .insert([johnnyMatch]);
 
-  if (saveError && saveError.code !== '23505') {
-    console.error(`  ❌ Error saving match:`, saveError);
-  } else {
-    console.log(`  ✅ Match saved: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
+    if (saveError && saveError.code !== '23505') {
+      console.error(`  ❌ Error saving match:`, saveError);
+    } else {
+      console.log(`  ✅ Match saved: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
+    }
+  } catch (saveErr) {
+    console.error(`  ❌ Exception saving match:`, saveErr);
   }
 
   // Resolve bets
-  const { resolved, errors } = await resolveBetsForMatch(matchData, player.puuid, player.display_name);
-  console.log(`  📊 Bets resolved: ${resolved} (${errors} errors)`);
+  try {
+    const { resolved, errors } = await resolveBetsForMatch(matchData, player.puuid, player.display_name);
+    console.log(`  📊 Bets resolved: ${resolved} (${errors} errors)`);
+  } catch (resolveErr) {
+    console.error(`  ❌ Exception resolving bets:`, resolveErr);
+  }
 
-  // Send game end notification
+  // Fetch current rank + LP after game (for webhook and DB update)
+  let newRankInfo: { tier: string; division: string; lp: number } | null = null;
+  let lpChange: number | null = null;
+  try {
+    newRankInfo = await getRankedInfo(player.puuid, player.region);
+    if (newRankInfo) {
+      // Calculate LP change from stored rank
+      if (player.solo_tier === newRankInfo.tier &&
+          player.solo_division === newRankInfo.division &&
+          player.solo_lp != null) {
+        lpChange = newRankInfo.lp - player.solo_lp;
+      }
+
+      // Update rank in DB
+      await supabase
+        .from('tracked_players')
+        .update({
+          solo_tier: newRankInfo.tier,
+          solo_division: newRankInfo.division,
+          solo_lp: newRankInfo.lp,
+          rank_updated_at: new Date().toISOString()
+        })
+        .eq('id', player.id);
+
+      console.log(`  🎖️ Rank: ${newRankInfo.tier} ${newRankInfo.division} ${newRankInfo.lp} LP${lpChange != null ? ` (${lpChange >= 0 ? '+' : ''}${lpChange})` : ''}`);
+    }
+  } catch (rankErr) {
+    console.error('  ⚠️ Error fetching rank:', rankErr);
+  }
+
+  // Send game end notification (always runs even if above steps failed)
   const gameMode = QUEUE_NAMES[matchData.info.queueId] || matchData.info.gameMode || 'Normal';
   const championName = playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown';
   await sendGameEndNotification(
@@ -1877,7 +1967,9 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
     playerStats.deaths,
     playerStats.assists,
     gameMode,
-    playerStats.championId
+    playerStats.championId,
+    newRankInfo,
+    lpChange
   );
 }
 
@@ -1909,6 +2001,13 @@ async function checkAllPlayers(): Promise<void> {
     const prevState = previousGameState.get(player.id);
     const wasInGame = prevState?.isInGame || false;
     const previousGameId = prevState?.gameId || null;
+
+    // undefined = API error, keep previous state and skip this player
+    if (game === undefined) {
+      const name = player.display_name || player.game_name || 'Unknown';
+      console.log(`  ⚠️  ${name} - API error, keeping previous state`);
+      continue;
+    }
 
     if (game) {
       const gameId = game.gameId;
@@ -1943,6 +2042,7 @@ async function checkAllPlayers(): Promise<void> {
         previousGameState.set(player.id, { isInGame: true, gameId: String(gameId) });
       }
     } else {
+      // game === null: confirmed not in game (404 from Riot API)
       const name = player.display_name || player.game_name || 'Unknown';
       console.log(`  ⏸️  ${name} not in game`);
       await updateGameStatusInSupabase(player.id, false, null, null);
@@ -2114,6 +2214,7 @@ async function main(): Promise<void> {
   console.log('🎰 JohnnyFF15 Game Watcher Started');
   console.log(`   Game check: every ${CHECK_INTERVAL / 1000} seconds`);
   console.log(`   Command check: every ${COMMAND_CHECK_INTERVAL / 1000} seconds`);
+  console.log(`   Rank sync: every 24 hours`);
   console.log(`   Wealth tax check: every hour (runs on Sundays)`);
   console.log('   Press Ctrl+C to stop\n');
 
@@ -2138,6 +2239,10 @@ async function main(): Promise<void> {
 
   // Schedule command processing
   setInterval(processCommands, COMMAND_CHECK_INTERVAL);
+
+  // Sync ranks on startup and schedule every 24 hours
+  await syncRanksForAllPlayers();
+  setInterval(syncRanksForAllPlayers, RANK_SYNC_INTERVAL);
 
   // Check wealth tax on startup and schedule periodic checks
   await checkAndApplyWeeklyWealthTax();

@@ -13,7 +13,9 @@ import { MOCK_PROPS } from '../services/mockData';
 import { supabase } from '../services/supabase';
 import { addTrackedPlayer, updateTrackedPlayer, deleteTrackedPlayer, togglePlayerActive, getInactiveTrackedPlayers, permanentlyDeleteTrackedPlayer, deleteAllTrackedPlayers, linkUserToPlayer, unlinkUserFromPlayer } from '../services/playersService';
 import { Power, Dices, RotateCcw, User, Globe, CheckCircle, AlertCircle, Loader2, Radio, Wifi, WifiOff, ShieldX, Zap, Trash2, History, Gavel, FlaskConical, Play, Square, Settings, Users, RefreshCw, TrendingUp, ChevronDown, ChevronUp, Check, X, Download, Plus, Coins, Bell, Send, UserPlus, Edit2, ToggleLeft, ToggleRight, Link2, Unlink } from 'lucide-react';
-import { sendTestNotification } from '../services/discordWebhook';
+import { sendTestNotification, notifySeasonReset } from '../services/discordWebhook';
+import { recordSnapshot, recordSnapshotBatch } from '../services/balanceSnapshots';
+import AdminAnalytics from '../components/AdminAnalytics';
 import { syncLastGame as syncLastGameCommand, checkPlayersStatus, syncRanks as syncRanksCommand, syncPlayerGames as syncPlayerGamesCommand } from '../services/adminCommands';
 
 const REGIONS: { value: Region; label: string }[] = [
@@ -722,12 +724,12 @@ const Admin = () => {
 
   // Reset ALL user accounts
   const handleResetAllAccounts = async () => {
-    if (!confirm('⚠️ ATTENTION ⚠️\n\nEs-tu VRAIMENT sûr de vouloir reset TOUS les comptes du site ?\n\nCela va:\n- Remettre TOUS les crédits à 10000\n- Reset TOUS les daily bonus\n- Remettre TOUTES les stats à zéro\n- Supprimer TOUS les paris\n\nCette action est IRRÉVERSIBLE !')) {
+    if (!confirm('⚠️ RESET DE SAISON ⚠️\n\nEs-tu VRAIMENT sûr de vouloir reset TOUS les comptes du site ?\n\nCela va:\n- Remettre TOUS les crédits à 10000\n- Reset TOUS les daily bonus\n- Remettre TOUTES les stats à zéro\n- Supprimer TOUS les paris\n- Supprimer TOUS les cosmétiques possédés\n- Déséquiper TOUS les cosmétiques (badge, titre, bordure, background)\n\nCette action est IRRÉVERSIBLE !')) {
       return;
     }
 
     // Double confirmation
-    if (!confirm('DERNIÈRE CONFIRMATION\n\nTous les comptes vont être reset.\nContinuer ?')) {
+    if (!confirm('DERNIÈRE CONFIRMATION\n\nReset de saison complet: crédits, stats, paris, cosmétiques.\nContinuer ?')) {
       return;
     }
 
@@ -735,8 +737,18 @@ const Admin = () => {
     setResetAllAccountsResult(null);
 
     try {
+      // Fetch fresh user list first to ensure accurate count
+      const { data: freshUsers, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id, pseudo, credits')
+        .order('pseudo');
+
+      if (fetchError) throw fetchError;
+      const users = freshUsers || [];
+      setAllUsers(users);
+
       // Reset all profiles in Supabase
-      const { error: profileError, count } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           credits: 10000,
@@ -746,6 +758,11 @@ const Admin = () => {
           bets_lost: 0,
           jc_won: 0,
           jc_lost: 0,
+          owned_cosmetics: [],
+          equipped_badge: null,
+          equipped_title: null,
+          equipped_border: null,
+          equipped_background: null,
           reset_at: new Date().toISOString()
         })
         .not('id', 'is', null); // Update all rows
@@ -760,9 +777,21 @@ const Admin = () => {
 
       if (betsError) throw betsError;
 
+      // Delete all case drops history and old snapshots
+      await supabase.from('case_drops').delete().not('id', 'is', null);
+      await supabase.from('balance_snapshots').delete().not('id', 'is', null);
+
+      // Record initial season snapshots for all users
+      recordSnapshotBatch(users.map(u => ({
+        user_id: u.id, balance: 10000, delta: 0, source: 'season_reset' as const
+      })));
+
+      // Send Discord notification
+      notifySeasonReset(users.length);
+
       setResetAllAccountsResult({
         success: true,
-        message: `Tous les comptes ont été reset ! (${allUsers.length} utilisateurs)`
+        message: `Reset de saison complet effectué ! (${users.length} utilisateurs)`
       });
 
       // Refresh users list and pending bets
@@ -816,6 +845,8 @@ const Admin = () => {
         .eq('id', addCreditsUserId);
 
       if (updateError) throw updateError;
+
+      recordSnapshot(addCreditsUserId, newCredits, amount, 'admin_add');
 
       setAddCreditsResult({
         success: true,
@@ -2011,6 +2042,9 @@ const Admin = () => {
               </div>
             )}
           </div>
+
+          {/* Analytics Dashboard */}
+          <AdminAnalytics />
 
           {/* User Account Reset */}
           <div className="bg-gradient-to-b from-red-950/20 to-zinc-900 p-6 rounded-2xl border border-red-500/30">

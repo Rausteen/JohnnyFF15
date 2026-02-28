@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Target, Swords, Skull, Heart, ChevronUp, ChevronDown, Trophy, Loader2, AlertCircle, CheckCircle, UserX } from 'lucide-react';
+import { Target, Swords, Skull, Heart, ChevronUp, ChevronDown, Trophy, Loader2, AlertCircle, CheckCircle, UserX, Database } from 'lucide-react';
 import { useStore } from '../services/store';
 import { useCreditsStore } from '../services/creditsStore';
 import { useAuthStore } from '../services/authStore';
@@ -7,6 +7,7 @@ import { useGameStore } from '../services/gameStore';
 import { TrackedPlayer, Bet } from '../types';
 import { isUserThePlayer } from '../services/playersService';
 import { getUserPendingBets } from '../services/betsService';
+import { getExactStatsDistribution, calculateExactKdaOdds, calculateExactDamageOdds, ExactStatsDistribution } from '../services/dataOddsService';
 
 interface ExactStatsBetProps {
   player?: TrackedPlayer;
@@ -14,9 +15,9 @@ interface ExactStatsBetProps {
 
 type BetType = 'kda' | 'damage';
 
-// Fixed odds
-const EXACT_KDA_ODDS = 13671;
-const EXACT_DAMAGE_ODDS = 41;
+// Fallback odds when not enough data
+const FALLBACK_KDA_ODDS = 500;
+const FALLBACK_DAMAGE_ODDS = 41;
 
 // Max bets per game
 const MAX_DAMAGE_BETS = 3;
@@ -66,8 +67,31 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [damageBetsCount, setDamageBetsCount] = useState(0);
+  const [distribution, setDistribution] = useState<ExactStatsDistribution | null>(null);
+  const [loadingOdds, setLoadingOdds] = useState(false);
 
   const credits = profile?.credits || 0;
+
+  // Fetch exact stats distribution when player/queue changes
+  useEffect(() => {
+    const fetchDist = async () => {
+      if (!activePlayer?.puuid || !currentGame?.gameQueueConfigId) {
+        setDistribution(null);
+        return;
+      }
+      setLoadingOdds(true);
+      try {
+        const dist = await getExactStatsDistribution(activePlayer.puuid, currentGame.gameQueueConfigId);
+        setDistribution(dist);
+      } catch (err) {
+        console.error('Error fetching exact stats distribution:', err);
+        setDistribution(null);
+      } finally {
+        setLoadingOdds(false);
+      }
+    };
+    fetchDist();
+  }, [activePlayer?.puuid, currentGame?.gameQueueConfigId]);
 
   // Count existing damage bets for this game
   useEffect(() => {
@@ -94,8 +118,19 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
     return () => window.removeEventListener('betPlaced', handleBetPlaced);
   }, [user, betMatchId]);
 
-  // Fixed odds
-  const odds = betType === 'kda' ? EXACT_KDA_ODDS : EXACT_DAMAGE_ODDS;
+  // Data-driven odds (fallback to static if no data)
+  const odds = useMemo(() => {
+    if (distribution) {
+      if (betType === 'kda') {
+        return calculateExactKdaOdds(kills, deaths, assists, distribution);
+      } else {
+        return calculateExactDamageOdds(damageK, distribution);
+      }
+    }
+    return betType === 'kda' ? FALLBACK_KDA_ODDS : FALLBACK_DAMAGE_ODDS;
+  }, [betType, kills, deaths, assists, damageK, distribution]);
+
+  const isDataDriven = distribution !== null;
 
   // Check if max damage bets reached
   const maxDamageBetsReached = damageBetsCount >= MAX_DAMAGE_BETS;
@@ -389,6 +424,20 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
                 </div>
               </div>
             </div>
+            {/* Data-driven probability breakdown */}
+            {isDataDriven && distribution && (
+              <div className="flex justify-center gap-3 text-xs">
+                <span className="text-green-400/70">
+                  P({kills}K) = {((distribution.killsDist.get(kills) || 0) * 100).toFixed(1)}%
+                </span>
+                <span className="text-red-400/70">
+                  P({deaths}D) = {((distribution.deathsDist.get(deaths) || 0) * 100).toFixed(1)}%
+                </span>
+                <span className="text-blue-400/70">
+                  P({assists}A) = {((distribution.assistsDist.get(assists) || 0) * 100).toFixed(1)}%
+                </span>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -436,6 +485,13 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
               </div>
             </div>
 
+            {/* Data-driven probability */}
+            {isDataDriven && distribution && (
+              <div className="text-center text-xs text-orange-400/70">
+                P({damageK >= 40 ? '40k+' : `${damageK}k-${damageK + 1}k`}) = {((distribution.damageDist.get(Math.min(40, damageK)) || 0) * 100).toFixed(1)}%
+              </div>
+            )}
+
             {/* Damage bets remaining */}
             <div className={`text-center text-xs font-bold ${maxDamageBetsReached ? 'text-red-400' : 'text-zinc-400'}`}>
               {maxDamageBetsReached
@@ -450,7 +506,17 @@ const ExactStatsBet: React.FC<ExactStatsBetProps> = ({ player }) => {
         <div className="flex items-center justify-center gap-2 py-2">
           <Trophy className="w-4 h-4 text-gold" />
           <span className="text-zinc-400 text-sm">Cote:</span>
-          <span className="text-2xl font-mono font-black text-gold">x{odds}</span>
+          {loadingOdds ? (
+            <Loader2 className="w-5 h-5 animate-spin text-zinc-400" />
+          ) : (
+            <span className="text-2xl font-mono font-black text-gold">x{odds.toLocaleString()}</span>
+          )}
+          {isDataDriven && (
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-cyan-500/10 text-cyan-400 text-xs font-bold rounded-full border border-cyan-500/30">
+              <Database className="w-3 h-3" />
+              {distribution?.gamesCount}G
+            </span>
+          )}
         </div>
 
         {/* Quick Bet Buttons */}
