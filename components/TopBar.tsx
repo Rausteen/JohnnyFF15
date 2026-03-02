@@ -24,8 +24,8 @@ const navLinks = [
   { path: '/leaderboard', label: 'Classement', icon: Trophy },
   { path: '/cases', label: 'Caisses', icon: Package },
   { path: '/player-stats', label: 'Stats', icon: BarChart3 },
+  { path: '/gridrush', label: 'GridRush', icon: Zap },
   ...(isAdmin ? [
-    { path: '/gridrush', label: 'GridRush', icon: Zap },
     { path: '/team-balancer', label: '5v5', icon: Swords },
     { path: '/admin', label: 'Admin', icon: ShieldAlert }
   ] : []),
