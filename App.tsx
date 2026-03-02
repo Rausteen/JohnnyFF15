@@ -18,6 +18,9 @@ const PublicProfile = lazy(() => import('./pages/PublicProfile'));
 const TeamBalancer = lazy(() => import('./pages/TeamBalancer'));
 const Cases = lazy(() => import('./pages/Cases'));
 const PlayerStats = lazy(() => import('./pages/PlayerStats'));
+const GridRush = lazy(() => import('./pages/GridRush'));
+const GridRushGame = lazy(() => import('./pages/GridRushGame'));
+const GridRushEditor = lazy(() => import('./pages/GridRushEditor'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -87,6 +90,9 @@ const App = () => {
             <Route path="team-balancer" element={<TeamBalancer />} />
             <Route path="cases" element={<Cases />} />
             <Route path="player-stats" element={<PlayerStats />} />
+            <Route path="gridrush" element={<GridRush />} />
+            <Route path="gridrush/game/:gameCode" element={<GridRushGame />} />
+            <Route path="gridrush/editor" element={<GridRushEditor />} />
             <Route path="user/:userId" element={<PublicProfile />} />
           </Route>
         </Routes>
