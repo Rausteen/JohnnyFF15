@@ -14,8 +14,8 @@ const GridRush: React.FC = () => {
   const isAdmin = profile?.pseudo === 'Rausteen';
   const [mode, setMode] = useState<Mode>('menu');
 
-  // Create game form
-  const [hostName, setHostName] = useState('');
+  // Create game form — pseudo comes from account
+  const playerName = profile?.pseudo || '';
   const [teamName, setTeamName] = useState('');
   const [timerMin, setTimerMin] = useState(20);
 
@@ -23,12 +23,12 @@ const GridRush: React.FC = () => {
   const [error, setError] = useState('');
 
   const handleCreate = async () => {
-    if (!hostName.trim() || !teamName.trim()) return;
+    if (!playerName || !teamName.trim()) return;
     setLoading(true);
     setError('');
 
     const result = await createGame(
-      hostName.trim(),
+      playerName,
       'default-set',
       teamName.trim(),
       timerMin * 60
@@ -43,7 +43,7 @@ const GridRush: React.FC = () => {
           gameCode: result.gameCode,
           teamId: result.teamId,
           playerId: result.playerId,
-          playerName: hostName.trim(),
+          playerName,
           isHost: true,
         })
       );
@@ -129,16 +129,9 @@ const GridRush: React.FC = () => {
                 Créer une partie
               </h2>
 
-              <div>
-                <label className="block text-xs text-zinc-500 mb-1">Ton pseudo</label>
-                <input
-                  type="text"
-                  value={hostName}
-                  onChange={(e) => setHostName(e.target.value)}
-                  placeholder="Ex: Johnny"
-                  className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 outline-none focus:border-primary/50"
-                  maxLength={20}
-                />
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+                <span className="text-xs text-zinc-500">Joueur :</span>
+                <span className="text-sm font-bold text-white">{playerName}</span>
               </div>
 
               <div>
@@ -174,7 +167,7 @@ const GridRush: React.FC = () => {
 
               <button
                 onClick={handleCreate}
-                disabled={loading || !hostName.trim() || !teamName.trim()}
+                disabled={loading || !playerName || !teamName.trim()}
                 className="w-full py-4 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:brightness-110 text-white font-bold text-lg transition-all disabled:opacity-50"
               >
                 {loading ? 'Création...' : 'Créer la partie'}
