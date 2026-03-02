@@ -379,6 +379,14 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
             </h1>
           </div>
 
+          {/* Realtime connection status */}
+          <div className="flex items-center justify-center gap-2 mb-4 text-xs text-zinc-500">
+            <div className={`w-2 h-2 rounded-full ${game.realtimeStatus.teamReady ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`} />
+            <span>Équipe: {game.realtimeStatus.teamReady ? 'connecté' : 'connexion...'}</span>
+            <div className={`w-2 h-2 rounded-full ml-2 ${game.realtimeStatus.gameReady ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`} />
+            <span>Partie: {game.realtimeStatus.gameReady ? 'connecté' : 'connexion...'}</span>
+          </div>
+
           <Lobby
             game={gameSession}
             myPlayerId={playerId}
@@ -421,11 +429,14 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
             </span>
           </div>
 
-          <GridProgress
-            currentGridIndex={game.currentGridIndex}
-            totalGrids={game.totalGrids}
-            wordsFoundPerGrid={game.allWordsFound}
-          />
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${game.realtimeStatus.teamReady ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`} title={game.realtimeStatus.teamReady ? 'Connecté' : 'Déconnecté'} />
+            <GridProgress
+              currentGridIndex={game.currentGridIndex}
+              totalGrids={game.totalGrids}
+              wordsFoundPerGrid={game.allWordsFound}
+            />
+          </div>
 
           <GameTimer timeRemaining={game.timeRemaining} />
         </div>

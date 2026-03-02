@@ -29,6 +29,7 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
   const rtRef = useRef<GridRushRealtime | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number | null>(startedAt ? new Date(startedAt).getTime() : null);
+  const [rtStatus, setRtStatus] = useState({ teamReady: false, gameReady: false });
 
   const currentGrid: CrosswordGridData = gridSet.grids[state.currentGridIndex];
 
@@ -134,6 +135,7 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
   // Connect realtime ONCE — the handler ref ensures we always dispatch to the latest closure
   useEffect(() => {
     const rt = new GridRushRealtime(gameId, teamId);
+    rt.onStatusChange((teamReady, gameReady) => setRtStatus({ teamReady, gameReady }));
     rt.connect((event) => handleEventRef.current(event));
     rtRef.current = rt;
     if (startedAt) startTimer(startedAt);
@@ -256,5 +258,6 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
     sendChat, clearNotification: useCallback((i: number) => setState(prev => ({ ...prev, notifications: prev.notifications.filter((_, idx) => idx !== i) })), []),
     startTimer,
     broadcastGameStarted: useCallback((startedAt: string) => { rtRef.current?.sendGameStarted(startedAt); }, []),
+    realtimeStatus: rtStatus,
   };
 }
