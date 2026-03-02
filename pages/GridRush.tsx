@@ -7,12 +7,6 @@ import { useCreditsStore } from '../services/creditsStore';
 
 type Mode = 'menu' | 'create';
 
-const diffLabel = (d: string) => d === 'easy' ? 'Facile' : d === 'medium' ? 'Moyen' : 'Difficile';
-const diffBadge = (d: string) =>
-  d === 'easy' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-    : d === 'medium' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-    : 'bg-red-500/20 text-red-400 border-red-500/30';
-
 interface ExistingSet { id: string; name: string; createdAt: string; }
 
 const GridRush: React.FC = () => {
@@ -58,7 +52,7 @@ const GridRush: React.FC = () => {
   const hardGrids = savedGrids.filter(g => g.difficulty === 'hard');
 
   const handleCreate = async () => {
-    if (!playerName.trim() || !teamName.trim()) return;
+    if (!playerName || !teamName.trim()) return;
     setLoading(true);
     setError('');
 
@@ -90,7 +84,7 @@ const GridRush: React.FC = () => {
     }
 
     const result = await createGame(
-      playerName.trim(),
+      playerName,
       gridSetId,
       teamName.trim(),
       timerMin * 60
@@ -104,7 +98,7 @@ const GridRush: React.FC = () => {
           gameCode: result.gameCode,
           teamId: result.teamId,
           playerId: result.playerId,
-          playerName: playerName.trim(),
+          playerName,
           isHost: true,
         })
       );
@@ -190,7 +184,6 @@ const GridRush: React.FC = () => {
                 Créer une partie
               </h2>
 
-              {/* Player name (read-only from account) */}
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
                 <span className="text-xs text-zinc-500">Joueur :</span>
                 <span className="text-sm font-bold text-white">{playerName}</span>
@@ -316,7 +309,7 @@ const GridRush: React.FC = () => {
 
               <button
                 onClick={handleCreate}
-                disabled={loading || !playerName.trim() || !teamName.trim()}
+                disabled={loading || !playerName || !teamName.trim()}
                 className="w-full py-4 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:brightness-110 text-white font-bold text-lg transition-all disabled:opacity-50"
               >
                 {loading ? 'Création...' : 'Créer la partie'}

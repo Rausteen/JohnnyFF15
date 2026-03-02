@@ -29,8 +29,16 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
   const rtRef = useRef<GridRushRealtime | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number | null>(startedAt ? new Date(startedAt).getTime() : null);
+  const [rtStatus, setRtStatus] = useState({ teamReady: false, gameReady: false });
 
   const currentGrid: CrosswordGridData = gridSet.grids[state.currentGridIndex];
+
+  // Queue for async side-effects triggered from inside setState
+  const pendingEffectsRef = useRef<Array<() => void>>([]);
+  const flushEffects = useCallback(() => {
+    const effects = pendingEffectsRef.current.splice(0);
+    for (const fn of effects) fn();
+  }, []);
 
   const updateTimer = useCallback(() => {
     if (!startTimeRef.current) return;
@@ -50,13 +58,6 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
     updateTimer();
   }, [updateTimer]);
 
-  // Queue for async side-effects triggered from inside setState
-  const pendingEffectsRef = useRef<Array<() => void>>([]);
-  const flushEffects = useCallback(() => {
-    const effects = pendingEffectsRef.current.splice(0);
-    for (const fn of effects) fn();
-  }, []);
-
   const handleGridComplete = useCallback(async (gi: number, updatedWF: number[][]) => {
     const next = gi + 1;
     if (next >= 3) {
@@ -72,20 +73,20 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
     }
   }, [teamId, teamName, gameId, isHost]);
 
-  // Ref-based handler so the realtime connection never needs to reconnect
-  const handleEventRef = useRef<(event: RealtimeEvent) => void>(() => {});
+  // Ref wrappers so closures inside handleEvent always have the latest versions
   const handleGridCompleteRef = useRef(handleGridComplete);
   handleGridCompleteRef.current = handleGridComplete;
 
+  // Use a ref for the event handler so the realtime connection is created ONCE
+  // and never tears down/reconnects (which would cause missed events)
+  const handleEventRef = useRef<(event: RealtimeEvent) => void>(() => {});
   handleEventRef.current = (event: RealtimeEvent) => {
     switch (event.type) {
       case 'cell_update':
-        // Update cell and check word completion for teammate's input
         setState(prev => {
           const cv = [...prev.cellValues];
           cv[event.data.gridIndex] = { ...cv[event.data.gridIndex], [`${event.data.row},${event.data.col}`]: event.data.value };
-
-          // Check word completion with updated values
+          // Also check word completion with updated values from teammate
           const grid = gridSet.grids[event.data.gridIndex];
           const updatedCV = cv[event.data.gridIndex];
           let newWF = [...prev.wordsFound[event.data.gridIndex]];
@@ -95,18 +96,21 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
             if (isWordComplete(w, updatedCV)) {
               newWF.push(w.id);
               foundAny = true;
+              const wordId = w.id;
+              const gi = event.data.gridIndex;
+              pendingEffectsRef.current.push(() => rtRef.current?.sendWordFound(wordId, gi, playerName));
             }
           }
-
           if (!foundAny) return { ...prev, cellValues: cv };
-
           const updatedWF = [...prev.wordsFound];
           updatedWF[event.data.gridIndex] = newWF;
-
           if (newWF.length >= grid.words.length) {
-            pendingEffectsRef.current.push(() => handleGridCompleteRef.current(event.data.gridIndex, updatedWF));
+            const gi = event.data.gridIndex;
+            pendingEffectsRef.current.push(() => handleGridCompleteRef.current(gi, updatedWF));
+          } else {
+            const gi = event.data.gridIndex;
+            pendingEffectsRef.current.push(() => updateTeamProgress(teamId, gi, updatedWF));
           }
-
           return { ...prev, cellValues: cv, wordsFound: updatedWF };
         });
         setTimeout(flushEffects, 0);
@@ -129,17 +133,15 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
     }
   };
 
-  // Single realtime connection — only reconnects if gameId or teamId changes
+  // Connect realtime ONCE — the handler ref ensures we always dispatch to the latest closure
   useEffect(() => {
     const rt = new GridRushRealtime(gameId, teamId);
+    rt.onStatusChange((teamReady, gameReady) => setRtStatus({ teamReady, gameReady }));
     rt.connect((event) => handleEventRef.current(event));
     rtRef.current = rt;
     if (startedAt) startTimer(startedAt);
-    return () => {
-      rt.disconnect();
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { rt.disconnect(); if (timerRef.current) clearInterval(timerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, teamId]);
 
   const setCellValue = useCallback((row: number, col: number, value: string) => {
@@ -170,7 +172,7 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
       updatedWF[gi] = newWF;
 
       if (newWF.length >= grid.words.length) {
-        pendingEffectsRef.current.push(() => handleGridComplete(gi, updatedWF));
+        pendingEffectsRef.current.push(() => handleGridCompleteRef.current(gi, updatedWF));
         return { ...prev, cellValues: cv, wordsFound: updatedWF };
       }
 
@@ -181,7 +183,34 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
     rtRef.current?.sendCellUpdate({ row, col, value: v, playerName, gridIndex: state.currentGridIndex });
 
     setTimeout(flushEffects, 0);
-  }, [gridSet, playerName, teamId, state.currentGridIndex, handleGridComplete, flushEffects]);
+  }, [gridSet, playerName, teamId, state.currentGridIndex, flushEffects]);
+
+  const checkWordCompletion = useCallback(() => {
+    setState(prev => {
+      const gi = prev.currentGridIndex;
+      const grid = gridSet.grids[gi];
+      const cv = prev.cellValues[gi];
+      let newWF = [...prev.wordsFound[gi]];
+      let found = false;
+      for (const w of grid.words) {
+        if (newWF.includes(w.id)) continue;
+        if (isWordComplete(w, cv)) {
+          newWF.push(w.id);
+          found = true;
+          pendingEffectsRef.current.push(() => rtRef.current?.sendWordFound(w.id, gi, playerName));
+        }
+      }
+      if (!found) return prev;
+      const updated = [...prev.wordsFound]; updated[gi] = newWF;
+      if (newWF.length >= grid.words.length) {
+        pendingEffectsRef.current.push(() => handleGridCompleteRef.current(gi, updated));
+        return { ...prev, wordsFound: updated };
+      }
+      pendingEffectsRef.current.push(() => updateTeamProgress(teamId, gi, updated));
+      return { ...prev, wordsFound: updated };
+    });
+    setTimeout(flushEffects, 0);
+  }, [gridSet, playerName, teamId, flushEffects]);
 
   const submitMysteryWord = useCallback((input: string) => {
     const gi = state.currentGridIndex;
@@ -189,11 +218,11 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
     if (normalize(input) === grid.mysteryWord) {
       rtRef.current?.sendMysteryFound(gi, playerName);
       const updated = [...state.wordsFound]; updated[gi] = grid.words.map(w => w.id);
-      handleGridComplete(gi, updated);
+      handleGridCompleteRef.current(gi, updated);
       return true;
     }
     return false;
-  }, [state.currentGridIndex, state.wordsFound, gridSet, playerName, handleGridComplete]);
+  }, [state.currentGridIndex, state.wordsFound, gridSet, playerName]);
 
   const selectCell = useCallback((row: number, col: number, dir?: WordDirection) => {
     setState(prev => ({ ...prev, selectedCell: { row, col }, selectedDirection: dir ?? prev.selectedDirection }));
@@ -222,13 +251,13 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
     showMysteryHint5: (state.wordsFound[state.currentGridIndex]?.length || 0) >= 5,
     showMysteryHint8: (state.wordsFound[state.currentGridIndex]?.length || 0) >= 8,
     totalGrids: 3,
-    setCellValue, submitMysteryWord, selectCell,
+    setCellValue, checkWordCompletion, submitMysteryWord, selectCell,
     setSelectedDirection: useCallback((d: WordDirection) => setState(prev => ({ ...prev, selectedDirection: d })), []),
     setSelectedWordId: useCallback((id: number | null) => setState(prev => ({ ...prev, selectedWordId: id })), []),
     setMysteryInput: useCallback((v: string) => setState(prev => ({ ...prev, mysteryInput: v })), []),
     sendChat, clearNotification: useCallback((i: number) => setState(prev => ({ ...prev, notifications: prev.notifications.filter((_, idx) => idx !== i) })), []),
     startTimer,
     broadcastGameStarted: useCallback((startedAt: string) => { rtRef.current?.sendGameStarted(startedAt); }, []),
-    realtimeStatus: { teamReady: true, gameReady: true }, // Connection status managed internally by GridRushRealtime
+    realtimeStatus: rtStatus,
   };
 }
