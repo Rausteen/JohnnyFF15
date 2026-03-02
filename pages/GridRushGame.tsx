@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Zap } from 'lucide-react';
+import { Zap, LogIn, Plus, Users, Gamepad2 } from 'lucide-react';
 import CrosswordGrid from '../components/gridrush/CrosswordGrid';
 import ClueList from '../components/gridrush/ClueList';
 import MysteryWordInput from '../components/gridrush/MysteryWordInput';
@@ -9,11 +9,164 @@ import GridProgress from '../components/gridrush/GridProgress';
 import TeamChat from '../components/gridrush/TeamChat';
 import GameOverScreen from '../components/gridrush/GameOverScreen';
 import Lobby from '../components/gridrush/Lobby';
-import type { GameSession, GridSet } from '../services/gridrush/gridrushTypes';
+import type { GameSession, GridSet, Team } from '../services/gridrush/gridrushTypes';
 import { getGameByCode, startGame, joinGame } from '../services/gridrush/gridrushService';
 import { getDefaultGridSet } from '../services/gridrush/gridrushData';
 import { loadGridSet } from '../services/gridrush/gridrushService';
 import { useGridRushGame } from '../services/gridrush/useGridRushGame';
+
+// Join form shown to players visiting via the shared link
+const JoinForm: React.FC<{ gameCode: string; game: GameSession; onJoined: (data: { gameId: string; teamId: string; playerId: string; playerName: string }) => void }> = ({ gameCode, game, onJoined }) => {
+  const [playerName, setPlayerName] = useState('');
+  const [teamOption, setTeamOption] = useState<'new' | 'existing'>('new');
+  const [newTeamName, setNewTeamName] = useState('');
+  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const availableTeams = game.teams.filter(t => t.players.length < 2);
+
+  const handleJoin = async () => {
+    if (!playerName.trim()) return;
+    setLoading(true);
+    setError('');
+
+    const result = await joinGame(
+      gameCode,
+      playerName.trim(),
+      teamOption === 'existing' ? selectedTeamId : undefined,
+      teamOption === 'new' ? (newTeamName.trim() || `Équipe ${playerName.trim()}`) : undefined
+    );
+
+    if (result) {
+      sessionStorage.setItem(
+        'gridrush_session',
+        JSON.stringify({
+          gameId: result.gameId,
+          gameCode: gameCode.toUpperCase(),
+          teamId: result.teamId,
+          playerId: result.playerId,
+          playerName: playerName.trim(),
+          isHost: false,
+        })
+      );
+      onJoined({ gameId: result.gameId, teamId: result.teamId, playerId: result.playerId, playerName: playerName.trim() });
+    } else {
+      setError('Impossible de rejoindre. Équipe pleine ou partie déjà lancée.');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
+      <div className="max-w-md w-full mx-4">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center">
+              <Zap className="w-6 h-6 text-white" />
+            </div>
+            <h1 className="text-3xl font-black tracking-tight">
+              GRID<span className="text-red-400">RUSH</span>
+            </h1>
+          </div>
+          <p className="text-zinc-500 text-sm">Rejoindre la partie <span className="font-mono text-white">{gameCode}</span></p>
+        </div>
+
+        <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 space-y-4">
+          <h2 className="font-bold text-lg flex items-center gap-2">
+            <LogIn className="w-5 h-5 text-violet-400" />
+            Rejoindre
+          </h2>
+
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1">Ton pseudo</label>
+            <input
+              type="text"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              placeholder="Ex: Johnny"
+              className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 outline-none focus:border-violet-500/50"
+              maxLength={20}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-zinc-500 mb-1">Équipe</label>
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setTeamOption('new')}
+                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                  teamOption === 'new'
+                    ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
+                    : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5 inline mr-1" />
+                Nouvelle équipe
+              </button>
+              {availableTeams.length > 0 && (
+                <button
+                  onClick={() => { setTeamOption('existing'); setSelectedTeamId(availableTeams[0]?.id || ''); }}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                    teamOption === 'existing'
+                      ? 'bg-violet-500/20 text-violet-400 border border-violet-500/40'
+                      : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5 inline mr-1" />
+                  Rejoindre existante
+                </button>
+              )}
+            </div>
+
+            {teamOption === 'new' && (
+              <input
+                type="text"
+                value={newTeamName}
+                onChange={(e) => setNewTeamName(e.target.value)}
+                placeholder="Nom de l'équipe"
+                className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 outline-none focus:border-violet-500/50"
+                maxLength={30}
+              />
+            )}
+
+            {teamOption === 'existing' && availableTeams.length > 0 && (
+              <div className="space-y-2">
+                {availableTeams.map((team) => (
+                  <button
+                    key={team.id}
+                    onClick={() => setSelectedTeamId(team.id)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left ${
+                      selectedTeamId === team.id
+                        ? 'border-violet-500/50 bg-violet-500/10 text-white'
+                        : 'border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    }`}
+                  >
+                    <Gamepad2 className="w-4 h-4 text-violet-400" />
+                    <div>
+                      <span className="font-bold text-sm">{team.name}</span>
+                      <span className="text-xs text-zinc-500 ml-2">{team.players.length}/2 joueurs</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+
+          <button
+            onClick={handleJoin}
+            disabled={loading || !playerName.trim() || (teamOption === 'existing' && !selectedTeamId)}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:brightness-110 text-white font-bold text-lg transition-all disabled:opacity-50"
+          >
+            {loading ? 'Connexion...' : 'Rejoindre la partie'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Wrapper that loads game data, then renders the actual game
 const GridRushGame: React.FC = () => {
@@ -23,9 +176,10 @@ const GridRushGame: React.FC = () => {
   const [gridSet, setGridSet] = useState<GridSet | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [needsJoin, setNeedsJoin] = useState(false);
 
   // Get session info from sessionStorage
-  const sessionData = useMemo(() => {
+  const [sessionData, setSessionData] = useState<any>(() => {
     const raw = sessionStorage.getItem('gridrush_session');
     if (!raw) return null;
     try {
@@ -33,50 +187,60 @@ const GridRushGame: React.FC = () => {
     } catch {
       return null;
     }
-  }, []);
+  });
+
+  const loadGame = useCallback(async () => {
+    if (!gameCode) { navigate('/'); return; }
+
+    const game = await getGameByCode(gameCode);
+    if (!game) {
+      setError('Partie introuvable');
+      setLoading(false);
+      return;
+    }
+    setGameSession(game);
+
+    // Load grid set
+    let gs: GridSet | null = null;
+    if (game.gridSetId === 'default-set') {
+      gs = getDefaultGridSet();
+    } else {
+      gs = await loadGridSet(game.gridSetId);
+    }
+
+    if (!gs) {
+      setError('Impossible de charger les grilles');
+      setLoading(false);
+      return;
+    }
+
+    setGridSet(gs);
+    setLoading(false);
+  }, [gameCode, navigate]);
 
   useEffect(() => {
-    if (!gameCode) {
-      navigate('/gridrush');
-      return;
+    loadGame();
+  }, [loadGame]);
+
+  useEffect(() => {
+    if (!loading && gameSession && !sessionData) {
+      setNeedsJoin(true);
     }
+  }, [loading, gameSession, sessionData]);
 
-    if (!sessionData) {
-      setError("Session expirée. Retourne au menu principal pour rejoindre.");
-      setLoading(false);
-      return;
-    }
-
-    const load = async () => {
-      const game = await getGameByCode(gameCode);
-      if (!game) {
-        setError('Partie introuvable');
-        setLoading(false);
-        return;
-      }
-
-      setGameSession(game);
-
-      // Load grid set
-      let gs: GridSet | null = null;
-      if (game.gridSetId === 'default-set') {
-        gs = getDefaultGridSet();
-      } else {
-        gs = await loadGridSet(game.gridSetId);
-      }
-
-      if (!gs) {
-        setError('Impossible de charger les grilles');
-        setLoading(false);
-        return;
-      }
-
-      setGridSet(gs);
-      setLoading(false);
-    };
-
-    load();
-  }, [gameCode, sessionData, navigate]);
+  const handleJoined = useCallback((data: { gameId: string; teamId: string; playerId: string; playerName: string }) => {
+    setSessionData({
+      gameId: data.gameId,
+      gameCode: gameCode?.toUpperCase(),
+      teamId: data.teamId,
+      playerId: data.playerId,
+      playerName: data.playerName,
+      isHost: false,
+    });
+    setNeedsJoin(false);
+    // Reload game data to get updated teams
+    loadGame();
+  }, [gameCode, loadGame]);
 
   if (loading) {
     return (
@@ -91,20 +255,25 @@ const GridRushGame: React.FC = () => {
     );
   }
 
-  if (error || !gameSession || !gridSet || !sessionData) {
+  if (error || !gameSession || !gridSet) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
         <div className="text-center max-w-sm">
           <p className="text-red-400 mb-4">{error || 'Erreur inconnue'}</p>
           <button
-            onClick={() => navigate('/gridrush')}
+            onClick={() => navigate('/')}
             className="px-6 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white transition-colors"
           >
-            Retour au menu
+            Retour à l'accueil
           </button>
         </div>
       </div>
     );
+  }
+
+  // Show join form for players visiting via the shared link
+  if (needsJoin || !sessionData) {
+    return <JoinForm gameCode={gameCode!} game={gameSession} onJoined={handleJoined} />;
   }
 
   return (
@@ -142,10 +311,13 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
 }) => {
   const navigate = useNavigate();
 
+  const myTeam = gameSession.teams.find(t => t.id === teamId);
+
   const game = useGridRushGame({
     gridSet,
     gameId: gameSession.id,
     teamId,
+    teamName: myTeam?.name || '',
     playerId,
     playerName,
     isHost,
@@ -157,6 +329,7 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
     const success = await startGame(gameSession.id);
     if (success) {
       const now = new Date().toISOString();
+      game.broadcastGameStarted(now);
       game.startTimer(now);
     }
   };

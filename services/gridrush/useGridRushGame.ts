@@ -5,7 +5,7 @@ import { GridRushRealtime } from './gridrushRealtime';
 import { updateTeamProgress, finishTeam, finishGame, sendChatMessage as sendChatDB } from './gridrushService';
 
 interface Props {
-  gridSet: GridSet; gameId: string; teamId: string; playerId: string;
+  gridSet: GridSet; gameId: string; teamId: string; teamName: string; playerId: string;
   playerName: string; isHost: boolean; timerDuration: number; startedAt: string | null;
 }
 
@@ -17,7 +17,7 @@ interface State {
   finishedTeams: Array<{ teamId: string; teamName: string; timeMs: number }>;
 }
 
-export function useGridRushGame({ gridSet, gameId, teamId, playerId, playerName, isHost, timerDuration, startedAt }: Props) {
+export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, playerName, isHost, timerDuration, startedAt }: Props) {
   const [state, setState] = useState<State>({
     currentGridIndex: 0, cellValues: [{}, {}, {}], wordsFound: [[], [], []],
     selectedCell: null, selectedDirection: 'across', selectedWordId: null,
@@ -93,14 +93,14 @@ export function useGridRushGame({ gridSet, gameId, teamId, playerId, playerName,
       const timeMs = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
       setState(prev => ({ ...prev, wordsFound: updatedWF, gameStatus: 'finished' }));
       await finishTeam(teamId);
-      rtRef.current?.sendTeamFinished(teamId, '', timeMs);
+      rtRef.current?.sendTeamFinished(teamId, teamName, timeMs);
       if (isHost) { await finishGame(gameId, teamId); rtRef.current?.sendGameOver('won', teamId); }
     } else {
       setState(prev => ({ ...prev, wordsFound: updatedWF, currentGridIndex: next, mysteryInput: '', selectedCell: null, selectedWordId: null }));
       rtRef.current?.sendGridComplete(gi, next);
       await updateTeamProgress(teamId, next, updatedWF);
     }
-  }, [teamId, gameId, isHost]);
+  }, [teamId, teamName, gameId, isHost]);
 
   const checkWordCompletion = useCallback(() => {
     const gi = state.currentGridIndex;
@@ -114,7 +114,7 @@ export function useGridRushGame({ gridSet, gameId, teamId, playerId, playerName,
     }
     if (!found) return;
     const updated = [...state.wordsFound]; updated[gi] = newWF;
-    if (newWF.length >= 9) { handleGridComplete(gi, updated); }
+    if (newWF.length >= grid.words.length) { handleGridComplete(gi, updated); }
     else { setState(prev => ({ ...prev, wordsFound: updated })); updateTeamProgress(teamId, gi, updated); }
   }, [state.currentGridIndex, state.cellValues, state.wordsFound, gridSet, playerName, teamId, handleGridComplete]);
 
@@ -163,5 +163,6 @@ export function useGridRushGame({ gridSet, gameId, teamId, playerId, playerName,
     setMysteryInput: useCallback((v: string) => setState(prev => ({ ...prev, mysteryInput: v })), []),
     sendChat, clearNotification: useCallback((i: number) => setState(prev => ({ ...prev, notifications: prev.notifications.filter((_, idx) => idx !== i) })), []),
     startTimer,
+    broadcastGameStarted: useCallback((startedAt: string) => { rtRef.current?.sendGameStarted(startedAt); }, []),
   };
 }

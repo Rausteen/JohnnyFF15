@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS gridrush_grid_sets (
 CREATE TABLE IF NOT EXISTS gridrush_games (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   game_code TEXT NOT NULL UNIQUE,
-  grid_set_id UUID NOT NULL REFERENCES gridrush_grid_sets(id) ON DELETE CASCADE,
+  grid_set_id TEXT NOT NULL DEFAULT 'default-set',
   host_id TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'lobby' CHECK (status IN ('lobby', 'playing', 'finished')),
   started_at TIMESTAMPTZ,

@@ -36,7 +36,7 @@ const Lobby: React.FC<LobbyProps> = ({
     setNewTeamName('');
   };
 
-  const allTeamsReady = game.teams.length >= 2 && game.teams.every(t => t.players.length === 2);
+  const allTeamsReady = game.teams.length >= 1 && game.teams.every(t => t.players.length >= 1);
 
   return (
     <div className="max-w-2xl mx-auto">
