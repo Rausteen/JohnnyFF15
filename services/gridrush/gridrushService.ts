@@ -77,6 +77,19 @@ export async function joinGame(gameCode: string, playerName: string, teamId?: st
 
   const { error } = await supabase.from('gridrush_players').insert({ id: playerId, team_id: actualTeamId, game_id: game.id, name: playerName, is_host: false });
   if (error) return null;
+
+  // Broadcast player_joined so lobby updates in realtime for everyone
+  try {
+    const ch = supabase.channel(`gridrush-lobby-${game.id}`);
+    await new Promise<void>((resolve) => {
+      ch.subscribe((status) => { if (status === 'SUBSCRIBED') resolve(); });
+      // Timeout after 3s if subscription doesn't complete
+      setTimeout(resolve, 3000);
+    });
+    ch.send({ type: 'broadcast', event: 'player_joined', payload: { player: { id: playerId, name: playerName, teamId: actualTeamId, isHost: false }, teamId: actualTeamId } });
+    setTimeout(() => supabase.removeChannel(ch), 1000);
+  } catch { /* best-effort */ }
+
   return { gameId: game.id, teamId: actualTeamId, playerId };
 }
 

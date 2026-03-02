@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Zap, LogIn, Plus, Users, Gamepad2 } from 'lucide-react';
 import CrosswordGrid from '../components/gridrush/CrosswordGrid';
@@ -14,6 +14,7 @@ import { getGameByCode, startGame, joinGame } from '../services/gridrush/gridrus
 import { getDefaultGridSet } from '../services/gridrush/gridrushData';
 import { loadGridSet } from '../services/gridrush/gridrushService';
 import { useGridRushGame } from '../services/gridrush/useGridRushGame';
+import { supabase } from '../services/supabase';
 
 // Join form shown to players visiting via the shared link
 const JoinForm: React.FC<{ gameCode: string; game: GameSession; onJoined: (data: { gameId: string; teamId: string; playerId: string; playerName: string }) => void }> = ({ gameCode, game, onJoined }) => {
@@ -227,6 +228,18 @@ const GridRushGame: React.FC = () => {
       setNeedsJoin(true);
     }
   }, [loading, gameSession, sessionData]);
+
+  // Subscribe to lobby channel for player_joined events (separate channel from game channel)
+  useEffect(() => {
+    if (!gameSession) return;
+    const channel = supabase.channel(`gridrush-lobby-${gameSession.id}`);
+    channel
+      .on('broadcast', { event: 'player_joined' }, () => {
+        loadGame();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [gameSession?.id, loadGame]);
 
   const handleJoined = useCallback((data: { gameId: string; teamId: string; playerId: string; playerName: string }) => {
     setSessionData({

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useLayoutEffect } from 'react';
 
 interface Props {
   row: number; col: number; letter: string;
@@ -15,7 +15,7 @@ const CELL = 'w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12';
 const CrosswordCell: React.FC<Props> = ({ row, col, letter, isActive, isHighlighted, isFound, isMystery, number, isBlack, mysteryIndex, onClick, onInput, onKeyDown }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isActive && inputRef.current) inputRef.current.focus();
   }, [isActive]);
 

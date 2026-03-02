@@ -13,7 +13,7 @@ const TeamChat: React.FC<Props> = ({ messages, playerName, onSendMessage }) => {
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if (!input.trim()) return; onSendMessage(input); setInput(''); };
 
   return (
-    <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl flex flex-col h-full">
+    <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl flex flex-col">
       <button onClick={() => setOpen(!open)} className="flex items-center gap-2 px-4 py-3 border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
         <MessageCircle className="w-4 h-4 text-violet-400" />
         <span className="text-sm font-bold text-zinc-300">Chat équipe</span>
