@@ -11,7 +11,7 @@ const colors = [
 interface Props { currentGridIndex: number; totalGrids: number; wordsFoundPerGrid: number[][]; }
 
 const GridProgress: React.FC<Props> = ({ currentGridIndex, totalGrids, wordsFoundPerGrid }) => (
-  <div className="flex items-center gap-2">
+  <div className="flex items-center gap-1.5 sm:gap-2">
     {Array.from({ length: totalGrids }).map((_, i) => {
       const done = i < currentGridIndex;
       const curr = i === currentGridIndex;
@@ -19,15 +19,16 @@ const GridProgress: React.FC<Props> = ({ currentGridIndex, totalGrids, wordsFoun
       const wf = wordsFoundPerGrid[i]?.length || 0;
       return (
         <React.Fragment key={i}>
-          {i > 0 && <div className={`w-6 h-0.5 ${done ? c.bg : 'bg-zinc-700'}`} />}
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+          {i > 0 && <div className={`w-3 sm:w-6 h-0.5 ${done ? c.bg : 'bg-zinc-700'}`} />}
+          <div className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all ${
             done ? `${c.bg}/20 ${c.text} border ${c.border}/40`
               : curr ? `bg-zinc-800 text-white border ${c.border}/60 ring-1 ring-offset-1 ring-offset-zinc-950`
               : 'bg-zinc-900 text-zinc-600 border border-zinc-800'
           }`}>
-            {done ? <Check className="w-3.5 h-3.5" /> : curr ? <Play className="w-3 h-3 fill-current" /> : null}
-            <span>{labels[i]}</span>
-            {curr && <span className="text-zinc-400 ml-1">{wf}/10</span>}
+            {done ? <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> : curr ? <Play className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-current" /> : null}
+            <span className="hidden sm:inline">{labels[i]}</span>
+            <span className="sm:hidden">{i + 1}</span>
+            {curr && <span className="text-zinc-400">{wf}</span>}
           </div>
         </React.Fragment>
       );

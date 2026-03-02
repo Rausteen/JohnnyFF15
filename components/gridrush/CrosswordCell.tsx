@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 
 interface Props {
   row: number; col: number; letter: string;
@@ -8,30 +8,59 @@ interface Props {
   onClick: (r: number, c: number) => void;
   onInput: (r: number, c: number, v: string) => void;
   onKeyDown: (r: number, c: number, k: string) => void;
-  inputRef: React.RefObject<HTMLInputElement | null>;
 }
 
-const CrosswordCell: React.FC<Props> = ({ row, col, letter, isActive, isHighlighted, isFound, isMystery, number, isBlack, mysteryIndex, onClick, onInput, onKeyDown, inputRef }) => {
-  if (isBlack) return <div className="w-8 h-8 sm:w-10 sm:h-10 bg-zinc-950" />;
+const CELL = 'w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12';
 
-  let bg = 'bg-zinc-800 border-zinc-600';
-  if (isFound) bg = 'bg-emerald-900/60 border-emerald-500/50';
-  else if (isMystery) bg = 'bg-red-900/40 border-red-500/50';
-  if (isActive) bg += ' ring-2 ring-yellow-400 ring-offset-1 ring-offset-zinc-950';
-  else if (isHighlighted) bg += ' brightness-125';
+const CrosswordCell: React.FC<Props> = ({ row, col, letter, isActive, isHighlighted, isFound, isMystery, number, isBlack, mysteryIndex, onClick, onInput, onKeyDown }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isActive && inputRef.current) inputRef.current.focus();
+  }, [isActive]);
+
+  if (isBlack) return <div className={CELL} />;
+
+  let border = 'border-zinc-600/70';
+  let bg = 'bg-zinc-800/90';
+  let text = 'text-white';
+
+  if (isFound) { bg = 'bg-emerald-900/50'; border = 'border-emerald-500/60'; text = 'text-emerald-200'; }
+  else if (isActive) { bg = 'bg-yellow-500/25'; border = 'border-yellow-400'; }
+  else if (isHighlighted) { bg = 'bg-sky-500/15'; border = 'border-sky-500/50'; }
+  else if (isMystery) { bg = 'bg-red-900/30'; border = 'border-red-500/40'; }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Backspace'].includes(e.key)) {
+      e.preventDefault();
+      onKeyDown(row, col, e.key);
+      return;
+    }
+    if (/^[a-zA-ZÀ-ÿ]$/.test(e.key)) {
+      e.preventDefault();
+      onInput(row, col, e.key.toUpperCase());
+    }
+  };
 
   return (
-    <div className={`relative w-8 h-8 sm:w-10 sm:h-10 border ${bg} cursor-pointer transition-all duration-100`} onClick={() => onClick(row, col)}>
-      {number !== null && <span className="absolute top-0 left-0.5 text-[8px] sm:text-[9px] font-bold text-zinc-400 leading-none select-none">{number}</span>}
-      {isMystery && mysteryIndex !== null && <span className="absolute bottom-0 right-0.5 text-[7px] sm:text-[8px] font-bold text-red-400 leading-none select-none">{mysteryIndex + 1}</span>}
+    <div className={`relative ${CELL} border-[1.5px] ${border} ${bg} cursor-pointer transition-colors duration-75 rounded-[3px]`} onClick={() => onClick(row, col)}>
+      {number !== null && <span className="absolute top-[1px] left-[3px] text-[8px] sm:text-[9px] font-bold text-zinc-400 leading-none select-none pointer-events-none z-10">{number}</span>}
+      {isMystery && mysteryIndex !== null && <span className="absolute bottom-[1px] right-[3px] text-[7px] sm:text-[8px] font-bold text-red-400 leading-none select-none pointer-events-none z-10">{mysteryIndex + 1}</span>}
+      {isActive && <div className="absolute inset-[-1px] rounded-[3px] ring-2 ring-yellow-400 ring-offset-1 ring-offset-zinc-950 pointer-events-none z-20" />}
       <input
-        ref={isActive ? inputRef : undefined}
-        type="text" maxLength={1} value={letter} readOnly={isFound}
-        className={`absolute inset-0 w-full h-full text-center font-bold text-sm sm:text-lg uppercase bg-transparent border-none outline-none cursor-pointer select-none ${isFound ? 'text-emerald-300' : isMystery ? 'text-red-200' : 'text-white'}`}
-        onChange={(e) => { const v = e.target.value.slice(-1); if (/^[a-zA-ZÀ-ÿ]$/.test(v) || v === '') onInput(row, col, v.toUpperCase()); }}
-        onKeyDown={(e) => onKeyDown(row, col, e.key)}
-        tabIndex={-1} autoComplete="off" spellCheck={false}
+        ref={inputRef}
+        type="text"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+        onKeyDown={handleKeyDown}
+        onFocus={() => { if (!isActive) onClick(row, col); }}
+        readOnly={isFound}
+        tabIndex={isActive ? 0 : -1}
+        autoComplete="off"
+        spellCheck={false}
       />
+      <div className={`absolute inset-0 flex items-center justify-center font-bold text-base sm:text-lg md:text-xl select-none pointer-events-none ${text}`}>
+        {letter}
+      </div>
     </div>
   );
 };

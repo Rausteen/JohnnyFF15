@@ -378,16 +378,27 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
   // Game over
   const isGameOver = game.gameStatus === 'finished';
 
+  // Currently selected clue for display above grid
+  const selectedWord = game.selectedWordId !== null
+    ? game.currentGrid.words.find(w => w.id === game.selectedWordId) : null;
+
+  const diffColors = [
+    { badge: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30', bar: 'bg-emerald-500' },
+    { badge: 'bg-amber-500/20 text-amber-400 border border-amber-500/30', bar: 'bg-amber-500' },
+    { badge: 'bg-red-500/20 text-red-400 border border-red-500/30', bar: 'bg-red-500' },
+  ];
+  const dc = diffColors[game.currentGridIndex] || diffColors[0];
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
       {/* Top bar */}
       <div className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-sm border-b border-zinc-800 px-4 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center">
               <Zap className="w-4 h-4 text-white" />
             </div>
-            <span className="font-black text-sm">
+            <span className="font-black text-sm hidden sm:inline">
               GRID<span className="text-red-400">RUSH</span>
             </span>
           </div>
@@ -403,28 +414,39 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
       </div>
 
       {/* Main content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6">
           {/* Left: Grid + Mystery */}
-          <div className="space-y-6">
-            {/* Grid difficulty label */}
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${
-                game.currentGridIndex === 0
-                  ? 'bg-emerald-500/20 text-emerald-400'
-                  : game.currentGridIndex === 1
-                  ? 'bg-amber-500/20 text-amber-400'
-                  : 'bg-red-500/20 text-red-400'
-              }`}>
+          <div className="space-y-4">
+            {/* Difficulty badge + progress bar */}
+            <div className="flex items-center gap-3">
+              <span className={`text-xs font-bold uppercase px-3 py-1 rounded-full ${dc.badge}`}>
                 {game.currentGrid.name}
               </span>
-              <span className="text-xs text-zinc-600">
-                {game.wordsFoundCount}/{game.currentGrid.words.length} mots
+              <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div className={`h-full ${dc.bar} rounded-full transition-all duration-500`}
+                  style={{ width: `${(game.wordsFoundCount / game.currentGrid.words.length) * 100}%` }} />
+              </div>
+              <span className="text-xs text-zinc-400 font-mono font-bold">
+                {game.wordsFoundCount}/{game.currentGrid.words.length}
               </span>
             </div>
 
+            {/* Selected clue banner */}
+            {selectedWord && (
+              <div className="bg-sky-500/10 border border-sky-500/30 rounded-xl px-4 py-3 flex items-start gap-3">
+                <span className="font-mono font-bold text-sky-400 text-sm mt-0.5">{selectedWord.number}.</span>
+                <div>
+                  <span className="text-xs text-sky-400/70 uppercase tracking-wider font-bold">
+                    {selectedWord.direction === 'across' ? 'Horizontal' : 'Vertical'}
+                  </span>
+                  <p className="text-sm text-white">{selectedWord.clue}</p>
+                </div>
+              </div>
+            )}
+
             {/* Crossword grid */}
-            <div className="overflow-x-auto flex justify-center">
+            <div className="overflow-x-auto flex justify-center py-2">
               <CrosswordGrid
                 grid={game.currentGrid}
                 cellValues={game.cellValues}
@@ -461,9 +483,7 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
                 game.setSelectedWordId(wordId);
                 game.setSelectedDirection(direction);
                 const word = game.currentGrid.words.find(w => w.id === wordId);
-                if (word) {
-                  game.selectCell(word.row, word.col, direction);
-                }
+                if (word) game.selectCell(word.row, word.col, direction);
               }}
             />
 
@@ -477,12 +497,12 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
       </div>
 
       {/* Notifications */}
-      <div className="fixed bottom-4 right-4 z-50 space-y-2">
+      <div className="fixed bottom-4 right-4 z-50 space-y-2 max-w-xs">
         {game.notifications.slice(-3).map((notif, i) => (
           <div
             key={i}
             onClick={() => game.clearNotification(i)}
-            className="bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white shadow-xl cursor-pointer animate-slide-in"
+            className="bg-emerald-900/80 border border-emerald-500/40 rounded-xl px-4 py-3 text-sm text-emerald-100 shadow-xl cursor-pointer backdrop-blur-sm"
           >
             {notif}
           </div>
@@ -492,7 +512,7 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
       {/* Game over overlay */}
       {isGameOver && (
         <GameOverScreen
-          isWin={game.allWordsFound.every((wf, i) => wf.length >= 9)}
+          isWin={game.allWordsFound.every((wf, i) => wf.length >= gridSet.grids[i].words.length)}
           myTeamId={teamId}
           timeElapsed={gameSession.timerDuration - game.timeRemaining}
           finishedTeams={game.finishedTeams}
