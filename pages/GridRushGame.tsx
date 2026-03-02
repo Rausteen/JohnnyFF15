@@ -179,12 +179,18 @@ const GridRushGame: React.FC = () => {
   const [error, setError] = useState('');
   const [needsJoin, setNeedsJoin] = useState(false);
 
-  // Get session info from sessionStorage
+  // Get session info from sessionStorage — MUST match the current gameCode
   const [sessionData, setSessionData] = useState<any>(() => {
     const raw = sessionStorage.getItem('gridrush_session');
     if (!raw) return null;
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      // Only use session if it matches the current game URL
+      if (parsed.gameCode?.toUpperCase() !== gameCode?.toUpperCase()) {
+        console.log('[GridRush] Session gameCode mismatch:', parsed.gameCode, '!==', gameCode, '— clearing');
+        return null;
+      }
+      return parsed;
     } catch {
       return null;
     }

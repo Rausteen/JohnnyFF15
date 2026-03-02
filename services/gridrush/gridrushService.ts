@@ -131,3 +131,77 @@ export async function finishGame(gameId: string, winnerTeamId?: string) {
 export async function sendChatMessage(gameId: string, teamId: string, playerName: string, message: string) {
   await supabase.from('gridrush_chat_messages').insert({ game_id: gameId, team_id: teamId, player_name: playerName, message });
 }
+
+// --- Cleanup stale games ---
+
+/** Mark all old lobby/playing games by this player as 'finished' so they don't interfere */
+export async function cleanupStaleGames(playerName: string) {
+  // Find all players with this name that are hosts
+  const { data: hostPlayers } = await supabase.from('gridrush_players').select('game_id').eq('name', playerName).eq('is_host', true);
+  if (!hostPlayers || hostPlayers.length === 0) return;
+
+  const gameIds = hostPlayers.map(p => p.game_id);
+  // Mark all lobby/playing games as finished
+  const now = new Date().toISOString();
+  await supabase.from('gridrush_games').update({ status: 'finished', finished_at: now }).in('id', gameIds).in('status', ['lobby', 'playing']);
+  await supabase.from('gridrush_teams').update({ status: 'finished', finished_at: now }).in('game_id', gameIds).in('status', ['waiting', 'playing']);
+}
+
+// --- Grid management ---
+
+export interface SavedGridSummary {
+  id: string;
+  name: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  wordCount: number;
+  createdBy: string;
+  createdAt: string;
+}
+
+/** List all saved grids from the database */
+export async function listSavedGrids(): Promise<SavedGridSummary[]> {
+  const { data, error } = await supabase.from('gridrush_grids').select('id, name, difficulty, words, created_by, created_at').order('created_at', { ascending: false });
+  if (error || !data) return [];
+  return data.map((g: any) => ({
+    id: g.id,
+    name: g.name,
+    difficulty: g.difficulty,
+    wordCount: Array.isArray(g.words) ? g.words.length : 0,
+    createdBy: g.created_by,
+    createdAt: g.created_at,
+  }));
+}
+
+/** Load a single grid from the database */
+export async function loadGrid(gridId: string): Promise<CrosswordGridData | null> {
+  const { data, error } = await supabase.from('gridrush_grids').select('*').eq('id', gridId).single();
+  if (error || !data) return null;
+  return {
+    id: data.id, name: data.name, difficulty: data.difficulty, rows: data.rows, cols: data.cols,
+    words: data.words, mysteryCells: data.mystery_cells, mysteryWord: data.mystery_word,
+    mysteryClue: data.mystery_clue, mysteryHint5: data.mystery_hint_5, mysteryHint8: data.mystery_hint_8,
+  };
+}
+
+/** Create a grid set and return its ID */
+export async function createGridSet(name: string, easyGridId: string, mediumGridId: string, hardGridId: string, createdBy: string): Promise<string | null> {
+  const id = generateId();
+  const { error } = await supabase.from('gridrush_grid_sets').insert({
+    id, name, easy_grid_id: easyGridId, medium_grid_id: mediumGridId, hard_grid_id: hardGridId, created_by: createdBy,
+  });
+  if (error) { console.error('Error creating grid set:', error); return null; }
+  return id;
+}
+
+/** List all saved grid sets */
+export async function listGridSets(): Promise<Array<{ id: string; name: string; createdAt: string }>> {
+  const { data, error } = await supabase.from('gridrush_grid_sets').select('id, name, created_at').order('created_at', { ascending: false });
+  if (error || !data) return [];
+  return data.map((s: any) => ({ id: s.id, name: s.name, createdAt: s.created_at }));
+}
+
+/** Delete a saved grid */
+export async function deleteGrid(gridId: string): Promise<boolean> {
+  const { error } = await supabase.from('gridrush_grids').delete().eq('id', gridId);
+  return !error;
+}
