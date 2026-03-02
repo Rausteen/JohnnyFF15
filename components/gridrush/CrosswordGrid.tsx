@@ -24,7 +24,6 @@ interface CrosswordGridProps {
   onCellSelect: (row: number, col: number, direction?: WordDirection) => void;
   onWordSelect: (wordId: number | null) => void;
   onDirectionChange: (dir: WordDirection) => void;
-  onCheckWords: () => void;
 }
 
 const CrosswordGrid: React.FC<CrosswordGridProps> = ({
@@ -38,7 +37,6 @@ const CrosswordGrid: React.FC<CrosswordGridProps> = ({
   onCellSelect,
   onWordSelect,
   onDirectionChange,
-  onCheckWords,
 }) => {
   const gridCellSet = useMemo(() => buildGridCellSet(grid.words), [grid.words]);
   const cellWordMap = useMemo(() => buildCellWordMap(grid.words), [grid.words]);
@@ -99,8 +97,7 @@ const CrosswordGrid: React.FC<CrosswordGridProps> = ({
   const handleCellInput = useCallback((row: number, col: number, value: string) => {
     onCellInput(row, col, value);
     if (value) moveToNextCell(row, col, selectedDirection);
-    setTimeout(() => onCheckWords(), 50);
-  }, [onCellInput, moveToNextCell, selectedDirection, onCheckWords]);
+  }, [onCellInput, moveToNextCell, selectedDirection]);
 
   const handleKeyDown = useCallback((row: number, col: number, key: string) => {
     switch (key) {
@@ -119,7 +116,6 @@ const CrosswordGrid: React.FC<CrosswordGridProps> = ({
       case 'Backspace':
         if (!cellValues[`${row},${col}`]) moveToNextCell(row, col, selectedDirection, true);
         onCellInput(row, col, '');
-        setTimeout(() => onCheckWords(), 50);
         break;
       case 'Tab': {
         const sorted = [...grid.words].sort((a, b) => a.number - b.number);
@@ -136,7 +132,7 @@ const CrosswordGrid: React.FC<CrosswordGridProps> = ({
         break;
       }
     }
-  }, [selectedDirection, selectedWordId, onDirectionChange, moveToNextCell, cellValues, onCellInput, onCheckWords, grid.words, wordsFound, onWordSelect, onCellSelect]);
+  }, [selectedDirection, selectedWordId, onDirectionChange, moveToNextCell, cellValues, onCellInput, grid.words, wordsFound, onWordSelect, onCellSelect]);
 
   return (
     <div className="inline-block select-none bg-zinc-950 p-1 rounded-lg shadow-xl shadow-black/30">

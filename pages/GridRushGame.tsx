@@ -458,7 +458,6 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
                 onCellSelect={game.selectCell}
                 onWordSelect={game.setSelectedWordId}
                 onDirectionChange={game.setSelectedDirection}
-                onCheckWords={game.checkWordCompletion}
               />
             </div>
 
