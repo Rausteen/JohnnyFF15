@@ -61,6 +61,21 @@ export async function createGame(hostName: string, gridSetId: string, teamName: 
 export async function joinGame(gameCode: string, playerName: string, teamId?: string, newTeamName?: string) {
   const { data: game, error: ge } = await supabase.from('gridrush_games').select('*').eq('game_code', gameCode.toUpperCase()).single();
   if (ge || !game || game.status !== 'lobby') return null;
+
+  // Remove player from any existing team in this game before joining
+  await supabase.from('gridrush_players').delete().eq('game_id', game.id).eq('name', playerName);
+
+  // Clean up empty teams left behind (except host teams)
+  const { data: allTeams } = await supabase.from('gridrush_teams').select('id').eq('game_id', game.id);
+  if (allTeams) {
+    for (const t of allTeams) {
+      const { data: remaining } = await supabase.from('gridrush_players').select('id').eq('team_id', t.id);
+      if (!remaining || remaining.length === 0) {
+        await supabase.from('gridrush_teams').delete().eq('id', t.id);
+      }
+    }
+  }
+
   const playerId = generateId();
   let actualTeamId = teamId;
 
