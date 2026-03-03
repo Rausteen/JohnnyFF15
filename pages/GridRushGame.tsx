@@ -548,7 +548,7 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
       {/* Game over overlay */}
       {isGameOver && (
         <GameOverScreen
-          isWin={game.allWordsFound.every((wf, i) => wf.length >= gridSet.grids[i].words.length)}
+          isWin={game.allWordsFound.every((wf, i) => wf.length >= gridSet.grids[i].words.length - 1)}
           myTeamId={teamId}
           timeElapsed={gameSession.timerDuration - game.timeRemaining}
           finishedTeams={game.finishedTeams}

@@ -104,7 +104,8 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
           if (!foundAny) return { ...prev, cellValues: cv };
           const updatedWF = [...prev.wordsFound];
           updatedWF[event.data.gridIndex] = newWF;
-          if (newWF.length >= grid.words.length) {
+          // Grid validated when 9/10 words found (all but one)
+          if (newWF.length >= grid.words.length - 1) {
             const gi = event.data.gridIndex;
             pendingEffectsRef.current.push(() => handleGridCompleteRef.current(gi, updatedWF));
           } else {
@@ -171,7 +172,8 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
       const updatedWF = [...prev.wordsFound];
       updatedWF[gi] = newWF;
 
-      if (newWF.length >= grid.words.length) {
+      // Grid validated when 9/10 words found (all but one)
+      if (newWF.length >= grid.words.length - 1) {
         pendingEffectsRef.current.push(() => handleGridCompleteRef.current(gi, updatedWF));
         return { ...prev, cellValues: cv, wordsFound: updatedWF };
       }
@@ -202,7 +204,8 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
       }
       if (!found) return prev;
       const updated = [...prev.wordsFound]; updated[gi] = newWF;
-      if (newWF.length >= grid.words.length) {
+      // Grid validated when 9/10 words found (all but one)
+      if (newWF.length >= grid.words.length - 1) {
         pendingEffectsRef.current.push(() => handleGridCompleteRef.current(gi, updated));
         return { ...prev, wordsFound: updated };
       }
