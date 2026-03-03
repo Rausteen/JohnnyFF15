@@ -205,3 +205,23 @@ export async function deleteGrid(gridId: string): Promise<boolean> {
   const { error } = await supabase.from('gridrush_grids').delete().eq('id', gridId);
   return !error;
 }
+
+/** Get live progress for all teams in a game (for spectator/admin view) */
+export async function getTeamsProgress(gameId: string): Promise<Array<{
+  teamId: string; teamName: string; players: string[];
+  currentGridIndex: number; wordsFoundPerGrid: number[][];
+  status: string; finishedAt: string | null;
+}>> {
+  const { data: teams } = await supabase.from('gridrush_teams').select('*').eq('game_id', gameId);
+  const { data: players } = await supabase.from('gridrush_players').select('*').eq('game_id', gameId);
+  if (!teams) return [];
+  return teams.map((t: any) => ({
+    teamId: t.id,
+    teamName: t.name,
+    players: (players || []).filter((p: any) => p.team_id === t.id).map((p: any) => p.name),
+    currentGridIndex: t.current_grid_index,
+    wordsFoundPerGrid: t.words_found || [[], [], []],
+    status: t.status,
+    finishedAt: t.finished_at,
+  }));
+}

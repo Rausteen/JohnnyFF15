@@ -98,7 +98,8 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
               foundAny = true;
               const wordId = w.id;
               const gi = event.data.gridIndex;
-              pendingEffectsRef.current.push(() => rtRef.current?.sendWordFound(wordId, gi, playerName));
+              const whoFound = event.data.playerName;
+              pendingEffectsRef.current.push(() => rtRef.current?.sendWordFound(wordId, gi, whoFound));
             }
           }
           if (!foundAny) return { ...prev, cellValues: cv };

@@ -8,6 +8,7 @@ import GameTimer from '../components/gridrush/GameTimer';
 import GridProgress from '../components/gridrush/GridProgress';
 import TeamChat from '../components/gridrush/TeamChat';
 import GameOverScreen from '../components/gridrush/GameOverScreen';
+import AdminSpectator from '../components/gridrush/AdminSpectator';
 import Lobby from '../components/gridrush/Lobby';
 import type { GameSession, GridSet, Team } from '../services/gridrush/gridrushTypes';
 import { getGameByCode, startGame, joinGame } from '../services/gridrush/gridrushService';
@@ -545,6 +546,15 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
         ))}
       </div>
 
+      {/* Admin spectator panel (host only, during game) */}
+      {isHost && !isGameOver && (
+        <AdminSpectator
+          gameId={gameSession.id}
+          gridWordCounts={gridSet.grids.map(g => g.words.length)}
+          startedAt={gameSession.startedAt || null}
+        />
+      )}
+
       {/* Game over overlay */}
       {isGameOver && (
         <GameOverScreen
@@ -552,6 +562,8 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
           myTeamId={teamId}
           timeElapsed={gameSession.timerDuration - game.timeRemaining}
           finishedTeams={game.finishedTeams}
+          gameId={gameSession.id}
+          gridWordCounts={gridSet.grids.map(g => g.words.length)}
         />
       )}
     </div>
