@@ -134,11 +134,19 @@ const CrosswordGrid: React.FC<CrosswordGridProps> = ({
     }
   }, [selectedDirection, selectedWordId, onDirectionChange, moveToNextCell, cellValues, onCellInput, grid.words, wordsFound, onWordSelect, onCellSelect]);
 
+  // Compute a max cell size that fits the container.
+  // On small screens we clamp to fit, on large screens we cap at 48px.
+  // The grid uses CSS clamp() so it scales smoothly.
+  const cellSize = `clamp(24px, calc((100vw - 2rem - ${grid.cols * 2}px) / ${grid.cols}), 48px)`;
+
   return (
-    <div className="inline-block select-none bg-zinc-950 p-1 rounded-lg shadow-xl shadow-black/30">
+    <div className="inline-block select-none bg-zinc-950 p-1 rounded-lg shadow-xl shadow-black/30 max-w-full">
       <div
         className="grid gap-[2px]"
-        style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))` }}
+        style={{
+          gridTemplateColumns: `repeat(${grid.cols}, ${cellSize})`,
+          gridAutoRows: cellSize,
+        }}
       >
         {Array.from({ length: grid.rows }).map((_, row) =>
           Array.from({ length: grid.cols }).map((_, col) => {

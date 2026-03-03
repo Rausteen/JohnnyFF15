@@ -71,7 +71,6 @@ const MysteryWordInput: React.FC<Props> = ({ grid, wordsFoundCount, wordsFound, 
         <h3 className="font-bold text-red-300 text-sm uppercase tracking-wider">Mot Mystère</h3>
         <span className="text-xs text-zinc-500 ml-auto">{grid.mysteryWord.length} lettres</span>
       </div>
-      <p className="text-sm text-zinc-300 italic mb-3 px-2">"{grid.mysteryClue}"</p>
       <div className="space-y-2 mb-3">
         <div className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg ${show5 ? 'bg-amber-900/30 text-amber-300' : 'bg-zinc-800/50 text-zinc-600'}`}>
           {show5 ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}

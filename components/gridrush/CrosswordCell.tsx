@@ -10,7 +10,8 @@ interface Props {
   onKeyDown: (r: number, c: number, k: string) => void;
 }
 
-const CELL = 'w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12';
+// Cell size is now set via CSS custom property --cell-size from the parent grid
+const CELL = 'aspect-square';
 
 const CrosswordCell: React.FC<Props> = ({ row, col, letter, isActive, isHighlighted, isFound, isMystery, number, isBlack, mysteryIndex, onClick, onInput, onKeyDown }) => {
   const inputRef = useRef<HTMLInputElement>(null);
