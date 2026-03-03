@@ -32,7 +32,7 @@ const GridRushInfo: React.FC = () => {
             Le concept
           </h2>
           <p className="text-zinc-400 leading-relaxed text-lg">
-            Les équipes s'affrontent pour compléter <span className="text-amber-400 font-bold">3 grilles de mots croisés</span> de difficulté croissante (facile, moyenne, difficile). Chaque grille contient un <span className="text-red-400 font-bold">mot mystère</span> caché qu'il faut deviner pour passer à la grille suivante. La première équipe à terminer les 3 grilles et trouver les 3 mots mystères remporte la partie.
+            Les équipes s'affrontent pour compléter <span className="text-amber-400 font-bold">3 grilles de mots croisés</span> de difficulté croissante (facile, moyenne, difficile). Chaque grille contient un <span className="text-red-400 font-bold">mot mystère</span> bonus caché dans certaines cases. Pour passer à la grille suivante, il suffit de trouver <span className="text-white font-bold">presque tous les mots</span> (tous sauf un). La première équipe à terminer les 3 grilles remporte la partie.
           </p>
         </div>
 
@@ -67,7 +67,7 @@ const GridRushInfo: React.FC = () => {
             <div className="text-xs text-red-400 font-bold uppercase tracking-wider mb-2">Étape 3</div>
             <h3 className="text-lg font-bold text-white mb-2">Trouver le mot mystère</h3>
             <p className="text-zinc-500 text-sm leading-relaxed">
-              Certaines cases de la grille forment un <span className="text-white font-semibold">mot mystère</span>. Trouve-le grâce à l'indice donné pour débloquer la grille suivante.
+              Certaines cases de la grille forment un <span className="text-white font-semibold">mot mystère</span>. C'est un bonus : le trouver valide automatiquement tous les mots restants de la grille et permet de passer directement à la suivante.
             </p>
           </div>
         </div>
@@ -80,7 +80,7 @@ const GridRushInfo: React.FC = () => {
               Le timer
             </h3>
             <p className="text-zinc-500 text-sm leading-relaxed">
-              Chaque partie a un timer (5 à 60 min, par défaut 20 min). Si le temps expire, l'équipe avec le plus de mots trouvés gagne. Des <span className="text-amber-400 font-semibold">indices supplémentaires</span> pour le mot mystère apparaissent à 5 et 8 minutes.
+              Chaque partie a un timer (5 à 60 min, par défaut 20 min). Si le temps expire, l'équipe avec le plus de mots trouvés gagne.
             </p>
           </div>
 
@@ -90,7 +90,7 @@ const GridRushInfo: React.FC = () => {
               3 niveaux de difficulté
             </h3>
             <p className="text-zinc-500 text-sm leading-relaxed">
-              Les grilles sont jouées dans l'ordre : <span className="text-emerald-400 font-semibold">Facile</span> → <span className="text-amber-400 font-semibold">Moyenne</span> → <span className="text-red-400 font-semibold">Difficile</span>. Il faut trouver le mot mystère d'une grille pour passer à la suivante.
+              Les grilles sont jouées dans l'ordre : <span className="text-emerald-400 font-semibold">Facile</span> → <span className="text-amber-400 font-semibold">Moyenne</span> → <span className="text-red-400 font-semibold">Difficile</span>. Il faut trouver <span className="text-white font-semibold">tous les mots sauf un</span> (ou le mot mystère) pour passer à la grille suivante.
             </p>
           </div>
 
@@ -100,7 +100,7 @@ const GridRushInfo: React.FC = () => {
               Indices du mot mystère
             </h3>
             <p className="text-zinc-500 text-sm leading-relaxed">
-              Chaque grille donne un <span className="text-yellow-400 font-semibold">indice principal</span> pour le mot mystère. Si tu bloques, des indices bonus se débloquent automatiquement après quelques minutes pour t'aider.
+              Chaque grille a un <span className="text-yellow-400 font-semibold">indice principal</span> pour le mot mystère. En trouvant <span className="text-white font-semibold">5 mots</span>, un premier indice bonus se débloque. À <span className="text-white font-semibold">8 mots</span> trouvés, un deuxième indice apparaît pour t'aider.
             </p>
           </div>
 
@@ -110,7 +110,7 @@ const GridRushInfo: React.FC = () => {
               Comment gagner
             </h3>
             <p className="text-zinc-500 text-sm leading-relaxed">
-              La <span className="text-gold font-semibold">première équipe</span> à compléter les 3 grilles et trouver les 3 mots mystères gagne ! Si le temps expire, l'équipe la plus avancée l'emporte.
+              La <span className="text-gold font-semibold">première équipe</span> à compléter les 3 grilles gagne ! Pas besoin de trouver tous les mots mystères : il suffit de trouver assez de mots pour valider chaque grille. Si le temps expire, l'équipe la plus avancée l'emporte.
             </p>
           </div>
         </div>
