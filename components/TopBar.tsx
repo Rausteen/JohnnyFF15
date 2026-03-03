@@ -15,7 +15,7 @@ const TopBar = () => {
   const isActive = (path: string) => location.pathname === path;
 
   // Check if user is admin (Rausteen)
-  const isAdmin = profile?.pseudo === 'Rausteen';
+  const isAdmin = ['Rausteen', 'AlbertEinstein 300IQ'].includes(profile?.pseudo || '');
 
 const navLinks = [
   { path: '/dashboard', label: 'Le Salon', icon: Skull },

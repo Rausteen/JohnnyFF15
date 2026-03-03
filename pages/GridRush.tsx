@@ -13,7 +13,7 @@ const GridRush: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { profile } = useCreditsStore();
-  const isAdmin = profile?.pseudo === 'Rausteen';
+  const isAdmin = ['Rausteen', 'AlbertEinstein 300IQ'].includes(profile?.pseudo || '');
   const playerName = profile?.pseudo || '';
   const [mode, setMode] = useState<Mode>('menu');
 
