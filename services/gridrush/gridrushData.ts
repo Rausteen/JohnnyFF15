@@ -3,7 +3,7 @@ import { generateCrosswordLayout, assignMysteryCells, normalize } from './crossw
 
 const easyWords: WordInput[] = [
   { answer: 'Arceus', clue: 'Dieu de Pokémon', acceptedAnswers: ['Arceus'] },
-  { answer: 'Geeko', clue: 'Pogo, altégo, verti, mordicus', acceptedAnswers: ['Geeko'] },
+  { answer: 'Gekko', clue: 'Pogo, altégo, verti, mordicus', acceptedAnswers: ['Gekko'] },
   { answer: 'Mario', clue: 'Mamma mia !', acceptedAnswers: ['Mario'] },
   { answer: 'Dofus', clue: "L'oeuf le plus convoité", acceptedAnswers: ['Dofus'] },
   { answer: 'Clair Obscur', clue: 'Expédition 33', acceptedAnswers: ['Clair Obscur', 'ClairObscur'] },

@@ -500,6 +500,8 @@ const GridRushGameInner: React.FC<GameInnerProps> = ({
             <MysteryWordInput
               grid={game.currentGrid}
               wordsFoundCount={game.wordsFoundCount}
+              wordsFound={game.wordsFound}
+              cellValues={game.cellValues}
               mysteryInput={game.mysteryInput}
               onInputChange={game.setMysteryInput}
               onSubmit={game.submitMysteryWord}

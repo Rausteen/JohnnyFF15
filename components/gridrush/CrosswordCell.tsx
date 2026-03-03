@@ -45,7 +45,8 @@ const CrosswordCell: React.FC<Props> = ({ row, col, letter, isActive, isHighligh
   return (
     <div className={`relative ${CELL} border-[1.5px] ${border} ${bg} cursor-pointer transition-colors duration-75 rounded-[3px]`} onClick={() => onClick(row, col)}>
       {number !== null && <span className="absolute top-[1px] left-[3px] text-[8px] sm:text-[9px] font-bold text-zinc-400 leading-none select-none pointer-events-none z-10">{number}</span>}
-      {isMystery && mysteryIndex !== null && <span className="absolute bottom-[1px] right-[3px] text-[7px] sm:text-[8px] font-bold text-red-400 leading-none select-none pointer-events-none z-10">{mysteryIndex + 1}</span>}
+      {/* Mystery cells show a small red diamond indicator instead of an index number */}
+      {isMystery && <span className="absolute bottom-[1px] right-[3px] text-[7px] text-red-400/60 leading-none select-none pointer-events-none z-10">&#9670;</span>}
       {isActive && <div className="absolute inset-[-1px] rounded-[3px] ring-2 ring-yellow-400 ring-offset-1 ring-offset-zinc-950 pointer-events-none z-20" />}
       <input
         ref={inputRef}

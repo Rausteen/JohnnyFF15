@@ -1,17 +1,62 @@
-import React, { useState } from 'react';
-import type { CrosswordGridData } from '../../services/gridrush/gridrushTypes';
+import React, { useState, useMemo } from 'react';
+import type { CrosswordGridData, CellValues } from '../../services/gridrush/gridrushTypes';
+import { getWordCells } from '../../services/gridrush/crosswordEngine';
 import { Lock, Unlock, Sparkles, AlertTriangle } from 'lucide-react';
 
 interface Props {
-  grid: CrosswordGridData; wordsFoundCount: number;
-  mysteryInput: string; onInputChange: (v: string) => void;
+  grid: CrosswordGridData;
+  wordsFoundCount: number;
+  wordsFound: number[];
+  cellValues: CellValues;
+  mysteryInput: string;
+  onInputChange: (v: string) => void;
   onSubmit: (input: string) => boolean;
 }
 
-const MysteryWordInput: React.FC<Props> = ({ grid, wordsFoundCount, mysteryInput, onInputChange, onSubmit }) => {
+/** Deterministic shuffle based on a seed string (so it doesn't re-shuffle on every render) */
+function seededShuffle<T>(arr: T[], seed: string): T[] {
+  const copy = [...arr];
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = ((h << 5) - h + seed.charCodeAt(i)) | 0;
+  for (let i = copy.length - 1; i > 0; i--) {
+    h = (h * 1103515245 + 12345) & 0x7fffffff;
+    const j = h % (i + 1);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+const MysteryWordInput: React.FC<Props> = ({ grid, wordsFoundCount, wordsFound, cellValues, mysteryInput, onInputChange, onSubmit }) => {
   const [error, setError] = useState(false);
   const show5 = wordsFoundCount >= 5;
   const show8 = wordsFoundCount >= 8;
+
+  // Find which mystery cells have been revealed (their word is found)
+  const revealedLetters = useMemo(() => {
+    // Build set of all cells belonging to found words
+    const foundCellKeys = new Set<string>();
+    for (const wordId of wordsFound) {
+      const word = grid.words.find(w => w.id === wordId);
+      if (word) for (const c of getWordCells(word)) foundCellKeys.add(`${c.row},${c.col}`);
+    }
+
+    // Check each mystery cell — if it belongs to a found word, the letter is revealed
+    const letters: string[] = [];
+    for (const mc of grid.mysteryCells) {
+      const key = `${mc.row},${mc.col}`;
+      if (foundCellKeys.has(key)) {
+        const val = cellValues[key];
+        if (val) letters.push(val.toUpperCase());
+      }
+    }
+    return letters;
+  }, [wordsFound, grid.words, grid.mysteryCells, cellValues]);
+
+  // Shuffle the revealed letters with a deterministic seed based on grid id
+  // so the order is consistent per grid but not matching the real mystery word order
+  const shuffledLetters = useMemo(() => {
+    return seededShuffle(revealedLetters, grid.id + '-mystery');
+  }, [revealedLetters, grid.id]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +82,8 @@ const MysteryWordInput: React.FC<Props> = ({ grid, wordsFoundCount, mysteryInput
           <span>{show8 ? `Indice 2 : ${grid.mysteryHint8}` : `Indice 2 à 8 mots (${wordsFoundCount}/8)`}</span>
         </div>
       </div>
+
+      {/* Mystery word boxes: show typed input */}
       <div className="flex flex-wrap gap-1 mb-3 justify-center">
         {Array.from({ length: grid.mysteryWord.length }).map((_, i) => (
           <div key={i} className="w-7 h-7 sm:w-8 sm:h-8 border border-red-500/40 bg-red-950/30 rounded flex items-center justify-center text-sm font-bold text-red-300">
@@ -44,6 +91,26 @@ const MysteryWordInput: React.FC<Props> = ({ grid, wordsFoundCount, mysteryInput
           </div>
         ))}
       </div>
+
+      {/* Revealed letters (shuffled) as clickable chips */}
+      {shuffledLetters.length > 0 && (
+        <div className="mb-3">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1.5">Lettres découvertes (mélangées)</p>
+          <div className="flex flex-wrap gap-1 justify-center">
+            {shuffledLetters.map((letter, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => onInputChange(mysteryInput + letter)}
+                className="w-7 h-7 sm:w-8 sm:h-8 border border-red-500/30 bg-red-900/40 rounded flex items-center justify-center text-sm font-bold text-red-300 hover:bg-red-800/50 hover:border-red-400/50 transition-colors cursor-pointer"
+              >
+                {letter}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input type="text" value={mysteryInput} onChange={(e) => { setError(false); onInputChange(e.target.value); }}
           placeholder="Tape le Mot Mystère..." className={`flex-1 px-3 py-2 rounded-lg bg-zinc-800 border text-white text-sm placeholder-zinc-500 outline-none ${error ? 'border-red-500' : 'border-zinc-700 focus:border-red-500/50'}`}
