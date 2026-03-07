@@ -40,7 +40,46 @@ const hardWords: WordInput[] = [
   { answer: 'Tom Nook', clue: "Bienvenue sur l'île, la dette t'attend déjà", acceptedAnswers: ['Tom Nook', 'TomNook'] },
 ];
 
+// --- Set 2: Jeux Vidéo ---
+
+const easyWords2: WordInput[] = [
+  { answer: 'Mario', clue: 'Le célèbre plombier rouge de Nintendo', acceptedAnswers: ['Mario'] },
+  { answer: 'Zelda', clue: "La princesse d'Hyrule à sauver", acceptedAnswers: ['Zelda'] },
+  { answer: 'Sonic', clue: 'Hérisson bleu supersonique de SEGA', acceptedAnswers: ['Sonic'] },
+  { answer: 'Pikachu', clue: 'Pokémon électrique numéro 025', acceptedAnswers: ['Pikachu'] },
+  { answer: 'Luigi', clue: 'Le frère en vert de Mario', acceptedAnswers: ['Luigi'] },
+  { answer: 'Link', clue: 'Le héros elfe porteur de la Triforce', acceptedAnswers: ['Link'] },
+  { answer: 'Samus', clue: 'La chasseuse de primes de Metroid', acceptedAnswers: ['Samus'] },
+  { answer: 'Kirby', clue: 'La petite boule rose qui avale tout', acceptedAnswers: ['Kirby'] },
+  { answer: 'Yoshi', clue: 'Le dinosaure vert monture de Mario', acceptedAnswers: ['Yoshi'] },
+];
+
+const mediumWords2: WordInput[] = [
+  { answer: 'Halo', clue: 'FPS Xbox où tu combats les Covenants avec le Master Chief', acceptedAnswers: ['Halo'] },
+  { answer: 'Kratos', clue: 'Le dieu de la guerre du studio Santa Monica', acceptedAnswers: ['Kratos'] },
+  { answer: 'Minecraft', clue: 'Jeu de construction en blocs cubiques créé par Notch', acceptedAnswers: ['Minecraft'] },
+  { answer: 'Diablo', clue: "Hack & slash de Blizzard où tu plonges en Enfer", acceptedAnswers: ['Diablo'] },
+  { answer: 'Portal', clue: 'Tu résous des énigmes avec un pistolet de téléportation', acceptedAnswers: ['Portal'] },
+  { answer: 'Tetris', clue: 'Jeu de pièces tombantes inventé par un Soviétique', acceptedAnswers: ['Tetris'] },
+  { answer: 'Bioshock', clue: 'Rapture : une ville sous-marine dystopique des années 60', acceptedAnswers: ['Bioshock', 'BioShock'] },
+  { answer: 'Overwatch', clue: 'Shooter héroïque de Blizzard avec Tracer et Reaper', acceptedAnswers: ['Overwatch'] },
+  { answer: 'Doom', clue: "Le FPS originel de id Software, sorti en 1993", acceptedAnswers: ['Doom'] },
+];
+
+const hardWords2: WordInput[] = [
+  { answer: 'Kojima', clue: 'Le génie derrière Metal Gear Solid et Death Stranding', acceptedAnswers: ['Kojima'] },
+  { answer: 'Roguelike', clue: 'Genre où chaque mort est permanente et les donjons générés aléatoirement', acceptedAnswers: ['Roguelike'] },
+  { answer: 'Glados', clue: "L'IA sadique de Portal, obsédée par la science et le mensonge", acceptedAnswers: ['Glados', 'GLaDOS'] },
+  { answer: 'FromSoftware', clue: 'Le studio japonais derrière Dark Souls, Bloodborne et Elden Ring', acceptedAnswers: ['FromSoftware', 'From Software'] },
+  { answer: 'Dualshock', clue: 'Manette emblématique de Sony introduite avec la PS1 en 1997', acceptedAnswers: ['Dualshock', 'DualShock'] },
+  { answer: 'Speedrun', clue: 'Terminer un jeu le plus vite possible, souvent en exploitant des bugs', acceptedAnswers: ['Speedrun', 'Speed Run'] },
+  { answer: 'Hitbox', clue: "Zone de collision invisible qui détermine si un coup touche", acceptedAnswers: ['Hitbox'] },
+  { answer: 'Lootbox', clue: "Boîte mystère payante controversée, comparée aux jeux d'argent", acceptedAnswers: ['Lootbox', 'Loot Box'] },
+  { answer: 'Respawn', clue: 'Studio derrière Titanfall, Apex Legends et Jedi Fallen Order', acceptedAnswers: ['Respawn'] },
+];
+
 let cachedGridSet: GridSet | null = null;
+let cachedGridSet2: GridSet | null = null;
 
 function buildGrid(
   id: string, name: string, difficulty: 'easy' | 'medium' | 'hard',
@@ -70,4 +109,43 @@ export function getDefaultGridSet(): GridSet {
 
   cachedGridSet = { id: 'default-set', name: 'Set Initial', grids: [easy, medium, hard], createdBy: 'System', createdAt: new Date().toISOString() };
   return cachedGridSet;
+}
+
+export function getDefaultGridSet2(): GridSet {
+  if (cachedGridSet2) return cachedGridSet2;
+
+  const easy = buildGrid('default2-easy', 'Facile — Jeux Vidéo', 'easy', easyWords2, 'Gameboy',
+    'Je suis une console portable Nintendo sortie en 1989. Mon nom évoque la lumière du jour. J\'ai fait connaître Tetris au monde entier.',
+    'Console portable Nintendo de 1989', 'Mon nom évoque la lumière du jour');
+
+  const medium = buildGrid('default2-medium', 'Moyen — Jeux Vidéo', 'medium', mediumWords2, 'FF7',
+    'Je suis le septième opus d\'une saga RPG japonaise légendaire. Je mets en scène Cloud Strife, une épée aussi grande qu\'un homme, et une ville corrompue par le Mako.',
+    'Suite RPG japonaise légendaire', 'Cloud Strife et le Mako');
+
+  const hard = buildGrid('default2-hard', 'Difficile — Jeux Vidéo', 'hard', hardWords2, 'Cancel',
+    'Je suis une technique de jeu compétitif dans les jeux de combat. Je consiste à annuler l\'animation d\'une attaque avant qu\'elle se termine pour en enchaîner une autre immédiatement.',
+    'Technique de jeu de combat compétitif', 'Annuler une animation pour enchaîner');
+
+  cachedGridSet2 = { id: 'default-set-2', name: 'Jeux Vidéo', grids: [easy, medium, hard], createdBy: 'System', createdAt: new Date().toISOString() };
+  return cachedGridSet2;
+}
+
+export interface DefaultSetInfo {
+  id: string;
+  name: string;
+}
+
+export const DEFAULT_SETS: DefaultSetInfo[] = [
+  { id: 'default-set', name: 'Set Initial' },
+  { id: 'default-set-2', name: 'Jeux Vidéo' },
+];
+
+export function getDefaultGridSetById(id: string): GridSet | null {
+  if (id === 'default-set') return getDefaultGridSet();
+  if (id === 'default-set-2') return getDefaultGridSet2();
+  return null;
+}
+
+export function isDefaultSetId(id: string): boolean {
+  return id === 'default-set' || id === 'default-set-2';
 }

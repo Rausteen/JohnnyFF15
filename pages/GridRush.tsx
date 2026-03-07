@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Zap, Plus, Grid3X3, Settings, Users, ShieldAlert, ChevronDown, Check, Layers } from 'lucide-react';
 import { createGame, cleanupStaleGames, listSavedGrids, createGridSet, listGridSets, type SavedGridSummary } from '../services/gridrush/gridrushService';
+import { DEFAULT_SETS } from '../services/gridrush/gridrushData';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 
@@ -23,6 +24,7 @@ const GridRush: React.FC = () => {
 
   // Grid selection
   const [gridSource, setGridSource] = useState<'default' | 'custom'>('default');
+  const [selectedDefaultSet, setSelectedDefaultSet] = useState<string>('default-set');
   const [savedGrids, setSavedGrids] = useState<SavedGridSummary[]>([]);
   const [existingSets, setExistingSets] = useState<ExistingSet[]>([]);
   const [selectedSetId, setSelectedSetId] = useState<string>('');
@@ -60,7 +62,7 @@ const GridRush: React.FC = () => {
     await cleanupStaleGames(playerName);
     sessionStorage.removeItem('gridrush_session');
 
-    let gridSetId = 'default-set';
+    let gridSetId = selectedDefaultSet;
 
     if (gridSource === 'custom') {
       if (selectedSetId) {
@@ -244,6 +246,25 @@ const GridRush: React.FC = () => {
                     Personnalisées
                   </button>
                 </div>
+
+                {gridSource === 'default' && (
+                  <div className="space-y-1 mb-3">
+                    {DEFAULT_SETS.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedDefaultSet(s.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-all ${
+                          selectedDefaultSet === s.id
+                            ? 'bg-primary/20 text-primary border border-primary/40'
+                            : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:bg-zinc-700'
+                        }`}
+                      >
+                        {selectedDefaultSet === s.id && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
+                        <span className="font-bold">{s.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {gridSource === 'custom' && (
                   <div className="space-y-3">

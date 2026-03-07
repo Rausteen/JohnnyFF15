@@ -12,7 +12,7 @@ import AdminSpectator from '../components/gridrush/AdminSpectator';
 import Lobby from '../components/gridrush/Lobby';
 import type { GameSession, GridSet, Team } from '../services/gridrush/gridrushTypes';
 import { getGameByCode, startGame, joinGame } from '../services/gridrush/gridrushService';
-import { getDefaultGridSet } from '../services/gridrush/gridrushData';
+import { getDefaultGridSetById, isDefaultSetId } from '../services/gridrush/gridrushData';
 import { loadGridSet } from '../services/gridrush/gridrushService';
 import { useGridRushGame } from '../services/gridrush/useGridRushGame';
 import { useCreditsStore } from '../services/creditsStore';
@@ -215,8 +215,8 @@ const GridRushGame: React.FC = () => {
 
     // Load grid set
     let gs: GridSet | null = null;
-    if (game.gridSetId === 'default-set') {
-      gs = getDefaultGridSet();
+    if (isDefaultSetId(game.gridSetId)) {
+      gs = getDefaultGridSetById(game.gridSetId);
     } else {
       gs = await loadGridSet(game.gridSetId);
     }
