@@ -19,7 +19,6 @@ const GridRush: React.FC = () => {
   const [mode, setMode] = useState<Mode>('menu');
 
   // Create game form
-  const [teamName, setTeamName] = useState('');
   const [timerMin, setTimerMin] = useState(20);
 
   // Grid selection
@@ -54,7 +53,7 @@ const GridRush: React.FC = () => {
   const hardGrids = savedGrids.filter(g => g.difficulty === 'hard');
 
   const handleCreate = async () => {
-    if (!playerName || !teamName.trim()) return;
+    if (!playerName) return;
     setLoading(true);
     setError('');
 
@@ -88,7 +87,7 @@ const GridRush: React.FC = () => {
     const result = await createGame(
       playerName,
       gridSetId,
-      teamName.trim(),
+      '',
       timerMin * 60
     );
 
@@ -189,18 +188,6 @@ const GridRush: React.FC = () => {
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
                 <span className="text-xs text-zinc-500">Joueur :</span>
                 <span className="text-sm font-bold text-white">{playerName}</span>
-              </div>
-
-              <div>
-                <label className="block text-xs text-zinc-500 mb-1">Nom de ton équipe</label>
-                <input
-                  type="text"
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
-                  placeholder="Ex: Les Chevaliers"
-                  className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 outline-none focus:border-primary/50"
-                  maxLength={30}
-                />
               </div>
 
               <div>
@@ -330,7 +317,7 @@ const GridRush: React.FC = () => {
 
               <button
                 onClick={handleCreate}
-                disabled={loading || !playerName || !teamName.trim()}
+                disabled={loading || !playerName}
                 className="w-full py-4 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:brightness-110 text-white font-bold text-lg transition-all disabled:opacity-50"
               >
                 {loading ? 'Création...' : 'Créer la partie'}

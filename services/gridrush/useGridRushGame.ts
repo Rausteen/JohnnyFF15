@@ -126,7 +126,10 @@ export function useGridRushGame({ gridSet, gameId, teamId, teamName, playerId, p
       case 'grid_complete':
         setState(prev => ({ ...prev, currentGridIndex: event.data.nextGridIndex, mysteryInput: '', notifications: [...prev.notifications, `Grille ${event.data.gridIndex + 1} terminée !`] }));
         break;
-      case 'game_started': startTimer(event.data.startedAt); break;
+      case 'game_started':
+        // Teams were randomly reassigned at game start — reload to get new team
+        window.location.reload();
+        break;
       case 'team_finished':
         setState(prev => ({ ...prev, finishedTeams: [...prev.finishedTeams, event.data], notifications: [...prev.notifications, `L'équipe ${event.data.teamName} a terminé !`] }));
         break;
