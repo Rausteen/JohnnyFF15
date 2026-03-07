@@ -1,6 +1,6 @@
 import { supabase } from '../supabase';
 import type { GameSession, Team, Player, ChatMessage, CrosswordGridData, GridSet } from './gridrushTypes';
-import { getDefaultGridSetById, isDefaultSetId } from './gridrushData';
+import { getDefaultGridSet } from './gridrushData';
 
 function generateGameCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -25,7 +25,7 @@ export async function saveGrid(grid: CrosswordGridData, createdBy: string): Prom
 }
 
 export async function loadGridSet(gridSetId: string): Promise<GridSet | null> {
-  if (isDefaultSetId(gridSetId)) return getDefaultGridSetById(gridSetId);
+  if (gridSetId === 'default-set') return getDefaultGridSet();
   const { data: setData, error } = await supabase.from('gridrush_grid_sets').select('*').eq('id', gridSetId).single();
   if (error || !setData) return null;
   const gridIds = [setData.easy_grid_id, setData.medium_grid_id, setData.hard_grid_id];
@@ -43,7 +43,7 @@ export async function loadGridSet(gridSetId: string): Promise<GridSet | null> {
   return { id: setData.id, name: setData.name, grids: [mapGrid(e), mapGrid(m), mapGrid(h)], createdBy: setData.created_by, createdAt: setData.created_at };
 }
 
-export async function createGame(hostName: string, gridSetId: string, _teamName: string, timerDuration = 1200) {
+export async function createGame(hostName: string, gridSetId: string, teamName: string, timerDuration = 1200) {
   const gameCode = generateGameCode();
   const gameId = generateId();
   const teamId = generateId();
@@ -51,22 +51,21 @@ export async function createGame(hostName: string, gridSetId: string, _teamName:
 
   const { error: ge } = await supabase.from('gridrush_games').insert({ id: gameId, game_code: gameCode, grid_set_id: gridSetId, host_id: playerId, status: 'lobby', timer_duration: timerDuration });
   if (ge) { console.error(ge); return null; }
-  // Create a temporary solo team for the host (teams are reassigned randomly at game start)
-  const { error: te } = await supabase.from('gridrush_teams').insert({ id: teamId, game_id: gameId, name: `Lobby-${hostName}`, status: 'waiting', current_grid_index: 0, words_found: [[], [], []] });
+  const { error: te } = await supabase.from('gridrush_teams').insert({ id: teamId, game_id: gameId, name: teamName, status: 'waiting', current_grid_index: 0, words_found: [[], [], []] });
   if (te) { console.error(te); return null; }
   const { error: pe } = await supabase.from('gridrush_players').insert({ id: playerId, team_id: teamId, game_id: gameId, name: hostName, is_host: true });
   if (pe) { console.error(pe); return null; }
   return { gameCode, gameId, teamId, playerId };
 }
 
-export async function joinGame(gameCode: string, playerName: string) {
+export async function joinGame(gameCode: string, playerName: string, teamId?: string, newTeamName?: string) {
   const { data: game, error: ge } = await supabase.from('gridrush_games').select('*').eq('game_code', gameCode.toUpperCase()).single();
   if (ge || !game || game.status !== 'lobby') return null;
 
   // Remove player from any existing team in this game before joining
   await supabase.from('gridrush_players').delete().eq('game_id', game.id).eq('name', playerName);
 
-  // Clean up empty teams left behind
+  // Clean up empty teams left behind (except host teams)
   const { data: allTeams } = await supabase.from('gridrush_teams').select('id').eq('game_id', game.id);
   if (allTeams) {
     for (const t of allTeams) {
@@ -78,12 +77,20 @@ export async function joinGame(gameCode: string, playerName: string) {
   }
 
   const playerId = generateId();
-  // Create a temporary solo team for this player (teams are reassigned at game start)
-  const tempTeamId = generateId();
-  const { error: te } = await supabase.from('gridrush_teams').insert({ id: tempTeamId, game_id: game.id, name: `Lobby-${playerName}`, status: 'waiting', current_grid_index: 0, words_found: [[], [], []] });
-  if (te) return null;
+  let actualTeamId = teamId;
 
-  const { error } = await supabase.from('gridrush_players').insert({ id: playerId, team_id: tempTeamId, game_id: game.id, name: playerName, is_host: false });
+  if (!teamId && newTeamName) {
+    const newTeamId = generateId();
+    const { error } = await supabase.from('gridrush_teams').insert({ id: newTeamId, game_id: game.id, name: newTeamName, status: 'waiting', current_grid_index: 0, words_found: [[], [], []] });
+    if (error) return null;
+    actualTeamId = newTeamId;
+  }
+  if (!actualTeamId) return null;
+
+  const { data: existing } = await supabase.from('gridrush_players').select('id').eq('team_id', actualTeamId);
+  if (existing && existing.length >= 2) return null;
+
+  const { error } = await supabase.from('gridrush_players').insert({ id: playerId, team_id: actualTeamId, game_id: game.id, name: playerName, is_host: false });
   if (error) return null;
 
   // Broadcast player_joined so lobby updates in realtime for everyone
@@ -91,13 +98,14 @@ export async function joinGame(gameCode: string, playerName: string) {
     const ch = supabase.channel(`gridrush-lobby-${game.id}`);
     await new Promise<void>((resolve) => {
       ch.subscribe((status) => { if (status === 'SUBSCRIBED') resolve(); });
+      // Timeout after 3s if subscription doesn't complete
       setTimeout(resolve, 3000);
     });
-    ch.send({ type: 'broadcast', event: 'player_joined', payload: { player: { id: playerId, name: playerName, teamId: tempTeamId, isHost: false }, teamId: tempTeamId } });
+    ch.send({ type: 'broadcast', event: 'player_joined', payload: { player: { id: playerId, name: playerName, teamId: actualTeamId, isHost: false }, teamId: actualTeamId } });
     setTimeout(() => supabase.removeChannel(ch), 1000);
   } catch { /* best-effort */ }
 
-  return { gameId: game.id, teamId: tempTeamId, playerId };
+  return { gameId: game.id, teamId: actualTeamId, playerId };
 }
 
 export async function getGameByCode(gameCode: string): Promise<GameSession | null> {
@@ -115,63 +123,12 @@ export async function getGameByCode(gameCode: string): Promise<GameSession | nul
   return { id: game.id, gameCode: game.game_code, gridSetId: game.grid_set_id, hostId: game.host_id, status: game.status, teams: mappedTeams, startedAt: game.started_at, finishedAt: game.finished_at, winnerTeamId: game.winner_team_id, timerDuration: game.timer_duration };
 }
 
-/** Shuffle players into random teams of 2 (1 if odd) before starting */
-export async function assignRandomTeams(gameId: string): Promise<Array<{ teamId: string; playerIds: string[] }> | null> {
-  // Get all players in the game
-  const { data: players } = await supabase.from('gridrush_players').select('id, name').eq('game_id', gameId);
-  if (!players || players.length === 0) return null;
-
-  // Delete all old lobby teams
-  await supabase.from('gridrush_teams').delete().eq('game_id', gameId);
-
-  // Shuffle players randomly
-  const shuffled = [...players];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-
-  // Create teams of 2
-  const result: Array<{ teamId: string; playerIds: string[] }> = [];
-  let teamNum = 1;
-  for (let i = 0; i < shuffled.length; i += 2) {
-    const teamId = generateId();
-    const pair = shuffled.slice(i, i + 2);
-    const teamName = `Équipe ${teamNum}`;
-    teamNum++;
-
-    const { error: te } = await supabase.from('gridrush_teams').insert({
-      id: teamId, game_id: gameId, name: teamName, status: 'waiting', current_grid_index: 0, words_found: [[], [], []],
-    });
-    if (te) { console.error(te); return null; }
-
-    // Update players to point to their new team
-    for (const p of pair) {
-      await supabase.from('gridrush_players').update({ team_id: teamId }).eq('id', p.id);
-    }
-
-    result.push({ teamId, playerIds: pair.map(p => p.id) });
-  }
-
-  return result;
-}
-
 export async function startGame(gameId: string): Promise<boolean> {
-  // Assign random teams before starting
-  const teams = await assignRandomTeams(gameId);
-  if (!teams) return false;
-
   const now = new Date().toISOString();
   const { error } = await supabase.from('gridrush_games').update({ status: 'playing', started_at: now }).eq('id', gameId);
   if (error) return false;
   await supabase.from('gridrush_teams').update({ status: 'playing' }).eq('game_id', gameId);
   return true;
-}
-
-/** Get a player's current team_id (used after random team assignment) */
-export async function getPlayerTeamId(playerId: string): Promise<string | null> {
-  const { data } = await supabase.from('gridrush_players').select('team_id').eq('id', playerId).single();
-  return data?.team_id || null;
 }
 
 export async function updateTeamProgress(teamId: string, currentGridIndex: number, wordsFound: number[][]) {
