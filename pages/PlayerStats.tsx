@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { BarChart3, User, Loader2, Target, Skull, Swords, Eye, Coins, Shield, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { BarChart3, User, Loader2, Target, Skull, Swords, Eye, Coins, Shield, ChevronDown, ChevronUp, Crown, Gamepad2, WifiOff, TrendingUp, TrendingDown } from 'lucide-react';
 import { useGameStore } from '../services/gameStore';
 import { supabase } from '../services/supabase';
 import { getDetailedPlayerOdds } from '../services/dataOddsService';
 import { MOCK_PROPS } from '../services/mockData';
-import { TrackedPlayer } from '../types';
+import { TrackedPlayer, RANK_LABELS, RANK_COLORS, RANK_TIERS } from '../types';
+import { getChampionName, getQueueName } from '../services/riotApi';
 
 interface PlayerMatchStats {
   gamesPlayed: number;
@@ -19,6 +20,17 @@ interface PlayerMatchStats {
   avgVision: number;
   avgGold: number;
   avgKP: number;
+}
+
+interface ChampionStats {
+  championName: string;
+  championId: number;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  avgKills: number;
+  avgDeaths: number;
+  avgAssists: number;
 }
 
 interface PropDetail {
@@ -36,8 +48,29 @@ const QUEUE_OPTIONS = [
   { id: 440, label: 'Flex' },
 ];
 
+// Rank badge component
+const RankBadge = ({ tier, division, lp, size = 'md' }: { tier?: string | null; division?: string | null; lp?: number | null; size?: 'sm' | 'md' | 'lg' }) => {
+  if (!tier) return <span className="text-zinc-600 text-sm">Unranked</span>;
+
+  const colorClass = RANK_COLORS[tier as keyof typeof RANK_COLORS] || 'text-zinc-400';
+  const label = RANK_LABELS[tier as keyof typeof RANK_LABELS] || tier;
+  const sizeClasses = {
+    sm: 'text-xs px-2 py-0.5',
+    md: 'text-sm px-3 py-1',
+    lg: 'text-lg px-4 py-2',
+  };
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${sizeClasses[size]} rounded-full bg-zinc-800/80 border border-zinc-700/50 font-bold ${colorClass}`}>
+      <Crown className={size === 'sm' ? 'w-3 h-3' : size === 'lg' ? 'w-5 h-5' : 'w-4 h-4'} />
+      {label} {division || ''}
+      {lp !== null && lp !== undefined && <span className="text-zinc-400 font-normal">({lp} LP)</span>}
+    </span>
+  );
+};
+
 const PlayerStats = () => {
-  const { trackedPlayers, loadTrackedPlayers } = useGameStore();
+  const { trackedPlayers, loadTrackedPlayers, playerStates } = useGameStore();
   const [selectedPlayer, setSelectedPlayer] = useState<TrackedPlayer | null>(null);
   const [selectedQueue, setSelectedQueue] = useState(420);
   const [loading, setLoading] = useState(false);
@@ -45,6 +78,7 @@ const PlayerStats = () => {
   const [propDetails, setPropDetails] = useState<PropDetail[]>([]);
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [allPlayerStats, setAllPlayerStats] = useState<Map<string, { solo: PlayerMatchStats | null; flex: PlayerMatchStats | null }>>(new Map());
+  const [championStats, setChampionStats] = useState<ChampionStats[]>([]);
 
   useEffect(() => {
     loadTrackedPlayers();
@@ -71,11 +105,13 @@ const PlayerStats = () => {
     if (!selectedPlayer?.puuid) return;
     const load = async () => {
       setLoading(true);
-      const [stats, oddsResult] = await Promise.all([
+      const [stats, oddsResult, champStats] = await Promise.all([
         fetchMatchStats(selectedPlayer.puuid!, selectedQueue),
-        getDetailedPlayerOdds(selectedPlayer.puuid!, selectedQueue, MOCK_PROPS)
+        getDetailedPlayerOdds(selectedPlayer.puuid!, selectedQueue, MOCK_PROPS),
+        fetchChampionStats(selectedPlayer.puuid!, selectedQueue)
       ]);
       setMatchStats(stats);
+      setChampionStats(champStats);
 
       const details: PropDetail[] = oddsResult.details.map(d => {
         const prop = MOCK_PROPS.find(p => p.id === d.propId);
@@ -89,7 +125,6 @@ const PlayerStats = () => {
           gamesCount: oddsResult.gamesCount
         };
       });
-      // Sort by probability descending
       details.sort((a, b) => b.probability - a.probability);
       setPropDetails(details);
       setLoading(false);
@@ -107,16 +142,30 @@ const PlayerStats = () => {
     }
   };
 
+  // Sort players: in-game first, then by rank
+  const sortedPlayers = [...trackedPlayers].filter(p => p.isActive).sort((a, b) => {
+    const aInGame = a.puuid ? playerStates.get(a.puuid)?.isInGame : false;
+    const bInGame = b.puuid ? playerStates.get(b.puuid)?.isInGame : false;
+    if (aInGame && !bInGame) return -1;
+    if (!aInGame && bInGame) return 1;
+    const aRank = RANK_TIERS.indexOf(a.soloTier as any);
+    const bRank = RANK_TIERS.indexOf(b.soloTier as any);
+    return bRank - aRank;
+  });
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-white mb-2">Stats Joueurs</h1>
-        <p className="text-zinc-400">Statistiques et cotes data-driven par joueur</p>
+        <h1 className="text-3xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+          <BarChart3 className="w-8 h-8 text-cyan-400" />
+          Joueurs & Stats
+        </h1>
+        <p className="text-zinc-400">Ranks, stats et progression de chaque joueur</p>
       </div>
 
-      {/* Players Overview Grid */}
+      {/* Players List */}
       <div className="space-y-3 mb-8">
-        {trackedPlayers.filter(p => p.isActive).map(player => {
+        {sortedPlayers.map(player => {
           const stats = player.puuid ? allPlayerStats.get(player.puuid) : null;
           const soloStats = stats?.solo;
           const flexStats = stats?.flex;
@@ -124,30 +173,57 @@ const PlayerStats = () => {
           const totalWins = (soloStats?.wins || 0) + (flexStats?.wins || 0);
           const winRate = totalGames > 0 ? Math.round((totalWins / totalGames) * 100) : 0;
           const isExpanded = expandedPlayer === player.puuid;
+          const gameState = player.puuid ? playerStates.get(player.puuid) : undefined;
+          const isInGame = gameState?.isInGame || false;
+          const currentGame = gameState?.currentGame;
 
           return (
-            <div key={player.id} className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+            <div key={player.id} className={`rounded-xl border overflow-hidden transition-all ${
+              isInGame
+                ? 'bg-gradient-to-r from-green-900/20 to-zinc-900 border-green-500/30'
+                : 'bg-zinc-900 border-zinc-800'
+            }`}>
               {/* Player Header - clickable */}
               <button
                 onClick={() => handlePlayerClick(player)}
                 className="w-full p-4 flex items-center justify-between hover:bg-zinc-800/50 transition-colors"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                    <span className="text-lg font-bold text-white">{player.displayName.charAt(0).toUpperCase()}</span>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg text-white ${
+                    isInGame
+                      ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg shadow-green-500/20'
+                      : 'bg-gradient-to-br from-zinc-700 to-zinc-800'
+                  }`}>
+                    {player.displayName.charAt(0).toUpperCase()}
                   </div>
                   <div className="text-left">
-                    <div className="text-white font-bold text-lg">{player.displayName}</div>
-                    <div className="text-zinc-500 text-sm">
-                      {player.gameName}#{player.tagLine}
-                      {player.soloTier && (
-                        <span className="ml-2 text-amber-400">{player.soloTier} {player.soloDivision}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold text-lg">{player.displayName}</span>
+                      {isInGame && (
+                        <span className="flex items-center gap-1 text-xs font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
+                          <span className="relative flex h-1.5 w-1.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-400"></span>
+                          </span>
+                          LIVE
+                        </span>
                       )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-zinc-500 text-sm">{player.gameName}#{player.tagLine}</span>
+                      <RankBadge tier={player.soloTier} division={player.soloDivision} lp={player.soloLp} size="sm" />
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-6">
+                  {/* In-game info */}
+                  {isInGame && currentGame && (
+                    <div className="hidden sm:flex items-center gap-2 text-green-400 text-sm">
+                      <Gamepad2 className="w-4 h-4" />
+                      {getQueueName(currentGame.gameQueueConfigId)}
+                    </div>
+                  )}
                   {/* Quick stats */}
                   <div className="hidden sm:flex items-center gap-6">
                     <QuickStat label="Games" value={totalGames.toString()} />
@@ -174,6 +250,20 @@ const PlayerStats = () => {
               {/* Expanded Details */}
               {isExpanded && (
                 <div className="border-t border-zinc-800 p-4">
+                  {/* Rank Display */}
+                  <div className="flex items-center gap-4 mb-4 p-3 bg-zinc-800/30 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <Crown className="w-5 h-5 text-amber-400" />
+                      <span className="text-zinc-400 text-sm font-bold">Rang Solo/Duo :</span>
+                    </div>
+                    <RankBadge tier={player.soloTier} division={player.soloDivision} lp={player.soloLp} size="md" />
+                    {player.rankUpdatedAt && (
+                      <span className="text-zinc-600 text-xs ml-auto">
+                        MAJ: {new Date(player.rankUpdatedAt).toLocaleDateString('fr-FR')}
+                      </span>
+                    )}
+                  </div>
+
                   {/* Queue Selector */}
                   <div className="flex gap-2 mb-4">
                     {QUEUE_OPTIONS.map(q => (
@@ -220,6 +310,43 @@ const PlayerStats = () => {
                         <StatCard icon={<Coins className="w-4 h-4" />} label="Gold" value={formatNumber(matchStats.avgGold)} />
                         <StatCard icon={<Shield className="w-4 h-4" />} label="KP" value={`${matchStats.avgKP.toFixed(0)}%`} />
                       </div>
+
+                      {/* Champion Stats */}
+                      {championStats.length > 0 && (
+                        <div className="mb-6">
+                          <h3 className="text-white font-bold mb-3 flex items-center gap-2">
+                            <Swords className="w-4 h-4 text-amber-400" />
+                            Top Champions ({selectedQueue === 420 ? 'Solo/Duo' : 'Flex'})
+                          </h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {championStats.slice(0, 6).map(champ => {
+                              const wr = Math.round((champ.wins / champ.gamesPlayed) * 100);
+                              return (
+                                <div key={champ.championName} className="flex items-center gap-3 p-3 bg-zinc-800/40 rounded-lg border border-zinc-800">
+                                  <img
+                                    src={`https://ddragon.leagueoflegends.com/cdn/14.1.1/img/champion/${champ.championName.replace(/['\s.]/g, '')}.png`}
+                                    alt={champ.championName}
+                                    className="w-9 h-9 rounded-lg"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="text-white text-sm font-bold truncate">{champ.championName}</div>
+                                    <div className="text-xs text-zinc-500">
+                                      {champ.avgKills.toFixed(1)}/{champ.avgDeaths.toFixed(1)}/{champ.avgAssists.toFixed(1)}
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className={`text-sm font-bold font-mono ${wr >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {wr}%
+                                    </div>
+                                    <div className="text-xs text-zinc-500">{champ.gamesPlayed}G</div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Odds Table */}
                       <div className="mb-2">
@@ -283,10 +410,10 @@ const PlayerStats = () => {
         })}
       </div>
 
-      {trackedPlayers.filter(p => p.isActive).length === 0 && (
+      {sortedPlayers.length === 0 && (
         <div className="text-center py-16 bg-zinc-900/50 rounded-2xl border border-zinc-800">
           <User className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-white mb-2">Aucun joueur tracked</h3>
+          <h3 className="text-xl font-bold text-white mb-2">Aucun joueur track&eacute;</h3>
           <p className="text-zinc-400">Ajoutez des joueurs depuis la page Admin.</p>
         </div>
       )}
@@ -331,6 +458,48 @@ async function fetchMatchStats(puuid: string, queueId: number): Promise<PlayerMa
     avgGold: totalGold / games,
     avgKP: totalKP / games,
   };
+}
+
+// Fetch per-champion stats
+async function fetchChampionStats(puuid: string, queueId: number): Promise<ChampionStats[]> {
+  const { data, error } = await supabase
+    .from('johnny_matches')
+    .select('champion_name, champion_id, kills, deaths, assists, win')
+    .eq('puuid', puuid)
+    .eq('queue_id', queueId)
+    .order('game_creation', { ascending: false });
+
+  if (error || !data || data.length === 0) return [];
+
+  // Group by champion
+  const champMap = new Map<string, { championId: number; games: typeof data }>();
+  for (const match of data) {
+    const name = match.champion_name;
+    if (!champMap.has(name)) {
+      champMap.set(name, { championId: match.champion_id, games: [] });
+    }
+    champMap.get(name)!.games.push(match);
+  }
+
+  const stats: ChampionStats[] = [];
+  for (const [name, { championId, games }] of champMap) {
+    const gamesPlayed = games.length;
+    const wins = games.filter(g => g.win).length;
+    stats.push({
+      championName: name,
+      championId,
+      gamesPlayed,
+      wins,
+      losses: gamesPlayed - wins,
+      avgKills: games.reduce((s, g) => s + g.kills, 0) / gamesPlayed,
+      avgDeaths: games.reduce((s, g) => s + g.deaths, 0) / gamesPlayed,
+      avgAssists: games.reduce((s, g) => s + g.assists, 0) / gamesPlayed,
+    });
+  }
+
+  // Sort by games played descending
+  stats.sort((a, b) => b.gamesPlayed - a.gamesPlayed);
+  return stats;
 }
 
 // Helper components

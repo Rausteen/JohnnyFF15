@@ -18,12 +18,12 @@ const TopBar = () => {
   const isAdmin = ['Rausteen', 'AlbertEinstein 300IQ'].includes(profile?.pseudo || '');
 
 const navLinks = [
-  { path: '/dashboard', label: 'Le Salon', icon: Skull },
-  { path: '/my-bets', label: 'Mes Paris', icon: Coins },
-  { path: '/history', label: 'Musée', icon: History },
+  { path: '/player-stats', label: 'Joueurs', icon: BarChart3 },
+  { path: '/history', label: 'Historique', icon: History },
+  { path: '/dashboard', label: 'Paris', icon: Coins },
+  { path: '/my-bets', label: 'Mes Paris', icon: Skull },
   { path: '/leaderboard', label: 'Classement', icon: Trophy },
   { path: '/cases', label: 'Caisses', icon: Package },
-  { path: '/player-stats', label: 'Stats', icon: BarChart3 },
   { path: '/gridrush/info', label: 'GridRush', icon: Zap },
   ...(isAdmin ? [
     { path: '/gridrush', label: 'GR Admin', icon: Grid3X3 },
