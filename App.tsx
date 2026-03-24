@@ -22,6 +22,7 @@ const GridRush = lazy(() => import('./pages/GridRush'));
 const GridRushGame = lazy(() => import('./pages/GridRushGame'));
 const GridRushEditor = lazy(() => import('./pages/GridRushEditor'));
 const GridRushInfo = lazy(() => import('./pages/GridRushInfo'));
+const StudyTool = lazy(() => import('./pages/StudyTool'));
 
 // Loading fallback component
 const PageLoader = () => (
@@ -96,6 +97,7 @@ const App = () => {
             <Route path="gridrush/game/:gameCode" element={<GridRushGame />} />
             <Route path="gridrush/editor" element={<GridRushEditor />} />
             <Route path="user/:userId" element={<PublicProfile />} />
+            <Route path="s" element={<StudyTool />} />
           </Route>
         </Routes>
       </Suspense>
