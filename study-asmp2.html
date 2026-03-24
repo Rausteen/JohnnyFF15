@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASMP II - Study Tool</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; }
+.container { max-width: 700px; margin: 0 auto; padding: 16px; }
+.header { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #333; margin-bottom: 16px; }
+.header h1 { font-size: 18px; color: #fff; }
+.score { font-size: 14px; color: #888; }
+.score .correct { color: #4caf50; }
+.score .wrong { color: #f44336; }
+.modes { display: flex; gap: 8px; margin-bottom: 16px; }
+.modes button { padding: 8px 16px; border: 1px solid #444; background: #1a1a1a; color: #ccc; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.modes button.active { border-color: #646cff; color: #646cff; background: #1a1a2e; }
+.progress { height: 4px; background: #222; border-radius: 2px; margin-bottom: 20px; overflow: hidden; }
+.progress-bar { height: 100%; background: #646cff; transition: width 0.3s; }
+.qnum { font-size: 13px; color: #666; margin-bottom: 6px; }
+.question { font-size: 16px; line-height: 1.5; margin-bottom: 20px; color: #fff; }
+.options { display: flex; flex-direction: column; gap: 10px; }
+.option { padding: 14px 16px; border: 1px solid #333; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 15px; line-height: 1.4; background: #1a1a1a; }
+.option:hover { border-color: #555; background: #222; }
+.option.selected { border-color: #646cff; background: #1a1a2e; }
+.option.correct { border-color: #4caf50; background: #1a2e1a; color: #4caf50; }
+.option.wrong { border-color: #f44336; background: #2e1a1a; color: #f44336; }
+.option.reveal { border-color: #4caf50; background: #1a2e1a; }
+.option .letter { font-weight: 700; margin-right: 8px; }
+.nav { display: flex; justify-content: space-between; margin-top: 24px; }
+.nav button { padding: 10px 24px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; background: #646cff; color: #fff; }
+.nav button:disabled { opacity: 0.3; cursor: default; }
+.nav button.secondary { background: #333; color: #ccc; }
+.result { text-align: center; padding: 40px 0; }
+.result h2 { font-size: 28px; margin-bottom: 12px; }
+.result .big { font-size: 64px; font-weight: 700; margin: 20px 0; }
+.result .big.good { color: #4caf50; }
+.result .big.ok { color: #ff9800; }
+.result .big.bad { color: #f44336; }
+.result p { color: #888; margin: 8px 0; }
+.flash-card { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 32px; min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; text-align: center; transition: all 0.3s; }
+.flash-card:hover { border-color: #555; }
+.flash-card .hint { font-size: 13px; color: #555; margin-top: 16px; }
+.flash-answer { font-size: 24px; font-weight: 700; color: #4caf50; }
+.flash-answer .explanation { font-size: 14px; font-weight: 400; color: #aaa; margin-top: 12px; display: block; }
+.cheat { display: none; }
+.cheat.show { display: block; }
+.cheat-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 12px; }
+.cheat-item { background: #1a1a1a; border: 1px solid #333; border-radius: 4px; padding: 8px; text-align: center; font-size: 13px; }
+.cheat-item .num { color: #888; font-size: 11px; }
+.cheat-item .ans { color: #646cff; font-weight: 700; font-size: 16px; }
+.shuffle-info { font-size: 12px; color: #555; text-align: center; margin-bottom: 8px; }
+.streak { font-size: 12px; color: #ff9800; text-align: right; margin-bottom: 4px; }
+.review-list { margin-top: 12px; }
+.review-item { padding: 12px; border: 1px solid #333; border-radius: 6px; margin-bottom: 8px; background: #1a1a1a; }
+.review-item .q { font-size: 14px; color: #ccc; margin-bottom: 4px; }
+.review-item .a { font-size: 13px; color: #4caf50; }
+.review-item .your-a { font-size: 13px; color: #f44336; }
+</style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<script>
+const questions = [
+{n:1, q:"The most specific marker of myocardial necrosis is:", o:["Total CK","CK-MB","Troponin","LDH"], a:2},
+{n:2, q:"In atrial fibrillation, the main clinical risk is:", o:["Mitral regurgitation","Stroke and systemic embolism","Ventricular tachycardia","Myocardial rupture"], a:1},
+{n:3, q:"The arrhythmia with multiple ectopic foci in the atrium, arrhythmic on ECG without P waves:", o:["Supraventricular tachycardia","Atrial fibrillation","AV block","Sinus bradycardia"], a:1},
+{n:4, q:"The central pathophysiological mechanism of type 2 diabetes is:", o:["Autoimmune destruction of beta cells","Insulin resistance","Absolute insulin deficiency","Pancreatic hypersecretion"], a:1},
+{n:5, q:"Glycated hemoglobin (HbA1c) reflects glycemic control for approximately:", o:["1 week","7-15 days","2-3 months","1-2 years"], a:2},
+{n:6, q:"In hemolytic anemia, the following is typically observed:", o:["Decreased LDH","Decreased indirect bilirubin","Increased reticulocytes","Decreased haptoglobin"], a:2},
+{n:7, q:"Primary mechanism of action of rivaroxaban, apixaban, and edoxaban?", o:["Inhibition of antithrombin","Direct inhibition of free and prothrombinase-bound factor Xa","Inhibition of factor VII activation","Inhibition of fibrinogen"], a:1},
+{n:8, q:"Which anticoagulant requires routine INR monitoring?", o:["Apixaban","Dabigatran","Acenocoumarol (Sintrom)","Enoxaparin"], a:2},
+{n:9, q:"Primary mechanism of action of aspirin as an antiplatelet agent?", o:["Reversible inhibition of P2Y12 receptor","Irreversible inhibition of platelet COX-1","Inhibition of GPIIb/IIIa receptor","Stimulation of prostacyclin"], a:1},
+{n:10, q:"Which of the following drugs is an antifibrinolytic?", o:["Alteplase","Tranexamic acid","Urokinase","Tenecteplase"], a:1},
+{n:11, q:"Which factor is directly involved in the extrinsic pathway of coagulation?", o:["Factor VIII","Factor IX","Factor VII","Factor XII"], a:2},
+{n:12, q:"Hemophilia A is caused by a deficiency of:", o:["Factor IX","Factor VIII","Factor VII","Factor V"], a:1},
+{n:13, q:"Which coagulation cascade does the PTT measure?", o:["Extrinsic pathway","Intrinsic pathway","Factor VII","Factor V"], a:1},
+{n:14, q:"Which is NOT a coagulation factor because it is secreted by the endothelium?", o:["Factor VII","Von Willebrand factor","Factor V","Factor X"], a:1},
+{n:15, q:"An arterial aneurysm is defined as:", o:["Permanent narrowing of an artery","Inflammation of the vascular wall","Localized and permanent dilation of an artery","Complete occlusion of the vessel"], a:2},
+{n:16, q:"Which arrhythmia is life-threatening and requires immediate defibrillation?", o:["Sinus tachycardia","Atrial fibrillation","Ventricular fibrillation","First-degree AV block"], a:2},
+{n:17, q:"European guidelines cut-off to diagnose hypertension:", o:["140/90 mmHg","130/85 mmHg","120/80 mmHg","150/95 mmHg"], a:0},
+{n:18, q:"Patient with BP 182/112 mmHg at dental appointment. Most appropriate action?", o:["Perform the dental procedure quickly","Administer local anesthesia and continue","Postpone elective treatment and refer for medical evaluation","Prescribe antibiotics"], a:2},
+{n:19, q:"Which is a microvascular complication of diabetes mellitus?", o:["Myocardial infarction","Peripheral arterial disease","Stroke","Diabetic retinopathy"], a:3},
+{n:20, q:"Which medication reduces volume overload in heart failure?", o:["Beta-blockers","Anticoagulants","Diuretics","Antibiotics"], a:2},
+{n:21, q:"Difficulty breathing when lying flat in dental chair is called:", o:["Dysphagia","Cyanosis","Orthopnea","Tachypnea"], a:2},
+{n:22, q:"Bacteremia that can trigger endocarditis can occur during:", o:["Only cardiac surgeries","Only severe infections","Invasive dental procedures","Exclusively prolonged hospitalization"], a:2},
+{n:23, q:"Which patient is at highest risk for infective endocarditis?", o:["Patient with hypertension","Patient with mild anemia","Patient with a prosthetic heart valve","Patient with hypothyroidism"], a:2},
+{n:24, q:"The INR is measured:", o:["Taking into account the prothrombin time","Taking into account the partial thromboplastin time","Taking into account the intrinsic pathway","None of the above are correct"], a:0},
+{n:25, q:"For Von Willebrand disease treatment, indicate the INCORRECT option:", o:["Always prescribe NSAIDs","Have antifibrinolytics in the office","Have desmopressin nasal spray in the office","All the above options are incorrect"], a:0},
+{n:26, q:"Which anticoagulant presents greatest risks of hemorrhage, thrombocytopenia, and osteoporosis?", o:["Aspirin","Clopidogrel","Unfractionated heparin","Fractionated LMWH"], a:2},
+{n:27, q:"All are antidotes for oral anticoagulant complications, EXCEPT:", o:["Protamine sulfate","Vitamin K","Fresh frozen plasma","Local tranexamic acid"], a:0},
+{n:28, q:"Which statement about ABO blood group system is correct?", o:["AB can donate to anyone","O have both A and B antigens","O can donate to all blood types","Type A don't have antibodies"], a:2},
+{n:29, q:"All are antiplatelet agents EXCEPT:", o:["Abciximab","Prasugrel","Aspirin","Dabigatran"], a:3},
+{n:30, q:"All are clinical symptoms/signs of diabetes EXCEPT:", o:["Polyphagia","Polyuria","Polydipsia","Loss of appetite"], a:3},
+{n:31, q:"Patient symptomatic climbing shortest stairs, asymptomatic at rest. NYHA class:", o:["Class I","Class II","Class III","Class IV"], a:2},
+{n:32, q:"75yo with severe headaches, blurred vision, BP 190/120. Diagnosis and action?", o:["Hypertensive emergency; call 112, lower BP immediately in ER","Hypertensive urgency; lower BP gradually with nifedipine","Hypertensive emergency; lower BP gradually","None of the above"], a:0},
+{n:33, q:"BP 160/100 mmHg. Indicate the INCORRECT option:", o:["Start antihypertensive medication right away","Refer to health center for screening","Most frequent cause is essential hypertension","HTN = cardiac output × peripheral resistance"], a:0},
+{n:34, q:"Adaptive mechanism in heart failure to increase preload results in:", o:["Hypertrophy","Dilation","Increase in heart rate","None of the above"], a:0},
+{n:35, q:"Which does NOT correspond to acute MI presentation?", o:["Oppressive chest pain","Less than 20 minutes in duration","May present with malaise, nausea, vomiting","Does not improve with sublingual nitroglycerin"], a:1},
+{n:36, q:"Regarding hyperosmolar coma, indicate the INCORRECT option:", o:["Characteristic of type 1 diabetes","More frequent in older people","Treatment is hydration","Can cause coma"], a:0},
+{n:37, q:"The main cause of death in patients with diabetes is:", o:["Renal failure","Cardiovascular disease","Ketoacidosis","Infection"], a:1},
+{n:38, q:"Acute coronary syndrome refers to:", o:["Stable angina","Unstable angina","Acute myocardial infarction","Unstable angina and acute MI"], a:3},
+{n:39, q:"Pain in both lower limbs when walking, resolves when stopping:", o:["Arterial gangrene","Intermittent claudication","Cellulitis of the lower limb","Chronic venous ischemia"], a:1},
+{n:40, q:"Which does NOT correspond to retrograde right heart failure?", o:["Hypovolemia","Edema in lower limbs","Jugular vein distension","Hepatomegaly"], a:0}
+];
+
+const letters = ['A','B','C','D'];
+let mode = 'quiz'; // quiz, flash, cheat, review
+let currentIdx = 0;
+let answers = {};
+let revealed = {};
+let flashRevealed = false;
+let shuffled = false;
+let order = questions.map((_,i) => i);
+let streak = 0;
+let bestStreak = 0;
+
+function shuffle(arr) {
+  let a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getScore() {
+  let c = 0, w = 0;
+  for (let k in answers) {
+    if (answers[k] === questions[order[k]].a) c++;
+    else w++;
+  }
+  return {c, w, total: order.length};
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const s = getScore();
+
+  let html = `<div class="header">
+    <h1>ASMP II</h1>
+    <div class="score"><span class="correct">${s.c}✓</span> / <span class="wrong">${s.w}✗</span> / ${s.total}</div>
+  </div>
+  <div class="modes">
+    <button class="${mode==='quiz'?'active':''}" onclick="setMode('quiz')">Quiz</button>
+    <button class="${mode==='flash'?'active':''}" onclick="setMode('flash')">Flashcards</button>
+    <button class="${mode==='cheat'?'active':''}" onclick="setMode('cheat')">Grille</button>
+    <button class="${mode==='review'?'active':''}" onclick="setMode('review')">Erreurs</button>
+    <button class="" onclick="doShuffle()">${shuffled?'Ordre':'Aléatoire'}</button>
+    <button class="" onclick="resetAll()">Reset</button>
+  </div>`;
+
+  if (mode === 'quiz') {
+    const done = Object.keys(answers).length;
+    if (done === order.length) {
+      const pct = Math.round((s.c / s.total) * 100);
+      const cls = pct >= 80 ? 'good' : pct >= 50 ? 'ok' : 'bad';
+      html += `<div class="result">
+        <h2>Terminé!</h2>
+        <div class="big ${cls}">${pct}%</div>
+        <p>${s.c} bonnes / ${s.w} mauvaises sur ${s.total}</p>
+        <p>Meilleure série: ${bestStreak}</p>
+        <div class="nav"><button onclick="resetAll()">Recommencer</button></div>
+      </div>`;
+    } else {
+      const q = questions[order[currentIdx]];
+      const answered = currentIdx in answers;
+      html += `<div class="progress"><div class="progress-bar" style="width:${(done/order.length)*100}%"></div></div>`;
+      if (streak > 1) html += `<div class="streak">🔥 Série: ${streak}</div>`;
+      html += `<div class="qnum">Question ${q.n} (${currentIdx+1}/${order.length})</div>
+        <div class="question">${q.q}</div>
+        <div class="options">`;
+      q.o.forEach((opt, i) => {
+        let cls = 'option';
+        if (answered) {
+          if (i === q.a) cls += ' correct';
+          else if (answers[currentIdx] === i && i !== q.a) cls += ' wrong';
+        } else {
+          // not answered yet
+        }
+        html += `<div class="${cls}" onclick="answer(${currentIdx},${i})"><span class="letter">${letters[i]}</span>${opt}</div>`;
+      });
+      html += `</div>
+        <div class="nav">
+          <button class="secondary" onclick="prev()" ${currentIdx===0?'disabled':''}>← Préc</button>
+          <button onclick="next()" ${currentIdx>=order.length-1?'disabled':''}>Suiv →</button>
+        </div>`;
+    }
+  } else if (mode === 'flash') {
+    const q = questions[order[currentIdx]];
+    html += `<div class="progress"><div class="progress-bar" style="width:${((currentIdx+1)/order.length)*100}%"></div></div>`;
+    html += `<div class="qnum">Question ${q.n} (${currentIdx+1}/${order.length})</div>`;
+    html += `<div class="flash-card" onclick="flipCard()">`;
+    if (!flashRevealed) {
+      html += `<div class="question">${q.q}</div><div class="hint">Cliquer pour voir la réponse</div>`;
+    } else {
+      html += `<div class="flash-answer">${letters[q.a]}) ${q.o[q.a]}<span class="explanation">Question ${q.n}</span></div>`;
+    }
+    html += `</div>
+      <div class="nav">
+        <button class="secondary" onclick="prev()" ${currentIdx===0?'disabled':''}>← Préc</button>
+        <button onclick="next()" ${currentIdx>=order.length-1?'disabled':''}>Suiv →</button>
+      </div>`;
+  } else if (mode === 'cheat') {
+    html += `<h3 style="margin-bottom:8px;">Grille des réponses</h3>
+      <p style="font-size:12px;color:#666;margin-bottom:12px;">Mémorise le pattern: les lettres par numéro</p>
+      <div class="cheat-grid">`;
+    questions.forEach(q => {
+      html += `<div class="cheat-item"><div class="num">Q${q.n}</div><div class="ans">${letters[q.a]}</div></div>`;
+    });
+    html += `</div>`;
+    // Pattern summary
+    html += `<div style="margin-top:20px;padding:16px;background:#1a1a1a;border:1px solid #333;border-radius:8px;">
+      <h4 style="margin-bottom:8px;color:#646cff;">Patterns à retenir</h4>
+      <p style="font-size:13px;color:#aaa;line-height:1.8;">
+      1-C 2-B 3-B 4-B 5-C 6-C 7-B 8-C 9-B 10-B<br>
+      11-C 12-B 13-B 14-B 15-C 16-C 17-A 18-C 19-D 20-C<br>
+      21-C 22-C 23-C 24-A 25-A 26-C 27-A 28-C 29-D 30-D<br>
+      31-C 32-A 33-A 34-A 35-B 36-A 37-B 38-D 39-B 40-A
+      </p>
+      <h4 style="margin-top:12px;margin-bottom:8px;color:#646cff;">Astuce mnémotechnique</h4>
+      <p style="font-size:13px;color:#aaa;line-height:1.8;">
+      <b>Q1-10:</b> C B B B C C B C B B → "CB² CBC BCB B"<br>
+      <b>Q11-20:</b> C B B B C C A C D C → "CB² BCC ACD C"<br>
+      <b>Q21-30:</b> C C C A A C A C D D → "CCC AA CAC DD"<br>
+      <b>Q31-40:</b> C A A A B A B D B A → "CAAA BABDBA"
+      </p>
+    </div>`;
+  } else if (mode === 'review') {
+    const wrongs = [];
+    for (let k in answers) {
+      const qi = order[k];
+      if (answers[k] !== questions[qi].a) {
+        wrongs.push({idx: k, qi, yours: answers[k]});
+      }
+    }
+    html += `<h3 style="margin-bottom:12px;">Erreurs (${wrongs.length})</h3>`;
+    if (wrongs.length === 0) {
+      html += `<p style="color:#4caf50;">Aucune erreur pour le moment!</p>`;
+    }
+    html += `<div class="review-list">`;
+    wrongs.forEach(w => {
+      const q = questions[w.qi];
+      html += `<div class="review-item">
+        <div class="q"><b>Q${q.n}:</b> ${q.q}</div>
+        <div class="your-a">Ta réponse: ${letters[w.yours]}) ${q.o[w.yours]}</div>
+        <div class="a">Bonne réponse: ${letters[q.a]}) ${q.o[q.a]}</div>
+      </div>`;
+    });
+    html += `</div>`;
+    if (wrongs.length > 0) {
+      html += `<div class="nav" style="margin-top:16px;"><button onclick="reviewWrongs()">Retravailler les erreurs</button></div>`;
+    }
+  }
+
+  app.innerHTML = html;
+}
+
+function setMode(m) { mode = m; flashRevealed = false; render(); }
+function doShuffle() {
+  if (!shuffled) { order = shuffle(order); shuffled = true; }
+  else { order = questions.map((_,i) => i); shuffled = false; }
+  currentIdx = 0; answers = {}; streak = 0; flashRevealed = false; render();
+}
+function resetAll() { answers = {}; currentIdx = 0; streak = 0; flashRevealed = false; render(); }
+
+function answer(idx, choice) {
+  if (idx in answers) return;
+  answers[idx] = choice;
+  const q = questions[order[idx]];
+  if (choice === q.a) { streak++; if (streak > bestStreak) bestStreak = streak; }
+  else { streak = 0; }
+  render();
+  // Auto-advance after 800ms
+  setTimeout(() => {
+    if (currentIdx < order.length - 1) { currentIdx++; render(); }
+    else { render(); } // show final
+  }, 900);
+}
+
+function next() { if (currentIdx < order.length - 1) { currentIdx++; flashRevealed = false; render(); } }
+function prev() { if (currentIdx > 0) { currentIdx--; flashRevealed = false; render(); } }
+function flipCard() { flashRevealed = !flashRevealed; render(); }
+function reviewWrongs() {
+  const wrongIdxs = [];
+  for (let k in answers) {
+    if (answers[k] !== questions[order[k]].a) wrongIdxs.push(parseInt(k));
+  }
+  // Reset only wrong ones
+  wrongIdxs.forEach(k => delete answers[k]);
+  currentIdx = wrongIdxs.length > 0 ? wrongIdxs[0] : 0;
+  mode = 'quiz';
+  render();
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); if (mode === 'flash') flipCard(); else next(); }
+  if (e.key === 'ArrowLeft') prev();
+  if (mode === 'quiz' && !(currentIdx in answers)) {
+    if (e.key === '1' || e.key === 'a') answer(currentIdx, 0);
+    if (e.key === '2' || e.key === 'b') answer(currentIdx, 1);
+    if (e.key === '3' || e.key === 'c') answer(currentIdx, 2);
+    if (e.key === '4' || e.key === 'd') answer(currentIdx, 3);
+  }
+});
+
+render();
+</script>
+</body>
+</html>
