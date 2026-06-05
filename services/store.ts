@@ -2,18 +2,20 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Bet, BetStatus, GameState, MatchStatus, MatchHistoryItem } from '../types';
 import { MOCK_HISTORY } from './mockData';
+import { saveBetToSupabase, deleteBetFromSupabase, updateBetStatus } from './betsService';
 
 interface StoreState {
   balance: number;
   gameState: GameState;
-  bets: Bet[];
   history: MatchHistoryItem[];
-  
+
   // Actions
   addFunds: (amount: number) => void;
-  placeBet: (propId: string, propTitle: string, odds: number, amount: number) => void;
-  cancelBet: (betId: string) => void;
-  
+
+  // Bet actions (Supabase only - no local storage)
+  placeBet: (propId: string, propTitle: string, odds: number, amount: number, matchId?: string, comboInfo?: { comboId: string; comboIndex: number; comboTotal: number }, userId?: string, championName?: string, playerPuuid?: string, playerName?: string) => Promise<Bet | null>;
+  cancelBet: (betId: string, betAmount: number, betTimestamp: number) => Promise<boolean>;
+
   // Admin Actions
   toggleMatchStatus: (status: MatchStatus) => void;
   simulateGameEnd: () => void;
@@ -29,43 +31,62 @@ export const useStore = create<StoreState>()(
         gameTime: 0,
         matchId: 'm_init'
       },
-      bets: [],
       history: MOCK_HISTORY,
 
       addFunds: (amount) => set((state) => ({ balance: state.balance + amount })),
 
-      placeBet: (propId, propTitle, odds, amount) => {
-        const { balance, gameState } = get();
-        if (balance < amount) return;
-        if (gameState.status !== MatchStatus.LIVE) return;
+      // Place bet - saves directly to Supabase (no local storage)
+      placeBet: async (propId, propTitle, odds, amount, matchId, comboInfo, userId, championName, playerPuuid, playerName) => {
+        const { gameState } = get();
 
         const newBet: Bet = {
-          id: `bet_${Date.now()}`,
+          id: `bet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           propId,
           propTitle,
           amount,
           odds,
-          potentialPayout: Math.floor(amount * odds),
+          potentialPayout: Math.min(Math.floor(amount * odds), 100000),
           status: BetStatus.PENDING,
-          matchId: gameState.matchId,
+          matchId: matchId || gameState.matchId,
           timestamp: Date.now(),
+          userId,
+          championName,
+          playerPuuid,
+          playerName,
+          ...(comboInfo && {
+            comboId: comboInfo.comboId,
+            comboIndex: comboInfo.comboIndex,
+            comboTotal: comboInfo.comboTotal
+          })
         };
 
-        set((state) => ({
-          balance: state.balance - amount,
-          bets: [newBet, ...state.bets],
-        }));
+        // Save to Supabase
+        const success = await saveBetToSupabase(newBet);
+        if (!success) {
+          console.error('Failed to save bet to Supabase');
+          return null;
+        }
+
+        return newBet;
       },
 
-      cancelBet: (betId) => {
-        const { bets } = get();
-        const bet = bets.find((b) => b.id === betId);
-        if (!bet || bet.status !== BetStatus.PENDING) return;
+      // Cancel bet - deletes from Supabase (no local storage)
+      cancelBet: async (betId, betAmount, betTimestamp) => {
+        // Can only cancel within 1 minute of placing the bet
+        const oneMinuteAgo = Date.now() - 60 * 1000;
+        if (betTimestamp < oneMinuteAgo) {
+          console.warn('Cannot cancel bet - time limit exceeded');
+          return false;
+        }
 
-        set((state) => ({
-          balance: state.balance + bet.amount,
-          bets: state.bets.filter((b) => b.id !== betId),
-        }));
+        // Delete from Supabase
+        const success = await deleteBetFromSupabase(betId);
+        if (!success) {
+          console.error('Failed to delete bet from Supabase');
+          return false;
+        }
+
+        return true;
       },
 
       toggleMatchStatus: (status) => {
@@ -79,30 +100,9 @@ export const useStore = create<StoreState>()(
       },
 
       simulateGameEnd: () => {
-        const { bets, gameState, history } = get();
-        
-        // Randomly determine result for current pending bets
-        const updatedBets = bets.map(bet => {
-          if (bet.matchId === gameState.matchId && bet.status === BetStatus.PENDING) {
-            // 50% chance to win, pure chaos
-            const isWin = Math.random() > 0.5;
-            return {
-              ...bet,
-              status: isWin ? BetStatus.WON : BetStatus.LOST
-            };
-          }
-          return bet;
-        });
+        const { gameState, history } = get();
 
-        // Calculate winnings
-        let winnings = 0;
-        updatedBets.forEach(bet => {
-          if (bet.matchId === gameState.matchId && bet.status === BetStatus.WON) {
-            winnings += bet.potentialPayout;
-          }
-        });
-
-        // Add to history
+        // Add to history (simulation mode)
         const newHistoryItem: MatchHistoryItem = {
           id: gameState.matchId,
           date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }),
@@ -119,14 +119,17 @@ export const useStore = create<StoreState>()(
 
         set((state) => ({
           gameState: { ...state.gameState, status: MatchStatus.FINISHED },
-          bets: updatedBets,
-          balance: state.balance + winnings,
           history: [newHistoryItem, ...state.history]
         }));
       }
     }),
     {
       name: 'johnny-ff15-storage',
+      // Only persist gameState and history, NOT bets
+      partialize: (state) => ({
+        gameState: state.gameState,
+        history: state.history
+      })
     }
   )
 );
