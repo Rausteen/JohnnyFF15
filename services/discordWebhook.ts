@@ -107,7 +107,7 @@ export async function sendDiscordNotification(message: DiscordMessage): Promise<
 
 // Send a test notification
 export async function sendTestNotification(championName: string = 'Yasuo', gameMode: string = 'Ranked Solo/Duo', playerName: string = 'Johnny'): Promise<boolean> {
-  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/player-stats';
 
   return sendDiscordNotification({
     content: '🧪 **TEST** - Ceci est un message de test',
@@ -136,7 +136,7 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
   }
   lastNotifiedGameId = gameId;
 
-  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/player-stats';
 
   const players = Array.isArray(playerNames) ? playerNames : [playerNames];
   const champions = Array.isArray(championNames) ? championNames : (championNames ? [championNames] : []);
@@ -164,7 +164,7 @@ export async function notifyGameStarted(gameId: number, gameMode: string, player
   }
 
   fields.push({
-    name: '🔗 Voir la game',
+    name: '🔗 Voir le squad',
     value: `[Ouvrir JohnnyFF15](${siteUrl})`,
     inline: false,
   });
@@ -220,7 +220,7 @@ export async function notifyGameEnded(
   lastEndedGameIds.add(dedupeKey);
   setTimeout(() => lastEndedGameIds.delete(dedupeKey), 5 * 60 * 1000);
 
-  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/dashboard';
+  const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/player-stats';
   const kdaRatio = getKDARatio(kills, deaths, assists);
 
   // Performance rating

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Coins, Skull, History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift, Trophy, Swords, Package, BarChart3, Zap, Grid3X3 } from 'lucide-react';
+import { History, ShieldAlert, Menu, X, Sparkles, User, LogOut, Gift, Swords, BarChart3, Users } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useCreditsStore } from '../services/creditsStore';
 import { useCosmeticsLookup } from '../services/useCosmeticsLookup';
@@ -17,20 +17,14 @@ const TopBar = () => {
   // Check if user is admin (Rausteen)
   const isAdmin = ['Rausteen', 'AlbertEinstein 300IQ'].includes(profile?.pseudo || '');
 
-const navLinks = [
-  { path: '/player-stats', label: 'Joueurs', icon: BarChart3 },
-  { path: '/history', label: 'Historique', icon: History },
-  { path: '/dashboard', label: 'Paris', icon: Coins },
-  { path: '/my-bets', label: 'Mes Paris', icon: Skull },
-  { path: '/leaderboard', label: 'Classement', icon: Trophy },
-  { path: '/cases', label: 'Caisses', icon: Package },
-  { path: '/gridrush/info', label: 'GridRush', icon: Zap },
-  ...(isAdmin ? [
-    { path: '/gridrush', label: 'GR Admin', icon: Grid3X3 },
-    { path: '/team-balancer', label: '5v5', icon: Swords },
-    { path: '/admin', label: 'Admin', icon: ShieldAlert }
-  ] : []),
-];
+  const navLinks = [
+    { path: '/player-stats', label: 'Joueurs', icon: BarChart3 },
+    { path: '/history', label: 'Historique', icon: History },
+    ...(isAdmin ? [
+      { path: '/team-balancer', label: '5v5', icon: Swords },
+      { path: '/admin', label: 'Admin', icon: ShieldAlert }
+    ] : []),
+  ];
 
 
   const handleSignOut = async () => {
@@ -52,7 +46,7 @@ const navLinks = [
         <Link to="/" className="flex items-center gap-2 group">
           <div className="relative flex items-center justify-center">
             <div className="absolute inset-0 bg-primary rounded-full blur-md opacity-50 group-hover:opacity-100 transition duration-500"></div>
-            <Skull className="relative w-7 h-7 text-white" />
+            <Users className="relative w-7 h-7 text-white" />
           </div>
           <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white via-primary-300 to-accent-300 bg-clip-text text-transparent group-hover:from-primary group-hover:to-accent transition-all duration-300">
             JohnnyFF15

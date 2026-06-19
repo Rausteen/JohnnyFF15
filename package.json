@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "wealth-tax": "npx tsx scripts/weekly-wealth-tax.ts"
+    "wealth-tax": "npx tsx scripts/weekly-wealth-tax.ts",
+    "squad-summary": "npx tsx scripts/squad-summary.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.91.1",

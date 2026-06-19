@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { BarChart3, User, Loader2, Target, Skull, Swords, Eye, Coins, Shield, ChevronDown, ChevronUp, Crown, Gamepad2, WifiOff, TrendingUp, TrendingDown } from 'lucide-react';
 import { useGameStore } from '../services/gameStore';
 import { supabase } from '../services/supabase';
@@ -266,6 +267,12 @@ const PlayerStats = () => {
 
                   {/* Queue Selector */}
                   <div className="flex gap-2 mb-4">
+                    <Link
+                      to={`/players/${player.id}`}
+                      className="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-500 to-blue-600 text-white hover:brightness-110 transition"
+                    >
+                      Profil complet
+                    </Link>
                     {QUEUE_OPTIONS.map(q => (
                       <button
                         key={q.id}

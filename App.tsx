@@ -18,6 +18,7 @@ const PublicProfile = lazy(() => import('./pages/PublicProfile'));
 const TeamBalancer = lazy(() => import('./pages/TeamBalancer'));
 const Cases = lazy(() => import('./pages/Cases'));
 const PlayerStats = lazy(() => import('./pages/PlayerStats'));
+const PlayerDetail = lazy(() => import('./pages/PlayerDetail'));
 const GridRush = lazy(() => import('./pages/GridRush'));
 const GridRushGame = lazy(() => import('./pages/GridRushGame'));
 const GridRushEditor = lazy(() => import('./pages/GridRushEditor'));
@@ -92,6 +93,7 @@ const App = () => {
             <Route path="team-balancer" element={<TeamBalancer />} />
             <Route path="cases" element={<Cases />} />
             <Route path="player-stats" element={<PlayerStats />} />
+            <Route path="players/:playerId" element={<PlayerDetail />} />
             <Route path="gridrush/info" element={<GridRushInfo />} />
             <Route path="gridrush" element={<GridRush />} />
             <Route path="gridrush/game/:gameCode" element={<GridRushGame />} />

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Gamepad2, Trophy, Users, History, Wifi, WifiOff, Swords, BarChart3, Crown, Shield, Target, TrendingUp, Eye } from 'lucide-react';
+import { ArrowRight, Gamepad2, Users, History, Wifi, WifiOff, BarChart3, Crown, TrendingUp, Eye } from 'lucide-react';
 import { useAuthStore } from '../services/authStore';
 import { useGameStore, PlayerGameState } from '../services/gameStore';
 import { getChampionName, getQueueName } from '../services/riotApi';
@@ -243,11 +243,11 @@ const Landing = () => {
                 </div>
               </div>
               <Link
-                to={user ? "/dashboard" : "/login"}
+                to="/player-stats"
                 className="px-6 py-2 bg-green-500 hover:bg-green-400 text-black font-bold rounded-lg transition-all flex items-center gap-2"
               >
                 <Eye className="w-4 h-4" />
-                VOIR LA GAME
+                VOIR LES JOUEURS
               </Link>
             </div>
           </div>
@@ -273,7 +273,7 @@ const Landing = () => {
           </h1>
 
           <p className="text-lg text-zinc-400 max-w-xl mx-auto leading-relaxed mb-8">
-            Suis tes potes en temps r&eacute;el. Ranks, games live, stats, et notifications Discord d&egrave;s que quelqu'un lance une game.
+            Suis tes potes en temps r&eacute;el. Games live, ranks, stats r&eacute;centes, et notifications Discord d&egrave;s que quelqu'un lance une game.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center gap-4 justify-center">
@@ -290,13 +290,6 @@ const Landing = () => {
               <History className="w-5 h-5" />
               Historique
             </Link>
-
-            {user && (
-              <Link to="/dashboard" className="w-full sm:w-auto px-8 py-4 rounded-xl border border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 font-bold text-amber-400 hover:text-amber-300 transition-colors flex items-center justify-center gap-2">
-                <Swords className="w-5 h-5" />
-                Paris
-              </Link>
-            )}
           </div>
         </div>
 
@@ -408,7 +401,7 @@ const Landing = () => {
                 REJOINS LE SQUAD
               </h2>
               <p className="text-lg text-zinc-400 mb-8">
-                Connecte-toi pour acc&eacute;der aux stats d&eacute;taill&eacute;es, au Dashboard et aux paris entre potes.
+                Connecte-toi pour acc&eacute;der aux stats d&eacute;taill&eacute;es et suivre le squad plus facilement.
               </p>
               <Link
                 to="/login"
@@ -429,7 +422,7 @@ const Landing = () => {
           <span className="font-bold">JohnnyFF15</span>
         </div>
         <p className="max-w-md mx-auto px-4">
-          Tracker de squad LoL entre potes. Surveillance 24/7, notifs Discord, stats et paris.
+          Tracker de squad LoL entre potes. Surveillance 24/7, notifs Discord et stats de fin de game.
         </p>
       </footer>
     </div>

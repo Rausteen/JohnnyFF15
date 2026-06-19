@@ -318,8 +318,8 @@ async function sendDiscordNotification(
   }
 
   fields.push(
-    { name: '⏱️ Temps restant', value: '4 minutes pour parier', inline: true },
-    { name: '🔗 Parier maintenant', value: '[Ouvrir JohnnyFF15](https://johnnyff15.fr/#/dashboard)', inline: false }
+    { name: '🔔 Suivi', value: 'Récap envoyé en fin de game', inline: true },
+    { name: '🔗 Voir le squad', value: '[Ouvrir JohnnyFF15](https://johnnyff15.fr/#/player-stats)', inline: false }
   );
 
   // Use champion ID for thumbnail if available (more reliable for new champions)
@@ -335,15 +335,15 @@ async function sendDiscordNotification(
     content: '<@&1466416446094442578>',
     embeds: [{
       title: isMultiple
-        ? `🎰 ${playersUpper} SONT EN GAME ENSEMBLE !`
-        : `🎰 ${playersUpper} EST EN GAME !`,
+        ? `🎮 ${playersUpper} SONT EN GAME ENSEMBLE !`
+        : `🎮 ${playersUpper} EST EN GAME !`,
       description: isMultiple
-        ? `Les paris sont ouverts pendant **4 minutes** !\n\n**${playersList} jouent ensemble ! Viens parier sur leurs feeds !**`
-        : `Les paris sont ouverts pendant **4 minutes** !\n\n**Viens parier sur le feed de ${playersList} !**`,
+        ? `**${playersList} jouent ensemble !** Le tracker surveille la game et postera un récap à la fin.`
+        : `**${playersList} vient de lancer une game !** Le tracker surveille la game et postera un récap à la fin.`,
       color: 0x22c55e,
       fields,
       thumbnail: { url: thumbnailUrl },
-      footer: { text: 'JohnnyFF15 - Le casino du feed' },
+      footer: { text: 'JohnnyFF15 - Squad Tracker' },
       timestamp: new Date().toISOString(),
     }],
   };
@@ -1145,6 +1145,14 @@ async function sendGameEndNotification(
   const result = win ? '🏆 VICTOIRE' : '💀 DÉFAITE';
   const color = win ? 0x22c55e : 0xef4444;
   const kda = `${kills}/${deaths}/${assists}`;
+  const kdaRatio = (kills + assists) / Math.max(1, deaths);
+  const performance =
+    kdaRatio >= 5 ? '🔥 MVP potentiel' :
+    kdaRatio >= 3 ? '✨ Très propre' :
+    kdaRatio >= 2 ? '👍 Solide' :
+    deaths >= 10 ? '🚨 Game suspecte' :
+    kdaRatio < 1 ? '💀 À review' :
+    '😐 Correct';
 
   // Use champion ID for image if available (more reliable for new champions)
   const thumbnailUrl = championId > 0
@@ -1155,7 +1163,8 @@ async function sendGameEndNotification(
   const fields: Array<{ name: string; value: string; inline: boolean }> = [
     { name: '🎮 Mode', value: gameMode, inline: true },
     { name: '🏆 Champion', value: championName, inline: true },
-    { name: '📊 KDA', value: kda, inline: true },
+    { name: '📊 KDA', value: `${kda} (${kdaRatio.toFixed(2)})`, inline: true },
+    { name: '🎖️ Verdict', value: performance, inline: true },
   ];
 
   // Add rank + LP change if available
@@ -1178,11 +1187,11 @@ async function sendGameEndNotification(
     avatar_url: `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`,
     embeds: [{
       title: `${result} - ${playerName.toUpperCase()}`,
-      description: `La game de **${playerName}** est terminée !\n\nLes paris ont été résolus automatiquement.`,
+      description: `La game de **${playerName}** est terminée. Voici le récap de sa performance.`,
       color,
       fields,
       thumbnail: { url: thumbnailUrl },
-      footer: { text: 'JohnnyFF15 - Les paris sont résolus' },
+      footer: { text: 'JohnnyFF15 - Récap de game' },
       timestamp: new Date().toISOString(),
     }],
   };
