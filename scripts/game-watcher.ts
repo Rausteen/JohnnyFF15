@@ -284,8 +284,14 @@ function getChampionImageUrl(championNameOrId: string | number): string {
   return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalized}.png`;
 }
 
+function getPlayerProfileUrl(playerId: string): string {
+  const baseUrl = process.env.VITE_SITE_URL || 'https://johnnyff15.fr';
+  const cleanBase = baseUrl.replace(/\/$/, '').replace(/#\/.*$/, '');
+  return `${cleanBase}/#/players/${playerId}`;
+}
+
 async function sendDiscordNotification(
-  playerNames: string[],
+  players: TrackedPlayer[],
   championNames: string[],
   gameMode: string,
   gameId: number,
@@ -296,12 +302,15 @@ async function sendDiscordNotification(
     return;
   }
 
+  const playerNames = players.map(p => p.display_name || p.game_name || 'Joueur').filter(Boolean);
+  const profileLinks = players.map(p => `[${p.display_name || p.game_name || 'Joueur'}](${getPlayerProfileUrl(p.id)})`);
   const isMultiple = playerNames.length > 1;
   const playersUpper = playerNames.map(p => p.toUpperCase()).join(' & ');
   const playersList = playerNames.join(' et ');
-  const playersWithChamps = playerNames.map((p, i) => {
+  const playersWithChamps = players.map((player, i) => {
+    const playerLabel = `[${player.display_name || player.game_name || 'Joueur'}](${getPlayerProfileUrl(player.id)})`;
     const champ = championNames[i];
-    return champ ? `${p} (${champ})` : p;
+    return champ ? `${playerLabel} (${champ})` : playerLabel;
   }).join(', ');
 
   const fields = [
@@ -319,7 +328,11 @@ async function sendDiscordNotification(
 
   fields.push(
     { name: '🔔 Suivi', value: 'Récap envoyé en fin de game', inline: true },
-    { name: '🔗 Voir le squad', value: '[Ouvrir JohnnyFF15](https://johnnyff15.fr/#/player-stats)', inline: false }
+    {
+      name: isMultiple ? '🔗 Profils joueurs' : '🔗 Profil joueur',
+      value: isMultiple ? profileLinks.join(' · ') : profileLinks[0],
+      inline: false
+    }
   );
 
   // Use champion ID for thumbnail if available (more reliable for new champions)
@@ -1129,6 +1142,7 @@ async function processCommands(): Promise<void> {
 
 // Send Discord notification for game end
 async function sendGameEndNotification(
+  playerId: string,
   playerName: string,
   championName: string,
   win: boolean,
@@ -1141,6 +1155,7 @@ async function sendGameEndNotification(
   lpChange?: number | null
 ): Promise<void> {
   if (!DISCORD_WEBHOOK_URL) return;
+  const profileUrl = getPlayerProfileUrl(playerId);
 
   const result = win ? '🏆 VICTOIRE' : '💀 DÉFAITE';
   const color = win ? 0x22c55e : 0xef4444;
@@ -1182,6 +1197,12 @@ async function sendGameEndNotification(
     fields.push({ name: `${lpEmoji} LP`, value: `${lpSign}${lpChange}`, inline: true });
   }
 
+  fields.push({
+    name: '🔗 Profil joueur',
+    value: `[Voir le profil de ${playerName}](${profileUrl})`,
+    inline: false
+  });
+
   const payload = {
     username: 'JohnnyFF15 Bot',
     avatar_url: `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`,
@@ -1193,6 +1214,7 @@ async function sendGameEndNotification(
       thumbnail: { url: thumbnailUrl },
       footer: { text: 'JohnnyFF15 - Récap de game' },
       timestamp: new Date().toISOString(),
+      url: profileUrl,
     }],
   };
 
@@ -1969,6 +1991,7 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
   const gameMode = QUEUE_NAMES[matchData.info.queueId] || matchData.info.gameMode || 'Normal';
   const championName = playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown';
   await sendGameEndNotification(
+    player.id,
     player.display_name,
     championName,
     playerStats.win,
@@ -2077,10 +2100,9 @@ async function checkAllPlayers(): Promise<void> {
     if (!notifiedGames.has(notifKey)) {
       notifiedGames.add(notifKey);
 
-      const playerNames = gamePlayers.map(p => p.display_name || p.game_name || 'Joueur').filter(Boolean);
       const gameMode = QUEUE_NAMES[game.gameQueueConfigId] || 'Normal';
 
-      await sendDiscordNotification(playerNames, champions, gameMode, gameId, championIds);
+      await sendDiscordNotification(gamePlayers, champions, gameMode, gameId, championIds);
 
       // Clean up old notifications after 1 hour
       setTimeout(() => notifiedGames.delete(notifKey), 60 * 60 * 1000);
