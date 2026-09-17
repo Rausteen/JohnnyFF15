@@ -1,0 +1,15 @@
+# Game watcher (Discord notifications, bets, ranks) - lightweight alternative to Nixpacks.
+# Dokploy: Build Type "Dockerfile", Docker File = Dockerfile.watcher
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install only what the scripts need (tsx is a devDependency)
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY scripts ./scripts
+COPY tsconfig.json ./
+
+ENV NODE_ENV=production
+CMD ["npx", "tsx", "scripts/game-watcher.ts"]

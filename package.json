@@ -10,6 +10,7 @@
     "wealth-tax": "npx tsx scripts/weekly-wealth-tax.ts",
     "squad-summary": "npx tsx scripts/squad-summary.ts",
     "squad-summary:preview": "npx tsx scripts/squad-summary.ts --preview",
+    "watcher": "npx tsx scripts/game-watcher.ts",
     "watcher:preview": "npx tsx scripts/game-watcher.ts --preview"
   },
   "dependencies": {
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "tsx": "^4.23.13",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
