@@ -112,8 +112,6 @@ export async function sendDiscordNotification(message: DiscordMessage): Promise<
 export async function sendTestNotification(championName: string = 'Yasuo', gameMode: string = 'Ranked Solo/Duo', playerName: string = 'Johnny'): Promise<boolean> {
   const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/player-stats';
 
-  const normalizedName = championName.replace(/['\s.]/g, '');
-
   // Mirrors the layout of the real game-start notification sent by scripts/game-watcher.ts
   return sendDiscordNotification({
     content: '🧪 **TEST** - Ceci est un message de test',
@@ -133,7 +131,6 @@ export async function sendTestNotification(championName: string = 'Yasuo', gameM
         { name: '⚔️ Les équipes', value: `🔵 Aatrox · Lee Sin · **${championName}** · Jinx · Thresh\n🔴 Darius · Graves · Zed · Caitlyn · Lulu`, inline: false },
       ],
       thumbnail: { url: getChampionImageUrl(championName) },
-      image: { url: `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${normalizedName}_0.jpg` },
       footer: { text: 'JohnnyFF15 · Message de test' },
       timestamp: new Date().toISOString(),
     }],

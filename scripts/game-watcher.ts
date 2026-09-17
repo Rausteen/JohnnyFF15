@@ -25,7 +25,6 @@ import {
   loadLolAssets,
   getChampionNames,
   getChampionIconUrl,
-  getChampionSplashUrl,
   getProfileIconUrl,
   getRankEmblemUrl,
   formatRank,
@@ -416,7 +415,6 @@ async function sendDiscordNotification(
     ? `${gameMode} · ${formatRank(main.player.solo_tier, main.player.solo_division, main.player.solo_lp)}`
     : gameMode;
 
-  const splash = mainChampionId ? getChampionSplashUrl(mainChampionId) : null;
 
   const payload = {
     content: PREVIEW_MODE ? '🧪 **TEST** — aperçu de la notification de début de game (données fictives)' : '<@&1466416446094442578>',
@@ -433,7 +431,6 @@ async function sendDiscordNotification(
       color: DISCORD_COLORS.GREEN,
       fields,
       thumbnail: { url: mainChampionId ? getChampionImageUrl(mainChampionId) : getProfileIconUrl() },
-      ...(splash ? { image: { url: splash } } : {}),
       footer: { text: 'JohnnyFF15 · Récap envoyé en fin de game' },
       timestamp: new Date().toISOString(),
     }],

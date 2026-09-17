@@ -13,7 +13,6 @@ import {
   loadLolAssets,
   getChampionDisplayName,
   getChampionIconUrl,
-  getChampionSplashUrl,
   getProfileIconUrl,
   getRankEmblemUrl,
   formatRank,
@@ -198,7 +197,6 @@ if (bestFavorite) {
 bestLines.push(`🔥 Meilleure game : **${champName(best.bestGame.champion_name)}** ${formatKda(best.bestGame)} · ${formatK(best.bestGame.damage_dealt)} dégâts (${best.bestGame.win ? 'win' : 'lose'})`);
 if (best.lpChange != null) bestLines.push(`📈 LP sur la période : **${formatSigned(best.lpChange)}**`);
 
-const splash = bestFavorite ? getChampionSplashUrl(bestFavorite.champion) : null;
 
 const playerOfTheWeekEmbed = {
   author: {
@@ -210,7 +208,6 @@ const playerOfTheWeekEmbed = {
   description: bestLines.join('\n'),
   color: DISCORD_COLORS.GOLD,
   thumbnail: { url: getChampionIconUrl(bestFavorite?.champion || best.bestGame.champion_name) },
-  ...(splash ? { image: { url: splash } } : {}),
 };
 
 // ============================================
