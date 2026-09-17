@@ -1261,27 +1261,31 @@ interface GameEndNotificationParams {
   lpChange?: number | null;
 }
 
-// Verdict on the lane matchup from the gold difference (relative to the average gold of the two)
-function getLaneVerdict(goldDiff: number, playerGold: number, opponentGold: number, opponentName: string): string {
+// Verdict on the lane matchup from the gold difference (relative to the average gold of the two).
+// The bottom tiers are meant to be brutal - the squad is watching.
+function getLaneVerdict(goldDiff: number, playerGold: number, opponentGold: number, playerName: string, opponentName: string): string {
   const avg = Math.max(1, (playerGold + opponentGold) / 2);
   const pct = goldDiff / avg;
   const diffText = `${formatSigned(goldDiff, formatK)} gold`;
+  if (pct >= 0.30) return `☄️ **ASTRO GAP** — ${opponentName} a été rayé de la carte par ${playerName} (${diffText})`;
   if (pct >= 0.18) return `🔨 **GAP MONUMENTAL** — ${opponentName} s'est fait gapped (${diffText})`;
   if (pct >= 0.07) return `💪 **Lane gagnée** face à ${opponentName} (${diffText})`;
   if (pct > -0.07) return `🤝 **Lane serrée** contre ${opponentName} (${diffText})`;
   if (pct > -0.18) return `😬 **Lane perdue** contre ${opponentName} (${diffText})`;
-  return `💀 **GAPPED** par ${opponentName} (${diffText})`;
+  if (pct > -0.30) return `💀 **GAPPED** — ${playerName} s'est fait détruire par ${opponentName} (${diffText})`;
+  return `🤡 **ASTRO GAP** — ${playerName} s'est fait astro gap par ${opponentName}, ce gros loser (${diffText})`;
 }
 
 // Global verdict on the player's game
-function getPerformanceVerdict(stats: MatchParticipant): string {
+function getPerformanceVerdict(stats: MatchParticipant, playerName: string): string {
   const kdaRatio = (stats.kills + stats.assists) / Math.max(1, stats.deaths);
   if (stats.pentaKills) return '🏆 PENTAKILL';
   if (kdaRatio >= 5) return '🔥 Il a carry';
   if (kdaRatio >= 3) return '✨ Très propre';
   if (kdaRatio >= 2) return '👍 Solide';
-  if (stats.deaths >= 10) return '🚨 Game suspecte';
-  if (kdaRatio < 1) return '💀 À review';
+  if (stats.deaths >= 12) return `🤡 ${stats.deaths} morts — ${playerName} a joué avec les pieds`;
+  if (stats.deaths >= 10) return `🚨 ${stats.deaths} morts — game suspecte, ${playerName} a int ou quoi ?`;
+  if (kdaRatio < 1) return `💀 KDA négatif — ${playerName} doit review sa game`;
   return '😐 Correct';
 }
 
@@ -1372,7 +1376,7 @@ async function sendGameEndNotification(params: GameEndNotificationParams): Promi
   ];
   const loadout = [spells, runes ? `🔮 ${runes.keystone}` : null].filter(Boolean).join(' · ');
   if (loadout) descriptionLines.push(loadout);
-  descriptionLines.push('', `**${getPerformanceVerdict(playerStats)}**`);
+  descriptionLines.push('', `**${getPerformanceVerdict(playerStats, playerName)}**`);
   const highlights = getHighlights(playerStats, matchData);
   if (highlights.length) descriptionLines.push(highlights.join(' · '));
 
@@ -1392,7 +1396,7 @@ async function sendGameEndNotification(params: GameEndNotificationParams): Promi
     const goldDiff = playerStats.goldEarned - opponent.goldEarned;
     fields.push({
       name: `🥊 Face à face · ${championName} vs ${opponentChamp}`,
-      value: `${buildMatchupTable(championName, playerStats, opponentChamp, opponent)}\n${getLaneVerdict(goldDiff, playerStats.goldEarned, opponent.goldEarned, opponentChamp)}`,
+      value: `${buildMatchupTable(championName, playerStats, opponentChamp, opponent)}\n${getLaneVerdict(goldDiff, playerStats.goldEarned, opponent.goldEarned, playerName, opponentChamp)}`,
       inline: false,
     });
   }
@@ -2467,6 +2471,30 @@ async function runPreview(): Promise<void> {
     gameMode: QUEUE_NAMES[420],
     rankInfo: { tier: 'EMERALD', division: 'II', lp: 67 },
     lpChange: 22,
+  });
+
+  // Same game, but Johnny got destroyed (defeat + astro gap)
+  const lossMatch: MatchData = structuredClone(matchData);
+  for (const p of lossMatch.info.participants) p.win = p.teamId === 200;
+  const lossStats = lossMatch.info.participants[2];
+  Object.assign(lossStats, {
+    kills: 1, deaths: 11, assists: 3, totalMinionsKilled: 142, goldEarned: 8100,
+    totalDamageDealtToChampions: 9800, visionScore: 9, champLevel: 13, goldAt15: 4200,
+    tripleKills: 0, firstBloodKill: false, firstBloodVictim: true, soloDeaths: 5,
+    challenges: { soloKills: 0, killParticipation: 0.31 },
+  });
+  Object.assign(lossMatch.info.participants[7], {
+    kills: 12, deaths: 1, assists: 6, totalMinionsKilled: 261, goldEarned: 16900,
+    totalDamageDealtToChampions: 31000, champLevel: 18, goldAt15: 7300,
+  });
+
+  await sendGameEndNotification({
+    player,
+    matchData: lossMatch,
+    playerStats: lossStats,
+    gameMode: QUEUE_NAMES[420],
+    rankInfo: { tier: 'EMERALD', division: 'II', lp: 27 },
+    lpChange: -18,
   });
 
   console.log('\n🧪 Preview done');
