@@ -21,6 +21,25 @@ import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+import {
+  loadLolAssets,
+  getChampionNames,
+  getChampionIconUrl,
+  getChampionSplashUrl,
+  getProfileIconUrl,
+  getRankEmblemUrl,
+  formatRank,
+  formatSpells,
+  formatRunes,
+  formatRole,
+  guessRole,
+  formatK,
+  formatSigned,
+  formatDuration,
+  ROLE_LABELS,
+  DISCORD_COLORS,
+  type Role,
+} from './lib/lolAssets';
 
 // ES module compatibility for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -34,6 +53,7 @@ const RIOT_API_KEY = process.env.VITE_RIOT_API_KEY || process.env.RIOT_API_KEY |
 const DISCORD_WEBHOOK_URL = process.env.VITE_DISCORD_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || '';
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
+const PREVIEW_MODE = process.argv.includes('--preview'); // npx tsx scripts/game-watcher.ts --preview
 const CHECK_INTERVAL = 45000; // 45 seconds
 const WEALTH_TAX_CHECK_INTERVAL = 60 * 60 * 1000; // Check every hour
 const RANK_SYNC_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
@@ -68,19 +88,20 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
-// Data caches
-const matchDetailsCache = new Map<string, CacheEntry<unknown>>();
-const matchTimelineCache = new Map<string, CacheEntry<{
+// Condensed timeline data (kills + gold snapshot at 15 min)
+interface MatchTimeline {
   participants: Array<{ participantId: number; puuid: string }>;
   killEvents: TimelineKillEvent[];
-}>>();
+  goldAt15: Record<number, number>; // participantId -> totalGold at the 15 min frame (empty if game < 15 min)
+}
+
+// Data caches
+const matchDetailsCache = new Map<string, CacheEntry<unknown>>();
+const matchTimelineCache = new Map<string, CacheEntry<MatchTimeline>>();
 
 // In-flight request deduplication (prevents duplicate API calls when multiple players finish same game)
 const matchDetailsInFlight = new Map<string, Promise<unknown | null>>();
-const matchTimelineInFlight = new Map<string, Promise<{
-  participants: Array<{ participantId: number; puuid: string }>;
-  killEvents: TimelineKillEvent[];
-} | null>>();
+const matchTimelineInFlight = new Map<string, Promise<MatchTimeline | null>>();
 
 // Clean expired cache entries every 10 minutes
 setInterval(() => {
@@ -132,50 +153,13 @@ const QUEUE_NAMES: Record<number, string> = {
 // Only allow bets on these queues (Solo/Duo, Flex, and Clash)
 const ALLOWED_QUEUE_IDS = [420, 440, 700];
 
-// Rank display names
-const RANK_DISPLAY: Record<string, string> = {
-  IRON: 'Fer',
-  BRONZE: 'Bronze',
-  SILVER: 'Argent',
-  GOLD: 'Or',
-  PLATINUM: 'Platine',
-  EMERALD: 'Emeraude',
-  DIAMOND: 'Diamant',
-  MASTER: 'Master',
-  GRANDMASTER: 'GrandMaster',
-  CHALLENGER: 'Challenger'
-};
-
-// Champion data from Data Dragon
+// Champion data from Data Dragon (loaded through scripts/lib/lolAssets)
 let CHAMPIONS: Record<number, string> = {}; // ID -> display name (e.g., "Wukong")
-let CHAMPION_KEYS: Record<number, string> = {}; // ID -> internal key for images (e.g., "MonkeyKing")
-let DDRAGON_VERSION = '14.1.1'; // Will be updated to latest
 
-// Fetch champion data from Data Dragon
+// Fetch champions, runes, summoner spells and role rates
 async function loadChampionData(): Promise<void> {
-  try {
-    // Get latest version
-    const versionsRes = await fetch('https://ddragon.leagueoflegends.com/api/versions.json');
-    const versions = await versionsRes.json();
-    DDRAGON_VERSION = versions[0];
-
-    // Fetch champion data
-    const champRes = await fetch(`https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/data/en_US/champion.json`);
-    const champData = await champRes.json();
-
-    // Build ID -> name and ID -> key mappings
-    for (const [internalKey, data] of Object.entries(champData.data)) {
-      const champ = data as { key: string; name: string; id: string };
-      const champId = parseInt(champ.key, 10);
-      CHAMPIONS[champId] = champ.name; // Display name (e.g., "Wukong")
-      CHAMPION_KEYS[champId] = internalKey; // Internal key for URLs (e.g., "MonkeyKing")
-    }
-
-    console.log(`✅ Loaded ${Object.keys(CHAMPIONS).length} champions from Data Dragon (v${DDRAGON_VERSION})`);
-  } catch (error) {
-    console.error('Failed to load champion data:', error);
-    // Keep default version and empty mappings - will use fallback in getChampionImageUrl
-  }
+  await loadLolAssets();
+  CHAMPIONS = getChampionNames();
 }
 
 interface TrackedPlayer {
@@ -192,14 +176,25 @@ interface TrackedPlayer {
   rank_updated_at: string | null;
 }
 
+interface CurrentGameParticipant {
+  puuid: string;
+  championId: number;
+  teamId: number;
+  spell1Id?: number;
+  spell2Id?: number;
+  riotId?: string;
+  perks?: {
+    perkIds: number[];
+    perkStyle: number;
+    perkSubStyle: number;
+  };
+}
+
 interface CurrentGameInfo {
   gameId: number;
   gameStartTime: number;
   gameQueueConfigId: number;
-  participants: Array<{
-    puuid: string;
-    championId: number;
-  }>;
+  participants: CurrentGameParticipant[];
 }
 
 async function getTrackedPlayers(): Promise<TrackedPlayer[]> {
@@ -263,25 +258,7 @@ async function checkCurrentGame(puuid: string, region: string, retries = 2): Pro
 }
 
 function getChampionImageUrl(championNameOrId: string | number): string {
-  // If it's a champion ID, use the internal key mapping
-  if (typeof championNameOrId === 'number') {
-    const key = CHAMPION_KEYS[championNameOrId];
-    if (key) {
-      return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${key}.png`;
-    }
-    // Fallback: try to use the name from CHAMPIONS
-    const name = CHAMPIONS[championNameOrId];
-    if (name) {
-      const normalized = name.replace(/['\s.]/g, '');
-      return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalized}.png`;
-    }
-    // Ultimate fallback: default icon
-    return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`;
-  }
-
-  // If it's a string (champion name), normalize it
-  const normalized = championNameOrId.replace(/['\s.]/g, '');
-  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${normalized}.png`;
+  return getChampionIconUrl(championNameOrId);
 }
 
 function getPlayerProfileUrl(playerId: string): string {
@@ -290,92 +267,179 @@ function getPlayerProfileUrl(playerId: string): string {
   return `${cleanBase}/#/players/${playerId}`;
 }
 
-async function sendDiscordNotification(
-  players: TrackedPlayer[],
-  championNames: string[],
-  gameMode: string,
-  gameId: number,
-  championIds: number[] = []
-): Promise<void> {
+function getPlayerLabel(player: TrackedPlayer): string {
+  return player.display_name || player.game_name || 'Joueur';
+}
+
+async function postDiscordWebhook(payload: Record<string, unknown>, logLabel: string): Promise<boolean> {
   if (!DISCORD_WEBHOOK_URL) {
-    console.log('No Discord webhook configured');
-    return;
-  }
-
-  const playerNames = players.map(p => p.display_name || p.game_name || 'Joueur').filter(Boolean);
-  const profileLinks = players.map(p => `[${p.display_name || p.game_name || 'Joueur'}](${getPlayerProfileUrl(p.id)})`);
-  const isMultiple = playerNames.length > 1;
-  const playersUpper = playerNames.map(p => p.toUpperCase()).join(' & ');
-  const playersList = playerNames.join(' et ');
-  const playersWithChamps = players.map((player, i) => {
-    const playerLabel = `[${player.display_name || player.game_name || 'Joueur'}](${getPlayerProfileUrl(player.id)})`;
-    const champ = championNames[i];
-    return champ ? `${playerLabel} (${champ})` : playerLabel;
-  }).join(', ');
-
-  const fields = [
-    { name: '🎮 Mode de jeu', value: gameMode || 'Ranked Solo/Duo', inline: true },
-    { name: '👥 Joueurs', value: playersWithChamps, inline: true },
-  ];
-
-  if (championNames.length > 0) {
-    fields.push({
-      name: '🏆 Champion' + (championNames.length > 1 ? 's' : ''),
-      value: championNames.join(', '),
-      inline: true,
-    });
-  }
-
-  fields.push(
-    { name: '🔔 Suivi', value: 'Récap envoyé en fin de game', inline: true },
-    {
-      name: isMultiple ? '🔗 Profils joueurs' : '🔗 Profil joueur',
-      value: isMultiple ? profileLinks.join(' · ') : profileLinks[0],
-      inline: false
+    if (PREVIEW_MODE) {
+      console.log(`\n===== ${logLabel} =====\n${JSON.stringify(payload, null, 2)}`);
+      return true;
     }
-  );
-
-  // Use champion ID for thumbnail if available (more reliable for new champions)
-  const thumbnailUrl = championIds.length > 0 && championIds[0] > 0
-    ? getChampionImageUrl(championIds[0])
-    : championNames.length > 0
-      ? getChampionImageUrl(championNames[0])
-      : `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`;
-
-  const payload = {
-    username: 'JohnnyFF15 Bot',
-    avatar_url: `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`,
-    content: '<@&1466416446094442578>',
-    embeds: [{
-      title: isMultiple
-        ? `🎮 ${playersUpper} SONT EN GAME ENSEMBLE !`
-        : `🎮 ${playersUpper} EST EN GAME !`,
-      description: isMultiple
-        ? `**${playersList} jouent ensemble !** Le tracker surveille la game et postera un récap à la fin.`
-        : `**${playersList} vient de lancer une game !** Le tracker surveille la game et postera un récap à la fin.`,
-      color: 0x22c55e,
-      fields,
-      thumbnail: { url: thumbnailUrl },
-      footer: { text: 'JohnnyFF15 - Squad Tracker' },
-      timestamp: new Date().toISOString(),
-    }],
-  };
+    console.log('No Discord webhook configured');
+    return false;
+  }
 
   try {
     const response = await fetch(DISCORD_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        username: 'JohnnyFF15 Bot',
+        avatar_url: getProfileIconUrl(),
+        ...payload,
+      }),
     });
 
-    if (response.ok) {
-      console.log(`✅ Discord notification sent for game ${gameId}`);
-    } else {
-      console.error(`Discord webhook error: ${response.status}`);
+    if (!response.ok) {
+      console.error(`Discord webhook error (${logLabel}): ${response.status} ${await response.text()}`);
+      return false;
     }
+
+    console.log(`✅ Discord notification sent: ${logLabel}`);
+    return true;
   } catch (error) {
-    console.error('Discord notification error:', error);
+    console.error(`Discord notification error (${logLabel}):`, error);
+    return false;
   }
+}
+
+// How often a player has played each role on a champion (from johnny_matches)
+async function getPlayerRoleHistory(puuid: string, championId: number): Promise<Partial<Record<Role, number>> | undefined> {
+  const { data, error } = await supabase
+    .from('johnny_matches')
+    .select('team_position')
+    .eq('puuid', puuid)
+    .eq('champion_id', championId)
+    .not('team_position', 'is', null)
+    .limit(30);
+
+  if (error || !data?.length) return undefined;
+
+  const history: Partial<Record<Role, number>> = {};
+  for (const row of data as Array<{ team_position: string }>) {
+    const role = row.team_position as Role;
+    if (ROLE_LABELS[role]) history[role] = (history[role] || 0) + 1;
+  }
+  return history;
+}
+
+interface GameStartPlayerInfo {
+  player: TrackedPlayer;
+  participant: CurrentGameParticipant | undefined;
+  championName: string;
+  role: Role | null;
+}
+
+function formatTeamComposition(game: CurrentGameInfo, highlightPuuids: Set<string>): string {
+  const teams = [100, 200].map(teamId => {
+    const names = game.participants
+      .filter(p => p.teamId === teamId)
+      .map(p => {
+        const name = CHAMPIONS[p.championId] || `Champion${p.championId}`;
+        return highlightPuuids.has(p.puuid) ? `**${name}**` : name;
+      });
+    return names.length ? names.join(' · ') : '?';
+  });
+  return `🔵 ${teams[0]}\n🔴 ${teams[1]}`;
+}
+
+function describeLoadout(participant: CurrentGameParticipant | undefined, role: Role | null): string[] {
+  const lines: string[] = [];
+  const roleText = formatRole(role);
+  if (roleText) lines.push(roleText);
+  const spells = formatSpells(participant?.spell1Id, participant?.spell2Id);
+  if (spells) lines.push(spells);
+  const runes = formatRunes(participant?.perks?.perkIds, participant?.perks?.perkSubStyle);
+  if (runes) lines.push(`🔮 ${runes.keystone}${runes.secondary ? ` + ${runes.secondary}` : ''}`);
+  return lines;
+}
+
+async function sendDiscordNotification(
+  players: TrackedPlayer[],
+  gameMode: string,
+  game: CurrentGameInfo
+): Promise<void> {
+
+  const infos: GameStartPlayerInfo[] = [];
+  for (const player of players) {
+    const participant = game.participants.find(p => p.puuid === player.puuid);
+    const championId = participant?.championId || 0;
+    const spellIds = [participant?.spell1Id, participant?.spell2Id].filter((id): id is number => !!id);
+    const history = championId ? await getPlayerRoleHistory(player.puuid, championId) : undefined;
+    infos.push({
+      player,
+      participant,
+      championName: championId ? (CHAMPIONS[championId] || `Champion${championId}`) : '',
+      role: championId ? guessRole(championId, spellIds, history) : null,
+    });
+  }
+
+  const isMultiple = infos.length > 1;
+  const playersUpper = infos.map(i => getPlayerLabel(i.player).toUpperCase()).join(' & ');
+  const main = infos[0];
+  const mainChampionId = main.participant?.championId || 0;
+  const highlight = new Set(players.map(p => p.puuid));
+
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [];
+  let description: string;
+
+  if (!isMultiple) {
+    const roleText = formatRole(main.role);
+    description = `**[${getPlayerLabel(main.player)}](${getPlayerProfileUrl(main.player.id)})** lance une game sur **${main.championName || '?'}**${roleText ? ` en ${roleText}` : ''}.`;
+
+    const spells = formatSpells(main.participant?.spell1Id, main.participant?.spell2Id);
+    const runes = formatRunes(main.participant?.perks?.perkIds, main.participant?.perks?.perkSubStyle);
+    fields.push({ name: '🎯 Rôle', value: roleText || 'Inconnu', inline: true });
+    fields.push({ name: '✨ Sorts', value: spells || 'Inconnus', inline: true });
+    fields.push({
+      name: '🔮 Runes',
+      value: runes ? `${runes.keystone}${runes.secondary ? `\n↳ ${runes.secondary}` : ''}` : 'Inconnues',
+      inline: true,
+    });
+  } else {
+    description = `**${infos.map(i => getPlayerLabel(i.player)).join('** et **')}** jouent ensemble !`;
+    for (const info of infos) {
+      const lines = [`**${info.championName || '?'}**`, ...describeLoadout(info.participant, info.role)];
+      fields.push({
+        name: `👤 ${getPlayerLabel(info.player)}`,
+        value: `${lines.join('\n')}\n[Profil](${getPlayerProfileUrl(info.player.id)})`,
+        inline: true,
+      });
+    }
+  }
+
+  fields.push({ name: '⚔️ Les équipes', value: formatTeamComposition(game, highlight), inline: false });
+
+  const rankLine = !isMultiple && main.player.solo_tier
+    ? `${gameMode} · ${formatRank(main.player.solo_tier, main.player.solo_division, main.player.solo_lp)}`
+    : gameMode;
+
+  const splash = mainChampionId ? getChampionSplashUrl(mainChampionId) : null;
+
+  const payload = {
+    content: PREVIEW_MODE ? '🧪 **TEST** — aperçu de la notification de début de game (données fictives)' : '<@&1466416446094442578>',
+    embeds: [{
+      author: {
+        name: rankLine,
+        icon_url: !isMultiple ? getRankEmblemUrl(main.player.solo_tier) : getProfileIconUrl(),
+      },
+      title: isMultiple
+        ? `🎮 ${playersUpper} SONT EN GAME ENSEMBLE !`
+        : `🎮 ${playersUpper} EST EN GAME !`,
+      url: getPlayerProfileUrl(main.player.id),
+      description,
+      color: DISCORD_COLORS.GREEN,
+      fields,
+      thumbnail: { url: mainChampionId ? getChampionImageUrl(mainChampionId) : getProfileIconUrl() },
+      ...(splash ? { image: { url: splash } } : {}),
+      footer: { text: 'JohnnyFF15 · Récap envoyé en fin de game' },
+      timestamp: new Date().toISOString(),
+    }],
+  };
+
+  await postDiscordWebhook(payload, `game start ${game.gameId}`);
 }
 
 async function updateGameStatusInSupabase(
@@ -534,10 +598,7 @@ async function getMatchDetails(matchId: string, region: string): Promise<unknown
 }
 
 // Get match timeline from Riot API (with cache + in-flight deduplication)
-async function getMatchTimeline(matchId: string, region: string): Promise<{
-  participants: Array<{ participantId: number; puuid: string }>;
-  killEvents: TimelineKillEvent[];
-} | null> {
+async function getMatchTimeline(matchId: string, region: string): Promise<MatchTimeline | null> {
   // Check cache first
   const cached = matchTimelineCache.get(matchId);
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
@@ -592,9 +653,19 @@ async function getMatchTimeline(matchId: string, region: string): Promise<{
         }
       }
 
-      const result = {
+      // Gold snapshot at 15 min (frames are 1 min apart, index 15 = 15:00)
+      const goldAt15: Record<number, number> = {};
+      const frame15 = (data.info.frames || [])[15];
+      if (frame15?.participantFrames) {
+        for (const [pid, pf] of Object.entries(frame15.participantFrames as Record<string, { totalGold?: number }>)) {
+          if (typeof pf.totalGold === 'number') goldAt15[parseInt(pid, 10)] = pf.totalGold;
+        }
+      }
+
+      const result: MatchTimeline = {
         participants: data.info.participants || [],
         killEvents,
+        goldAt15,
       };
 
       // Store in cache
@@ -622,7 +693,7 @@ async function getMatchTimeline(matchId: string, region: string): Promise<{
 
 // Count solo deaths for a player from timeline data
 function countSoloDeaths(
-  timeline: { participants: Array<{ participantId: number; puuid: string }>; killEvents: TimelineKillEvent[] },
+  timeline: MatchTimeline,
   playerPuuid: string
 ): number {
   // Find player's participantId
@@ -640,7 +711,7 @@ function countSoloDeaths(
 // Check if player was the first blood victim (using timeline data)
 // Riot API doesn't return firstBloodVictim in match details, only firstBloodKill
 function isFirstBloodVictim(
-  timeline: { participants: Array<{ participantId: number; puuid: string }>; killEvents: TimelineKillEvent[] },
+  timeline: MatchTimeline,
   playerPuuid: string
 ): boolean {
   const participant = timeline.participants.find(p => p.puuid === playerPuuid);
@@ -686,33 +757,7 @@ async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message:
         continue;
       }
 
-      const matchData = await getMatchDetails(matchId, player.region) as {
-        metadata: { matchId: string };
-        info: {
-          gameCreation: number;
-          gameDuration: number;
-          gameMode: string;
-          queueId: number;
-          gameEndedInSurrender?: boolean;
-          participants: Array<{
-            puuid: string;
-            championId: number;
-            championName: string;
-            kills: number;
-            deaths: number;
-            assists: number;
-            totalMinionsKilled: number;
-            neutralMinionsKilled: number;
-            visionScore: number;
-            goldEarned: number;
-            totalDamageDealtToChampions: number;
-            win: boolean;
-            firstBloodVictim?: boolean;
-            teamEarlySurrendered?: boolean;
-            teamId: number;
-          }>;
-        };
-      } | null;
+      const matchData = await getMatchDetails(matchId, player.region) as MatchData | null;
 
       if (!matchData) {
         console.log(`  ⚠️ Could not fetch match for ${player.display_name}`);
@@ -728,9 +773,7 @@ async function syncLastGameForAllPlayers(): Promise<{ success: boolean; message:
       const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
 
       // Use insert instead of upsert to allow same match_id for different players
-      const { error } = await supabase
-        .from('johnny_matches')
-        .insert([johnnyMatch]);
+      const error = await insertJohnnyMatch(johnnyMatch);
 
       if (error) {
         // If duplicate key error, it means match already exists for this player
@@ -894,33 +937,7 @@ async function syncGamesForPlayer(playerId: string): Promise<{ success: boolean;
       continue;
     }
 
-    const matchData = await getMatchDetails(matchId, player.region) as {
-      metadata: { matchId: string };
-      info: {
-        gameCreation: number;
-        gameDuration: number;
-        gameMode: string;
-        queueId: number;
-        gameEndedInSurrender?: boolean;
-        participants: Array<{
-          puuid: string;
-          championId: number;
-          championName: string;
-          kills: number;
-          deaths: number;
-          assists: number;
-          totalMinionsKilled: number;
-          neutralMinionsKilled: number;
-          visionScore: number;
-          goldEarned: number;
-          totalDamageDealtToChampions: number;
-          win: boolean;
-          firstBloodVictim?: boolean;
-          teamEarlySurrendered?: boolean;
-          teamId: number;
-        }>;
-      };
-    } | null;
+    const matchData = await getMatchDetails(matchId, player.region) as MatchData | null;
 
     if (!matchData) {
       console.log(`  ⚠️ Could not fetch match ${matchId}`);
@@ -935,9 +952,7 @@ async function syncGamesForPlayer(playerId: string): Promise<{ success: boolean;
 
     const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
 
-    const { error } = await supabase
-      .from('johnny_matches')
-      .insert([johnnyMatch]);
+    const error = await insertJohnnyMatch(johnnyMatch);
 
     if (error) {
       if (error.code === '23505') {
@@ -1141,100 +1156,18 @@ async function processCommands(): Promise<void> {
 // ============================================
 
 // Send Discord notification for game end
-async function sendGameEndNotification(
-  playerId: string,
-  playerName: string,
-  championName: string,
-  win: boolean,
-  kills: number,
-  deaths: number,
-  assists: number,
-  gameMode: string,
-  championId: number = 0,
-  rankInfo?: { tier: string; division: string; lp: number } | null,
-  lpChange?: number | null
-): Promise<void> {
-  if (!DISCORD_WEBHOOK_URL) return;
-  const profileUrl = getPlayerProfileUrl(playerId);
-
-  const result = win ? '🏆 VICTOIRE' : '💀 DÉFAITE';
-  const color = win ? 0x22c55e : 0xef4444;
-  const kda = `${kills}/${deaths}/${assists}`;
-  const kdaRatio = (kills + assists) / Math.max(1, deaths);
-  const performance =
-    kdaRatio >= 5 ? '🔥 MVP potentiel' :
-    kdaRatio >= 3 ? '✨ Très propre' :
-    kdaRatio >= 2 ? '👍 Solide' :
-    deaths >= 10 ? '🚨 Game suspecte' :
-    kdaRatio < 1 ? '💀 À review' :
-    '😐 Correct';
-
-  // Use champion ID for image if available (more reliable for new champions)
-  const thumbnailUrl = championId > 0
-    ? getChampionImageUrl(championId)
-    : getChampionImageUrl(championName);
-
-  // Build fields
-  const fields: Array<{ name: string; value: string; inline: boolean }> = [
-    { name: '🎮 Mode', value: gameMode, inline: true },
-    { name: '🏆 Champion', value: championName, inline: true },
-    { name: '📊 KDA', value: `${kda} (${kdaRatio.toFixed(2)})`, inline: true },
-    { name: '🎖️ Verdict', value: performance, inline: true },
-  ];
-
-  // Add rank + LP change if available
-  if (rankInfo) {
-    const tierName = RANK_DISPLAY[rankInfo.tier] || rankInfo.tier;
-    const divDisplay = ['MASTER', 'GRANDMASTER', 'CHALLENGER'].includes(rankInfo.tier)
-      ? '' : ` ${rankInfo.division}`;
-    const rankText = `${tierName}${divDisplay} (${rankInfo.lp} LP)`;
-    fields.push({ name: '🎖️ Rank', value: rankText, inline: true });
-  }
-
-  if (lpChange != null) {
-    const lpSign = lpChange >= 0 ? '+' : '';
-    const lpEmoji = lpChange >= 0 ? '📈' : '📉';
-    fields.push({ name: `${lpEmoji} LP`, value: `${lpSign}${lpChange}`, inline: true });
-  }
-
-  fields.push({
-    name: '🔗 Profil joueur',
-    value: `[Voir le profil de ${playerName}](${profileUrl})`,
-    inline: false
-  });
-
-  const payload = {
-    username: 'JohnnyFF15 Bot',
-    avatar_url: `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/profileicon/4644.png`,
-    embeds: [{
-      title: `${result} - ${playerName.toUpperCase()}`,
-      description: `La game de **${playerName}** est terminée. Voici le récap de sa performance.`,
-      color,
-      fields,
-      thumbnail: { url: thumbnailUrl },
-      footer: { text: 'JohnnyFF15 - Récap de game' },
-      timestamp: new Date().toISOString(),
-      url: profileUrl,
-    }],
-  };
-
-  try {
-    await fetch(DISCORD_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    console.log(`✅ Game end notification sent for ${playerName}`);
-  } catch (error) {
-    console.error('Discord notification error:', error);
-  }
-}
-
 // Type for match participant stats
 interface MatchParticipant {
   puuid: string;
+  participantId?: number;
+  riotIdGameName?: string;
+  summonerName?: string;
   championId: number;
   championName: string;
+  champLevel?: number;
+  teamPosition?: string; // TOP / JUNGLE / MIDDLE / BOTTOM / UTILITY ('' in non-SR modes)
+  summoner1Id?: number;
+  summoner2Id?: number;
   kills: number;
   deaths: number;
   assists: number;
@@ -1256,6 +1189,13 @@ interface MatchParticipant {
   gameEndedInSurrender?: boolean;
   teamEarlySurrendered?: boolean;
   teamId: number;
+  perks?: {
+    styles?: Array<{
+      description: string; // primaryStyle / subStyle
+      style: number;
+      selections: Array<{ perk: number }>;
+    }>;
+  };
   // Challenges object from Riot API (advanced stats)
   challenges?: {
     soloKills?: number;
@@ -1264,9 +1204,11 @@ interface MatchParticipant {
     damagePerMinute?: number;
     goldPerMinute?: number;
     visionScorePerMinute?: number;
+    turretPlatesTaken?: number;
   };
   // Calculated from Timeline API
   soloDeaths?: number;
+  goldAt15?: number;
 }
 
 // Type for match data
@@ -1279,7 +1221,213 @@ interface MatchData {
     queueId: number;
     gameEndedInSurrender?: boolean;
     participants: MatchParticipant[];
+    teams?: Array<{
+      teamId: number;
+      objectives: Record<string, { kills: number }>;
+    }>;
   };
+}
+
+// The enemy playing the same position (Summoner's Rift only)
+function findLaneOpponent(matchData: MatchData, playerStats: MatchParticipant): MatchParticipant | null {
+  if (!playerStats.teamPosition) return null;
+  return matchData.info.participants.find(
+    p => p.teamId !== playerStats.teamId && p.teamPosition === playerStats.teamPosition
+  ) || null;
+}
+
+// Columns added by supabase/migrations/add_match_lane_stats.sql
+const OPTIONAL_MATCH_COLUMNS = ['team_position', 'lane_gold_diff', 'lp_change'] as const;
+
+// Insert a johnny_matches row; if the optional columns are not migrated yet, retry without them.
+// Returns the Supabase error (if any) so callers keep their existing handling.
+async function insertJohnnyMatch(row: Record<string, unknown>): Promise<{ code?: string; message?: string } | null> {
+  const { error } = await supabase.from('johnny_matches').insert([row]);
+  if (!error) return null;
+
+  const missingColumn = error.code === 'PGRST204' || error.code === '42703' || /column/i.test(error.message || '');
+  if (!missingColumn) return error;
+
+  console.warn(`  ⚠️ johnny_matches missing columns (${error.message}) - run supabase/migrations/add_match_lane_stats.sql. Retrying without them.`);
+  const fallback = { ...row };
+  for (const col of OPTIONAL_MATCH_COLUMNS) delete fallback[col];
+  const { error: retryError } = await supabase.from('johnny_matches').insert([fallback]);
+  return retryError || null;
+}
+
+interface GameEndNotificationParams {
+  player: TrackedPlayer;
+  matchData: MatchData;
+  playerStats: MatchParticipant;
+  gameMode: string;
+  rankInfo?: { tier: string; division: string; lp: number } | null;
+  lpChange?: number | null;
+}
+
+// Verdict on the lane matchup from the gold difference (relative to the average gold of the two)
+function getLaneVerdict(goldDiff: number, playerGold: number, opponentGold: number, opponentName: string): string {
+  const avg = Math.max(1, (playerGold + opponentGold) / 2);
+  const pct = goldDiff / avg;
+  const diffText = `${formatSigned(goldDiff, formatK)} gold`;
+  if (pct >= 0.18) return `🔨 **GAP MONUMENTAL** — ${opponentName} s'est fait gapped (${diffText})`;
+  if (pct >= 0.07) return `💪 **Lane gagnée** face à ${opponentName} (${diffText})`;
+  if (pct > -0.07) return `🤝 **Lane serrée** contre ${opponentName} (${diffText})`;
+  if (pct > -0.18) return `😬 **Lane perdue** contre ${opponentName} (${diffText})`;
+  return `💀 **GAPPED** par ${opponentName} (${diffText})`;
+}
+
+// Global verdict on the player's game
+function getPerformanceVerdict(stats: MatchParticipant): string {
+  const kdaRatio = (stats.kills + stats.assists) / Math.max(1, stats.deaths);
+  if (stats.pentaKills) return '🏆 PENTAKILL';
+  if (kdaRatio >= 5) return '🔥 Il a carry';
+  if (kdaRatio >= 3) return '✨ Très propre';
+  if (kdaRatio >= 2) return '👍 Solide';
+  if (stats.deaths >= 10) return '🚨 Game suspecte';
+  if (kdaRatio < 1) return '💀 À review';
+  return '😐 Correct';
+}
+
+function getHighlights(stats: MatchParticipant, matchData: MatchData): string[] {
+  const highlights: string[] = [];
+  if (stats.pentaKills) highlights.push(`🏆 ${stats.pentaKills} Penta`);
+  else if (stats.quadraKills) highlights.push(`💥 ${stats.quadraKills} Quadra`);
+  else if (stats.tripleKills) highlights.push(`🔥 ${stats.tripleKills} Triple`);
+  else if (stats.doubleKills && stats.doubleKills >= 2) highlights.push(`⚡ ${stats.doubleKills} Double`);
+
+  if (stats.firstBloodKill) highlights.push('🩸 First Blood');
+  else if (stats.firstBloodVictim) highlights.push('🩸 A donné le First Blood');
+
+  if ((stats.challenges?.soloKills || 0) >= 2) highlights.push(`🗡️ ${stats.challenges!.soloKills} solo kills`);
+  if ((stats.soloDeaths || 0) >= 3) highlights.push(`☠️ ${stats.soloDeaths} morts solo`);
+
+  const maxGameDamage = Math.max(...matchData.info.participants.map(p => p.totalDamageDealtToChampions));
+  if (stats.totalDamageDealtToChampions === maxGameDamage) highlights.push('🏅 Top dégâts de la game');
+
+  if (matchData.info.gameEndedInSurrender || stats.teamEarlySurrendered) highlights.push('🏳️ Fin par FF');
+  return highlights;
+}
+
+// Monospace table comparing the player with the lane opponent
+function buildMatchupTable(
+  playerName: string,
+  player: MatchParticipant,
+  opponentName: string,
+  opponent: MatchParticipant
+): string {
+  const col = (text: string, width: number) => text.padStart(width);
+  const label = (text: string) => text.padEnd(8);
+  const w = Math.max(6, playerName.length, opponentName.length);
+  const row = (name: string, a: string, b: string, diff?: string) =>
+    `${label(name)}${col(a, w)}  ${col(b, w)}${diff != null ? `  ${col(diff, 6)}` : ''}`;
+
+  const playerCs = player.totalMinionsKilled + player.neutralMinionsKilled;
+  const opponentCs = opponent.totalMinionsKilled + opponent.neutralMinionsKilled;
+  const lines = [
+    row('', playerName, opponentName, 'Diff'),
+    row('Gold', formatK(player.goldEarned), formatK(opponent.goldEarned), formatSigned(player.goldEarned - opponent.goldEarned, formatK)),
+  ];
+  if (player.goldAt15 != null && opponent.goldAt15 != null) {
+    lines.push(row('Gold@15', formatK(player.goldAt15), formatK(opponent.goldAt15), formatSigned(player.goldAt15 - opponent.goldAt15, formatK)));
+  }
+  lines.push(
+    row('CS', String(playerCs), String(opponentCs), formatSigned(playerCs - opponentCs)),
+    row('Dégâts', formatK(player.totalDamageDealtToChampions), formatK(opponent.totalDamageDealtToChampions), formatSigned(player.totalDamageDealtToChampions - opponent.totalDamageDealtToChampions, formatK)),
+    row('KDA', `${player.kills}/${player.deaths}/${player.assists}`, `${opponent.kills}/${opponent.deaths}/${opponent.assists}`),
+  );
+  if (player.champLevel != null && opponent.champLevel != null) {
+    lines.push(row('Niveau', String(player.champLevel), String(opponent.champLevel), formatSigned(player.champLevel - opponent.champLevel)));
+  }
+  const fence = '`'.repeat(3);
+  return `${fence}\n${lines.join('\n')}\n${fence}`;
+}
+
+async function sendGameEndNotification(params: GameEndNotificationParams): Promise<void> {
+  const { player, matchData, playerStats, gameMode, rankInfo, lpChange } = params;
+
+  const playerName = getPlayerLabel(player);
+  const profileUrl = getPlayerProfileUrl(player.id);
+  const championName = playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown';
+  const win = playerStats.win;
+  const durationSec = matchData.info.gameDuration;
+  const minutes = Math.max(1, durationSec / 60);
+
+  const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
+  const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
+  const teamDamage = team.reduce((sum, p) => sum + p.totalDamageDealtToChampions, 0);
+  const kp = playerStats.challenges?.killParticipation != null
+    ? playerStats.challenges.killParticipation * 100
+    : teamKills > 0 ? ((playerStats.kills + playerStats.assists) / teamKills) * 100 : 0;
+  const teamDmgPct = teamDamage > 0 ? (playerStats.totalDamageDealtToChampions / teamDamage) * 100 : 0;
+  const cs = playerStats.totalMinionsKilled + playerStats.neutralMinionsKilled;
+  const kdaRatio = (playerStats.kills + playerStats.assists) / Math.max(1, playerStats.deaths);
+
+  const role = (playerStats.teamPosition || null) as Role | null;
+  const roleText = formatRole(role);
+  const spells = formatSpells(playerStats.summoner1Id, playerStats.summoner2Id);
+  const primaryStyle = playerStats.perks?.styles?.find(s => s.description === 'primaryStyle');
+  const subStyle = playerStats.perks?.styles?.find(s => s.description === 'subStyle');
+  const runes = formatRunes(primaryStyle?.selections?.map(s => s.perk), subStyle?.style);
+
+  // Header lines
+  const descriptionLines = [
+    `**${championName}**${roleText ? ` · ${roleText}` : ''} · ⏱️ ${formatDuration(durationSec)} · ${gameMode}`,
+  ];
+  const loadout = [spells, runes ? `🔮 ${runes.keystone}` : null].filter(Boolean).join(' · ');
+  if (loadout) descriptionLines.push(loadout);
+  descriptionLines.push('', `**${getPerformanceVerdict(playerStats)}**`);
+  const highlights = getHighlights(playerStats, matchData);
+  if (highlights.length) descriptionLines.push(highlights.join(' · '));
+
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [
+    { name: '⚔️ KDA', value: `**${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}** · ${kdaRatio.toFixed(2)}`, inline: true },
+    { name: '🌾 CS', value: `**${cs}** · ${(cs / minutes).toFixed(1)}/min`, inline: true },
+    { name: '💥 Dégâts', value: `**${formatK(playerStats.totalDamageDealtToChampions)}** · ${Math.round(teamDmgPct)}% team`, inline: true },
+    { name: '🤝 KP', value: `**${Math.round(kp)}%**`, inline: true },
+    { name: '💰 Gold', value: `**${formatK(playerStats.goldEarned)}** · ${Math.round(playerStats.goldEarned / minutes)}/min`, inline: true },
+    { name: '👁️ Vision', value: `**${playerStats.visionScore}**`, inline: true },
+  ];
+
+  // Lane matchup
+  const opponent = findLaneOpponent(matchData, playerStats);
+  if (opponent) {
+    const opponentChamp = opponent.championName || CHAMPIONS[opponent.championId] || 'Adversaire';
+    const goldDiff = playerStats.goldEarned - opponent.goldEarned;
+    fields.push({
+      name: `🥊 Face à face · ${championName} vs ${opponentChamp}`,
+      value: `${buildMatchupTable(championName, playerStats, opponentChamp, opponent)}\n${getLaneVerdict(goldDiff, playerStats.goldEarned, opponent.goldEarned, opponentChamp)}`,
+      inline: false,
+    });
+  }
+
+  // Rank header (author line)
+  let authorName = gameMode;
+  if (rankInfo) {
+    authorName = formatRank(rankInfo.tier, rankInfo.division, rankInfo.lp);
+    if (lpChange != null) authorName += ` (${formatSigned(lpChange)} LP)`;
+  }
+
+  const lpTitle = lpChange != null ? ` · ${formatSigned(lpChange)} LP` : '';
+
+  const payload = {
+    ...(PREVIEW_MODE ? { content: '🧪 **TEST** — aperçu du récap de fin de game (données fictives)' } : {}),
+    embeds: [{
+      author: {
+        name: authorName,
+        icon_url: getRankEmblemUrl(rankInfo?.tier || player.solo_tier),
+      },
+      title: win ? `🏆 VICTOIRE — ${playerName.toUpperCase()}${lpTitle}` : `💀 DÉFAITE — ${playerName.toUpperCase()}${lpTitle}`,
+      url: profileUrl,
+      description: descriptionLines.join('\n'),
+      color: win ? DISCORD_COLORS.GREEN : DISCORD_COLORS.RED,
+      fields,
+      thumbnail: { url: playerStats.championId > 0 ? getChampionImageUrl(playerStats.championId) : getChampionImageUrl(championName) },
+      footer: { text: `JohnnyFF15 · Récap de game · ${playerName}` },
+      timestamp: new Date().toISOString(),
+    }],
+  };
+
+  await postDiscordWebhook(payload, `game end ${playerName}`);
 }
 
 // Build a johnny_matches row with all detailed stats
@@ -1288,7 +1436,8 @@ function buildJohnnyMatch(
   playerStats: MatchParticipant,
   playerPuuid: string,
   playerName: string,
-  teamKills: number
+  teamKills: number,
+  lpChange: number | null = null
 ) {
   const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
   const teamDamage = team.reduce((sum, p) => sum + p.totalDamageDealtToChampions, 0);
@@ -1300,6 +1449,8 @@ function buildJohnnyMatch(
   const maxGameDamage = Math.max(...matchData.info.participants.map(p => p.totalDamageDealtToChampions));
   const isTopDamageTeam = playerStats.totalDamageDealtToChampions === maxTeamDamage;
   const isTopDamageGame = playerStats.totalDamageDealtToChampions === maxGameDamage;
+
+  const opponent = findLaneOpponent(matchData, playerStats);
 
   return {
     id: matchData.metadata.matchId,
@@ -1325,18 +1476,22 @@ function buildJohnnyMatch(
     // New detailed stats
     double_kills: playerStats.doubleKills || 0,
     triple_kills: playerStats.tripleKills || 0,
-    quadra_kills: (playerStats as any).quadraKills || 0,
+    quadra_kills: playerStats.quadraKills || 0,
     penta_kills: playerStats.pentaKills || 0,
     solo_kills: playerStats.challenges?.soloKills || 0,
     first_blood_kill: playerStats.firstBloodKill === true,
     kill_participation: Math.round(kp * 10000) / 100, // Store as percentage (e.g., 65.43)
     team_damage_pct: Math.round(teamDmgPct * 10000) / 100,
-    damage_taken: (playerStats as any).totalDamageTaken || 0,
-    wards_placed: (playerStats as any).wardsPlaced || 0,
-    wards_killed: (playerStats as any).wardsKilled || 0,
+    damage_taken: playerStats.totalDamageTaken || 0,
+    wards_placed: playerStats.wardsPlaced || 0,
+    wards_killed: playerStats.wardsKilled || 0,
     solo_deaths: playerStats.soloDeaths || 0,
     is_top_damage_team: isTopDamageTeam,
     is_top_damage_game: isTopDamageGame,
+    // Lane / ranked context (see supabase/migrations/add_match_lane_stats.sql)
+    team_position: playerStats.teamPosition || null,
+    lane_gold_diff: opponent ? playerStats.goldEarned - opponent.goldEarned : null,
+    lp_change: lpChange,
     created_at: new Date().toISOString()
   };
 }
@@ -1362,8 +1517,8 @@ function evaluateProp(propId: string, stats: MatchParticipant, match: MatchData)
     const predictedTeam = parseInt(parts[2], 10);
     const predictedEnemy = parseInt(parts[3], 10);
 
-    const playerTeam = match.info.teams.find(t => t.teamId === stats.teamId);
-    const enemyTeam = match.info.teams.find(t => t.teamId !== stats.teamId);
+    const playerTeam = match.info.teams?.find(t => t.teamId === stats.teamId);
+    const enemyTeam = match.info.teams?.find(t => t.teamId !== stats.teamId);
     const actualTeam = playerTeam?.objectives.dragon.kills || 0;
     const actualEnemy = enemyTeam?.objectives.dragon.kills || 0;
 
@@ -1543,8 +1698,8 @@ function getResolvedStat(propId: string, stats: MatchParticipant, match: MatchDa
 
   // Handle Dragon Score bets
   if (propId.startsWith('dragon_score_')) {
-    const playerTeam = match.info.teams.find(t => t.teamId === stats.teamId);
-    const enemyTeam = match.info.teams.find(t => t.teamId !== stats.teamId);
+    const playerTeam = match.info.teams?.find(t => t.teamId === stats.teamId);
+    const enemyTeam = match.info.teams?.find(t => t.teamId !== stats.teamId);
     const teamDragons = playerTeam?.objectives.dragon.kills || 0;
     const enemyDragons = enemyTeam?.objectives.dragon.kills || 0;
     return `🐉 Dragons: ${teamDragons} - ${enemyDragons}`;
@@ -1846,37 +2001,7 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
 
   // Fetch last match with retries (API can be slow after game ends)
   let matchIds: string[] | null = null;
-  let rawMatchData: {
-    metadata: { matchId: string };
-    info: {
-      gameCreation: number;
-      gameDuration: number;
-      gameMode: string;
-      queueId: number;
-      gameEndedInSurrender?: boolean;
-      participants: Array<{
-        puuid: string;
-        championId: number;
-        championName: string;
-        kills: number;
-        deaths: number;
-        assists: number;
-        totalMinionsKilled: number;
-        neutralMinionsKilled: number;
-        visionScore: number;
-        goldEarned: number;
-        totalDamageDealtToChampions: number;
-        win: boolean;
-        firstBloodVictim?: boolean;
-        firstBloodKill?: boolean;
-        doubleKills?: number;
-        pentaKills?: number;
-        gameEndedInSurrender?: boolean;
-        teamEarlySurrendered?: boolean;
-        teamId: number;
-      }>;
-    };
-  } | null = null;
+  let matchData: MatchData | null = null;
 
   const RETRY_DELAYS = [0, 30000, 60000, 120000]; // immediate, 30s, 60s, 2min
   for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
@@ -1891,13 +2016,10 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
       continue;
     }
 
-    rawMatchData = await getMatchDetails(matchIds[0], player.region) as typeof rawMatchData;
-    if (rawMatchData) break;
+    matchData = await getMatchDetails(matchIds[0], player.region) as MatchData | null;
+    if (matchData) break;
     console.error(`  ❌ Could not fetch match data for ${player.display_name} (attempt ${attempt + 1})`);
   }
-
-  // Cast to MatchData type for bet resolution
-  const matchData: MatchData | null = rawMatchData;
 
   if (!matchData) {
     console.error(`  ❌ All retries failed for ${player.display_name} - giving up`);
@@ -1912,52 +2034,30 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
     return;
   }
 
-  // Fetch timeline for solo deaths calculation
+  // Fetch timeline for solo deaths + gold @15 (player and lane opponent)
   console.log('  📊 Fetching timeline for solo deaths...');
   const timeline = await getMatchTimeline(matchId, player.region);
   if (timeline) {
     const soloDeaths = countSoloDeaths(timeline, player.puuid);
-    (playerStats as MatchParticipant).soloDeaths = soloDeaths;
+    playerStats.soloDeaths = soloDeaths;
     console.log(`  💀 Solo deaths: ${soloDeaths}`);
 
     // Fix: Riot API doesn't return firstBloodVictim, determine from timeline
     const fbVictim = isFirstBloodVictim(timeline, player.puuid);
-    (playerStats as MatchParticipant).firstBloodVictim = fbVictim;
+    playerStats.firstBloodVictim = fbVictim;
     if (fbVictim) console.log(`  🩸 First Blood victim!`);
+
+    for (const participant of matchData.info.participants) {
+      const tp = timeline.participants.find(p => p.puuid === participant.puuid);
+      const gold = tp ? timeline.goldAt15[tp.participantId] : undefined;
+      if (gold != null) participant.goldAt15 = gold;
+    }
   } else {
     console.log('  ⚠️ Could not fetch timeline, solo deaths will be 0');
-    (playerStats as MatchParticipant).soloDeaths = 0;
+    playerStats.soloDeaths = 0;
   }
 
-  // Save match to johnny_matches
-  try {
-    const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
-    const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
-
-    const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills);
-
-    const { error: saveError } = await supabase
-      .from('johnny_matches')
-      .insert([johnnyMatch]);
-
-    if (saveError && saveError.code !== '23505') {
-      console.error(`  ❌ Error saving match:`, saveError);
-    } else {
-      console.log(`  ✅ Match saved: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
-    }
-  } catch (saveErr) {
-    console.error(`  ❌ Exception saving match:`, saveErr);
-  }
-
-  // Resolve bets
-  try {
-    const { resolved, errors } = await resolveBetsForMatch(matchData, player.puuid, player.display_name);
-    console.log(`  📊 Bets resolved: ${resolved} (${errors} errors)`);
-  } catch (resolveErr) {
-    console.error(`  ❌ Exception resolving bets:`, resolveErr);
-  }
-
-  // Fetch current rank + LP after game (for webhook and DB update)
+  // Fetch current rank + LP after game (for webhook, match row and DB update)
   let newRankInfo: { tier: string; division: string; lp: number } | null = null;
   let lpChange: number | null = null;
   try {
@@ -1987,22 +2087,41 @@ async function handleGameEnd(player: TrackedPlayer, previousGameId: string): Pro
     console.error('  ⚠️ Error fetching rank:', rankErr);
   }
 
+  // Save match to johnny_matches
+  try {
+    const team = matchData.info.participants.filter(p => p.teamId === playerStats.teamId);
+    const teamKills = team.reduce((sum, p) => sum + p.kills, 0);
+
+    const johnnyMatch = buildJohnnyMatch(matchData, playerStats, player.puuid, player.display_name, teamKills, lpChange);
+    const saveError = await insertJohnnyMatch(johnnyMatch);
+
+    if (saveError && saveError.code !== '23505') {
+      console.error(`  ❌ Error saving match:`, saveError);
+    } else {
+      console.log(`  ✅ Match saved: ${playerStats.kills}/${playerStats.deaths}/${playerStats.assists}`);
+    }
+  } catch (saveErr) {
+    console.error(`  ❌ Exception saving match:`, saveErr);
+  }
+
+  // Resolve bets
+  try {
+    const { resolved, errors } = await resolveBetsForMatch(matchData, player.puuid, player.display_name);
+    console.log(`  📊 Bets resolved: ${resolved} (${errors} errors)`);
+  } catch (resolveErr) {
+    console.error(`  ❌ Exception resolving bets:`, resolveErr);
+  }
+
   // Send game end notification (always runs even if above steps failed)
   const gameMode = QUEUE_NAMES[matchData.info.queueId] || matchData.info.gameMode || 'Normal';
-  const championName = playerStats.championName || CHAMPIONS[playerStats.championId] || 'Unknown';
-  await sendGameEndNotification(
-    player.id,
-    player.display_name,
-    championName,
-    playerStats.win,
-    playerStats.kills,
-    playerStats.deaths,
-    playerStats.assists,
+  await sendGameEndNotification({
+    player,
+    matchData,
+    playerStats,
     gameMode,
-    playerStats.championId,
-    newRankInfo,
-    lpChange
-  );
+    rankInfo: newRankInfo,
+    lpChange,
+  });
 }
 
 // ============================================
@@ -2102,7 +2221,8 @@ async function checkAllPlayers(): Promise<void> {
 
       const gameMode = QUEUE_NAMES[game.gameQueueConfigId] || 'Normal';
 
-      await sendDiscordNotification(gamePlayers, champions, gameMode, gameId, championIds);
+      console.log(`  📣 New game ${gameId}: ${champions.join(', ')} (${championIds.join(', ')})`);
+      await sendDiscordNotification(gamePlayers, gameMode, game);
 
       // Clean up old notifications after 1 hour
       setTimeout(() => notifiedGames.delete(notifKey), 60 * 60 * 1000);
@@ -2240,6 +2360,121 @@ async function checkAndApplyWeeklyWealthTax(): Promise<void> {
   }
 }
 
+// ============================================
+// PREVIEW MODE (mock data, no Riot API calls)
+// ============================================
+
+async function runPreview(): Promise<void> {
+  console.log('🧪 Preview mode: sending game start + game end notifications with mock data\n');
+
+  const player: TrackedPlayer = {
+    id: 'preview-player',
+    puuid: 'preview-puuid',
+    game_name: 'Johnny',
+    tag_line: 'EUW',
+    region: 'EUW',
+    display_name: 'Johnny',
+    is_active: true,
+    solo_tier: 'EMERALD',
+    solo_division: 'II',
+    solo_lp: 45,
+    rank_updated_at: null,
+  };
+
+  // Spectator-like data: Yasuo mid with Flash/Ignite, Conqueror + Resolve
+  const blue = [
+    { puuid: 'b1', championId: 266, teamId: 100, spell1Id: 4, spell2Id: 12 },   // Aatrox
+    { puuid: 'b2', championId: 64, teamId: 100, spell1Id: 4, spell2Id: 11 },    // Lee Sin
+    { puuid: 'preview-puuid', championId: 157, teamId: 100, spell1Id: 4, spell2Id: 14, perks: { perkIds: [8010, 9111, 9104, 8014, 8444, 8451, 5008, 5008, 5001], perkStyle: 8000, perkSubStyle: 8400 } }, // Yasuo
+    { puuid: 'b4', championId: 222, teamId: 100, spell1Id: 4, spell2Id: 7 },    // Jinx
+    { puuid: 'b5', championId: 412, teamId: 100, spell1Id: 4, spell2Id: 14 },   // Thresh
+  ];
+  const red = [
+    { puuid: 'r1', championId: 122, teamId: 200, spell1Id: 4, spell2Id: 6 },    // Darius
+    { puuid: 'r2', championId: 104, teamId: 200, spell1Id: 4, spell2Id: 11 },   // Graves
+    { puuid: 'r3', championId: 238, teamId: 200, spell1Id: 4, spell2Id: 14 },   // Zed
+    { puuid: 'r4', championId: 51, teamId: 200, spell1Id: 4, spell2Id: 7 },     // Caitlyn
+    { puuid: 'r5', championId: 117, teamId: 200, spell1Id: 4, spell2Id: 3 },    // Lulu
+  ];
+  const game: CurrentGameInfo = {
+    gameId: 1,
+    gameStartTime: Date.now(),
+    gameQueueConfigId: 420,
+    participants: [...blue, ...red],
+  };
+
+  await sendDiscordNotification([player], QUEUE_NAMES[420], game);
+
+  // Match-v5-like data for the same game
+  const mk = (
+    p: CurrentGameParticipant,
+    position: string,
+    stats: Partial<MatchParticipant>
+  ): MatchParticipant => ({
+    puuid: p.puuid,
+    championId: p.championId,
+    championName: CHAMPIONS[p.championId] || `Champion${p.championId}`,
+    teamId: p.teamId,
+    teamPosition: position,
+    summoner1Id: p.spell1Id,
+    summoner2Id: p.spell2Id,
+    kills: 2, deaths: 4, assists: 6,
+    totalMinionsKilled: 150, neutralMinionsKilled: 0,
+    visionScore: 20, goldEarned: 10500, totalDamageDealtToChampions: 15000,
+    champLevel: 15,
+    win: p.teamId === 100,
+    ...stats,
+  });
+
+  const matchData: MatchData = {
+    metadata: { matchId: 'EUW1_PREVIEW' },
+    info: {
+      gameCreation: Date.now() - 34 * 60 * 1000,
+      gameDuration: 34 * 60 + 12,
+      gameMode: 'CLASSIC',
+      queueId: 420,
+      participants: [
+        mk(blue[0], 'TOP', {}),
+        mk(blue[1], 'JUNGLE', { neutralMinionsKilled: 120, totalMinionsKilled: 30 }),
+        mk(blue[2], 'MIDDLE', {
+          kills: 9, deaths: 3, assists: 12, totalMinionsKilled: 245, goldEarned: 14200,
+          totalDamageDealtToChampions: 28400, visionScore: 24, champLevel: 17,
+          tripleKills: 1, firstBloodKill: true, goldAt15: 5800,
+          perks: { styles: [
+            { description: 'primaryStyle', style: 8000, selections: [{ perk: 8010 }, { perk: 9111 }, { perk: 9104 }, { perk: 8014 }] },
+            { description: 'subStyle', style: 8400, selections: [{ perk: 8444 }, { perk: 8451 }] },
+          ] },
+          challenges: { soloKills: 3, killParticipation: 0.68 },
+        }),
+        mk(blue[3], 'BOTTOM', {}),
+        mk(blue[4], 'UTILITY', { totalMinionsKilled: 30, visionScore: 70 }),
+        mk(red[0], 'TOP', {}),
+        mk(red[1], 'JUNGLE', {}),
+        mk(red[2], 'MIDDLE', {
+          kills: 3, deaths: 7, assists: 4, totalMinionsKilled: 198, goldEarned: 11800,
+          totalDamageDealtToChampions: 19100, champLevel: 15, goldAt15: 5100,
+        }),
+        mk(red[3], 'BOTTOM', {}),
+        mk(red[4], 'UTILITY', {}),
+      ],
+    },
+  };
+
+  const playerStats = matchData.info.participants[2];
+  playerStats.soloDeaths = 1;
+
+  await sendGameEndNotification({
+    player,
+    matchData,
+    playerStats,
+    gameMode: QUEUE_NAMES[420],
+    rankInfo: { tier: 'EMERALD', division: 'II', lp: 67 },
+    lpChange: 22,
+  });
+
+  console.log('\n🧪 Preview done');
+}
+
 // Main loop
 async function main(): Promise<void> {
   console.log('🎰 JohnnyFF15 Game Watcher Started');
@@ -2261,6 +2496,11 @@ async function main(): Promise<void> {
 
   // Load champion data from Data Dragon
   await loadChampionData();
+
+  if (PREVIEW_MODE) {
+    await runPreview();
+    process.exit(0);
+  }
 
   // Initial check
   await checkAllPlayers();

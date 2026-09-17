@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "wealth-tax": "npx tsx scripts/weekly-wealth-tax.ts",
-    "squad-summary": "npx tsx scripts/squad-summary.ts"
+    "squad-summary": "npx tsx scripts/squad-summary.ts",
+    "squad-summary:preview": "npx tsx scripts/squad-summary.ts --preview",
+    "watcher:preview": "npx tsx scripts/game-watcher.ts --preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.91.1",

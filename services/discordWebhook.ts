@@ -7,10 +7,13 @@ function getWebhookUrl(): string {
 
 interface DiscordEmbed {
   title?: string;
+  url?: string;
   description?: string;
   color?: number;
+  author?: { name: string; icon_url?: string; url?: string };
   fields?: { name: string; value: string; inline?: boolean }[];
   thumbnail?: { url: string };
+  image?: { url: string };
   footer?: { text: string };
   timestamp?: string;
 }
@@ -109,21 +112,29 @@ export async function sendDiscordNotification(message: DiscordMessage): Promise<
 export async function sendTestNotification(championName: string = 'Yasuo', gameMode: string = 'Ranked Solo/Duo', playerName: string = 'Johnny'): Promise<boolean> {
   const siteUrl = import.meta.env.VITE_SITE_URL || 'https://johnnyff15.fr/#/player-stats';
 
+  const normalizedName = championName.replace(/['\s.]/g, '');
+
+  // Mirrors the layout of the real game-start notification sent by scripts/game-watcher.ts
   return sendDiscordNotification({
     content: '🧪 **TEST** - Ceci est un message de test',
     embeds: [{
+      author: {
+        name: `${gameMode} · Émeraude II · 45 LP`,
+        icon_url: 'https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-emerald.png',
+      },
       title: `🎮 ${playerName.toUpperCase()} EST EN GAME ! (TEST)`,
-      description: `**${playerName}** vient de lancer une game !\n\n⚠️ *Ceci est un test, ${playerName} n'est pas vraiment en game*`,
+      url: siteUrl,
+      description: `**${playerName}** lance une game sur **${championName}** en 🗡️ Mid.\n⚠️ *Ceci est un test, ${playerName} n'est pas vraiment en game*`,
       color: COLORS.PURPLE,
       fields: [
-        { name: '🎮 Mode de jeu', value: gameMode, inline: true },
-        { name: '🏆 Champion', value: championName, inline: true },
-        { name: '🔗 Voir sur le site', value: `[Ouvrir JohnnyFF15](${siteUrl})`, inline: false },
+        { name: '🎯 Rôle', value: '🗡️ Mid', inline: true },
+        { name: '✨ Sorts', value: '⚡ Saut éclair · 🔥 Embrasement', inline: true },
+        { name: '🔮 Runes', value: 'Conquérant\n↳ Volonté', inline: true },
+        { name: '⚔️ Les équipes', value: `🔵 Aatrox · Lee Sin · **${championName}** · Jinx · Thresh\n🔴 Darius · Graves · Zed · Caitlyn · Lulu`, inline: false },
       ],
-      thumbnail: {
-        url: 'https://ddragon.leagueoflegends.com/cdn/14.1.1/img/profileicon/4644.png',
-      },
-      footer: { text: 'JohnnyFF15 - Message de test' },
+      thumbnail: { url: getChampionImageUrl(championName) },
+      image: { url: `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${normalizedName}_0.jpg` },
+      footer: { text: 'JohnnyFF15 · Message de test' },
       timestamp: new Date().toISOString(),
     }],
   });
